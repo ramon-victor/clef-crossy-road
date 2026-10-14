@@ -11,14 +11,14 @@ describe("decisionCost", () => {
     expect(cost("json", "choice")).toMatchObject({ tokens: 1120, measured: true });
     expect(cost("grid", "choice")).toMatchObject({ tokens: 1320, measured: true });
     expect(cost("image", "choice")).toMatchObject({ tokens: 972, measured: true });
+    expect(cost("json-rel", "choice")).toMatchObject({ tokens: 1163, measured: true });
     expect(cost("json", "critic")).toMatchObject({ tokens: 3070, measured: true });
     expect(cost("json", "critic-go").tokens).toBe(3070);
   });
 
-  it("flags the critic with a picture or a grid, and relative JSON, as estimates", () => {
+  it("flags the critic with a picture or a grid as an estimate", () => {
     expect(cost("image", "critic")).toMatchObject({ tokens: 3070, measured: false });
     expect(cost("grid", "critic-go").measured).toBe(false);
-    expect(cost("json-rel", "choice")).toMatchObject({ tokens: 1120, measured: false });
   });
 
   it("prices tokens at the published rate: Clef costs 6.3 times Clef-flash", () => {
