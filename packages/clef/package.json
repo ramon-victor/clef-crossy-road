@@ -1,0 +1,23 @@
+{
+  "name": "@ccr/clef",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Workers AI client for the Clef decision models (REST). Transport-agnostic.",
+  "exports": {
+    ".": "./src/index.ts",
+    "./node": "./src/node.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.test.json",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.4"
+  }
+}
