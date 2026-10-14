@@ -1,4 +1,5 @@
 import type { Action } from "@ccr/core";
+import type { EncoderId } from "./encode.ts";
 import { IMAGE_LEGEND } from "./image.ts";
 
 /**
@@ -8,7 +9,8 @@ import { IMAGE_LEGEND } from "./image.ts";
  */
 export const PROMPT_VERSION = "p1";
 
-export type ManualId = "full" | "minimal";
+export const MANUAL_IDS = ["full", "minimal"] as const;
+export type ManualId = (typeof MANUAL_IDS)[number];
 
 const MINIMAL = [
   "You control a chicken in a Crossy Road style game and pick one action per decision step.",
@@ -40,10 +42,10 @@ export const ACTION_CRITERIA: Readonly<Record<Action, string>> = {
   stay: "Do not move during this decision step.",
 };
 
-const withLegend = (manual: ManualId, encoder?: string): string =>
+const withLegend = (manual: ManualId, encoder?: EncoderId): string =>
   encoder === "image" ? `${MANUALS[manual]} ${IMAGE_LEGEND}` : MANUALS[manual];
 
-export function choiceInstructions(manual: ManualId, encoder?: string): string {
+export function choiceInstructions(manual: ManualId, encoder?: EncoderId): string {
   return `${withLegend(manual, encoder)} Choose the single best action for this decision step.`;
 }
 
@@ -55,7 +57,7 @@ const ACTION_VERB: Readonly<Record<Action, string>> = {
   stay: "does not move",
 };
 
-export function riskInstructions(manual: ManualId, action: Action, encoder?: string): string {
+export function riskInstructions(manual: ManualId, action: Action, encoder?: EncoderId): string {
   return `${withLegend(manual, encoder)} Answer yes if the chicken dies during this decision step when it ${ACTION_VERB[action]}. If the move is blocked by a tree the chicken stays where it is.`;
 }
 

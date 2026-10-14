@@ -10,6 +10,9 @@ import {
 } from "@ccr/core";
 import type { Decision, Policy, PolicyFactory } from "./policy.ts";
 
+export const DEFAULT_MAX_DECISIONS = 300;
+export const DEFAULT_STALL_LIMIT = 40;
+
 export interface EpisodeOptions {
   /** Ticks the world advances after each action. Default: one full hop (12). */
   decisionTicks?: number;
@@ -43,6 +46,30 @@ export type LatencyModel =
   | { kind: "recorded"; pipelined?: boolean };
 
 const msToTicks = (ms: number): number => Math.max(0, Math.round((ms * TICKS_PER_SECOND) / 1000));
+
+export const isPipelined = (latency: LatencyModel | undefined): boolean =>
+  latency !== undefined && latency.kind !== "none" && latency.pipelined === true;
+
+export interface ApplyOptions {
+  /** Ticks the world ran while the policy was thinking. */
+  waitedTicks: number;
+  pipelined: boolean;
+  decisionTicks: number;
+}
+
+/**
+ * How one decision changes the world: the ticks spent waiting for the answer, then the action
+ * (serial: its hop plays out now; pipelined: during the next wait). The runner and every replay of a
+ * stored episode go through this, so a replay cannot drift from the game the policy actually saw.
+ */
+export function applyDecision(
+  game: Game,
+  action: Action,
+  { waitedTicks, pipelined, decisionTicks }: ApplyOptions,
+): MoveOutcome {
+  if (waitedTicks > 0) game.advance(waitedTicks);
+  return pipelined ? game.act(action) : game.step(action, decisionTicks).outcome;
+}
 
 export interface DecisionRecord {
   index: number;
@@ -86,10 +113,11 @@ export async function playEpisode(
   options: EpisodeOptions = {},
 ): Promise<EpisodeResult> {
   const decisionTicks = options.decisionTicks ?? DECISION_TICKS;
-  const maxDecisions = options.maxDecisions ?? 300;
-  const stallLimit = options.stallLimit ?? 40;
+  const maxDecisions = options.maxDecisions ?? DEFAULT_MAX_DECISIONS;
+  const stallLimit = options.stallLimit ?? DEFAULT_STALL_LIMIT;
   const game = new Game({ seed });
   const policy = factory.create(seed);
+  const pipelined = isPipelined(options.latency);
   const records: DecisionRecord[] = [];
   const actions: Action[] = [];
   let bestScore = 0;
@@ -100,13 +128,13 @@ export async function playEpisode(
     const decision = await decide(policy, game, options.observeWindow);
     const tick = game.tick;
     const row = game.heroRow;
-    const pipelined = options.latency?.kind !== "none" && options.latency?.pipelined === true;
-    // In pipelined mode at least one tick must pass per decision, or time would never advance.
-    const waited = Math.max(pipelined ? 1 : 0, waitedTicks(options.latency, decision));
-    if (waited > 0) game.advance(waited); // the world does not wait for the model
-    const outcome = pipelined
-      ? game.act(decision.action)
-      : game.step(decision.action, decisionTicks).outcome;
+    // Pipelined: at least one tick must pass per decision, or time would never advance.
+    const waited = Math.max(pipelined ? 1 : 0, latencyTicks(options.latency, decision));
+    const outcome = applyDecision(game, decision.action, {
+      waitedTicks: waited,
+      pipelined,
+      decisionTicks,
+    });
     actions.push(decision.action);
     records.push(toRecord(records.length, tick, row, decision, outcome, waited));
     if (game.score > bestScore) {
@@ -138,7 +166,7 @@ function decide(policy: Policy, game: Game, view?: ObserveWindow): Promise<Decis
   return policy.kind === "oracle" ? policy.decide(game) : policy.decide(observe(game, view));
 }
 
-function waitedTicks(latency: LatencyModel | undefined, decision: Decision): number {
+function latencyTicks(latency: LatencyModel | undefined, decision: Decision): number {
   if (!latency || latency.kind === "none") return 0;
   if (latency.kind === "fixed") return msToTicks(latency.ms);
   return msToTicks(decision.latencyMs ?? 0);

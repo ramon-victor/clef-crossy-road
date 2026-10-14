@@ -5,7 +5,8 @@
   "type": "module",
   "description": "Policies (baselines and Clef), observation encoders, prompts and the episode runner.",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./testing": "./src/policy.testing.ts"
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.test.json",

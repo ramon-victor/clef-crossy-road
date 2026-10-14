@@ -1,7 +1,8 @@
 import type { Observation, ObsRow } from "@ccr/core";
 import { renderSceneImage } from "./image.ts";
 
-export type EncoderId = "json" | "grid" | "image";
+export const ENCODER_IDS = ["json", "grid", "image"] as const;
+export type EncoderId = (typeof ENCODER_IDS)[number];
 
 /**
  * Encoders turn an `Observation` into the `state` sent to the model. They are pure functions of

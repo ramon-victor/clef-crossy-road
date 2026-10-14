@@ -1,11 +1,19 @@
-import type { Answer, ClefClient, ClefModel, ClefResult, Question } from "@ccr/clef";
+import {
+  type Answer,
+  CLEF_MODELS,
+  type ClefClient,
+  type ClefModel,
+  type ClefResult,
+  type Question,
+} from "@ccr/clef";
 import { ACTIONS, type Action, type Observation } from "@ccr/core";
 import { ACTION_PREFERENCE } from "./baselines.ts";
-import { type EncoderId, encodeRequest } from "./encode.ts";
+import { ENCODER_IDS, type EncoderId, encodeRequest } from "./encode.ts";
 import type { Decision, ObservationPolicy, PolicyFactory } from "./policy.ts";
 import {
   ACTION_CRITERIA,
   choiceInstructions,
+  MANUAL_IDS,
   type ManualId,
   PROMPT_VERSION,
   riskInstructions,
@@ -21,7 +29,8 @@ import {
  * The critic strategies add our own decision rule on top of the model, so they are separate
  * experimental conditions from `choice` and must be reported as such.
  */
-export type StrategyId = "choice" | "critic" | "critic-go";
+export const STRATEGY_IDS = ["choice", "critic", "critic-go"] as const;
+export type StrategyId = (typeof STRATEGY_IDS)[number];
 
 export interface ClefPolicyConfig {
   model: ClefModel;
@@ -33,6 +42,29 @@ export interface ClefPolicyConfig {
 /** `clef:<model>:<encoder>:<strategy>[:<manual>]`, e.g. `clef:clef-flash:json:choice:full`. */
 export function clefPolicyId(config: ClefPolicyConfig): string {
   return `clef:${config.model}:${config.encoder}:${config.strategy}:${config.manual}`;
+}
+
+function oneOf<T extends string>(
+  allowed: readonly T[],
+  value: string | undefined,
+  what: string,
+  id: string,
+): T {
+  const found = allowed.find((candidate) => candidate === value);
+  if (found === undefined) throw new Error(`Unknown ${what} in "${id}"`);
+  return found;
+}
+
+/** Inverse of `clefPolicyId`. The manual defaults to `full`; anything unknown throws. */
+export function parseClefPolicyId(id: string): ClefPolicyConfig {
+  const [prefix, model, encoder, strategy, manual = "full"] = id.split(":");
+  if (prefix !== "clef") throw new Error(`Not a Clef policy id: "${id}"`);
+  return {
+    model: oneOf(CLEF_MODELS, model, "model", id),
+    encoder: oneOf(ENCODER_IDS, encoder, "encoder", id),
+    strategy: oneOf(STRATEGY_IDS, strategy, "strategy", id),
+    manual: oneOf(MANUAL_IDS, manual, "manual", id),
+  };
 }
 
 /** Risks within this distance of the lowest one count as equally safe. */
