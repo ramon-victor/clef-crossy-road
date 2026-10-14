@@ -1,4 +1,4 @@
-import type { SpendBudget } from "./budget.ts";
+import { budgetRefusal, type SpendBudget } from "./budget.ts";
 import type { CachedEntry, DecisionCache } from "./cache.ts";
 import { ClefError } from "./errors.ts";
 import { hashString } from "./hash.ts";
@@ -112,11 +112,8 @@ export class ClefClient {
         // The slot must be given back whatever happens here (the native ledger read can reject).
         try {
           if (!(await this.budget.canSpend())) {
-            const spent = Math.round(await this.budget.spentToday());
-            throw new ClefError(
-              "quota",
-              `Local daily budget reached: ${spent} of ${this.budget.dailyLimit} neurons used today (UTC). Nothing was sent.`,
-            );
+            const spent = await this.budget.spentToday();
+            throw new ClefError("quota", budgetRefusal(spent, this.budget.dailyLimit));
           }
         } catch (error) {
           release();

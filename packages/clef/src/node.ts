@@ -1,7 +1,8 @@
-import { appendFileSync, existsSync, mkdirSync, readFileSync, statSync } from "node:fs";
+import { existsSync, mkdirSync, statSync } from "node:fs";
 import { dirname } from "node:path";
 import { accountTag, MemoryBudget, type SpendEntry } from "./budget.ts";
 import type { CachedEntry, DecisionCache } from "./cache.ts";
+import { appendNdjson, endPartialLine, readNdjson } from "./ndjson.ts";
 import type { Transport, TransportRequest, TransportResponse } from "./transport.ts";
 
 export interface NodeTransportOptions {
@@ -55,14 +56,8 @@ export function createNodeTransport(options: NodeTransportOptions = {}): Transpo
   };
 }
 
-/**
- * If a previous process died mid-write, the file ends without a newline. Terminate that partial
- * line, otherwise the next appended record would be glued to it and become unreadable. For the
- * spend ledger that would silently under-count what was spent.
- */
-function terminatePartialLine(path: string, text: string): void {
-  if (text.length > 0 && !text.endsWith("\n")) appendFileSync(path, "\n");
-}
+const isObject = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null;
 
 /**
  * Daily spending ledger persisted as NDJSON (one `SpendEntry` per paid call). Every process that
@@ -81,14 +76,13 @@ export class FileBudget extends MemoryBudget {
     super(dailyLimit, clock, accountId ? accountTag(accountId) : undefined);
     this.path = path;
     mkdirSync(dirname(path), { recursive: true });
-    if (existsSync(path)) terminatePartialLine(path, readFileSync(path, "utf8"));
+    endPartialLine(path);
     this.reload();
   }
 
   /**
-   * Another process (the desktop app, a second bench run) may have spent since this one started.
-   * The ledger is re-read whenever its size changed, so the ceiling holds across processes and not
-   * only inside this one.
+   * Another process (the desktop app, a second bench run) may have spent since this one started, so
+   * the ledger is re-read whenever its size changed. That makes the ceiling hold across processes.
    */
   override spentToday(): number {
     this.reload();
@@ -100,22 +94,16 @@ export class FileBudget extends MemoryBudget {
     const size = statSync(this.path).size;
     if (size === this.knownSize) return;
     this.entries.length = 0;
-    for (const line of readFileSync(this.path, "utf8").split("\n")) {
-      if (!line.trim()) continue;
-      try {
-        const entry: unknown = JSON.parse(line);
-        if (typeof entry === "object" && entry !== null) this.entries.push(entry as SpendEntry);
-      } catch {
-        // Ignore a partially written last line.
-      }
+    for (const entry of readNdjson(this.path)) {
+      if (isObject(entry)) this.entries.push(entry as unknown as SpendEntry);
     }
     this.knownSize = size;
   }
 
   protected override add(entry: SpendEntry): void {
-    this.reload(); // pick up what others wrote before this record, so none of it is lost from view
+    this.reload(); // pick up what others wrote first, so none of it drops out of view
     super.add(entry);
-    appendFileSync(this.path, `${JSON.stringify(entry)}\n`);
+    appendNdjson(this.path, entry);
     this.knownSize = statSync(this.path).size;
   }
 }
@@ -131,17 +119,10 @@ export class FileCache implements DecisionCache {
   constructor(path: string) {
     this.path = path;
     mkdirSync(dirname(path), { recursive: true });
-    if (existsSync(path)) {
-      const text = readFileSync(path, "utf8");
-      terminatePartialLine(path, text);
-      for (const line of text.split("\n")) {
-        if (!line.trim()) continue;
-        try {
-          const { k, v } = JSON.parse(line) as { k: string; v: CachedEntry };
-          this.map.set(k, v);
-        } catch {
-          // A partially written last line (crash) is ignored; the call is simply repeated.
-        }
+    endPartialLine(path);
+    for (const line of readNdjson(path)) {
+      if (isObject(line) && typeof line.k === "string") {
+        this.map.set(line.k, line.v as CachedEntry);
       }
     }
   }
@@ -152,10 +133,12 @@ export class FileCache implements DecisionCache {
 
   set(key: string, value: CachedEntry): void {
     this.map.set(key, value);
-    appendFileSync(this.path, `${JSON.stringify({ k: key, v: value })}\n`);
+    appendNdjson(this.path, { k: key, v: value });
   }
 
   get size(): number {
     return this.map.size;
   }
 }
+
+export { appendNdjson, endPartialLine, readNdjson };

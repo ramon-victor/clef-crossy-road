@@ -2,7 +2,7 @@ import { appendFileSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { accountTag, MemoryBudget, utcDay } from "./budget.ts";
+import { accountTag, budgetRefusal, isBudgetRefusal, MemoryBudget, utcDay } from "./budget.ts";
 import { MemoryCache } from "./cache.ts";
 import { ClefClient } from "./client.ts";
 import { FileBudget } from "./node.ts";
@@ -58,6 +58,15 @@ describe("MemoryBudget", () => {
 
   it("a zero budget never allows a call", () => {
     expect(new MemoryBudget(0).canSpend()).toBe(false);
+  });
+
+  it("words the refusal so the UI can recognise it", () => {
+    const message = budgetRefusal(26_347.4, 10_000);
+    expect(message).toBe(
+      "Local daily budget reached: 26347 of 10000 neurons used today (UTC). Nothing was sent.",
+    );
+    expect(isBudgetRefusal(message)).toBe(true);
+    expect(isBudgetRefusal("network error: timeout")).toBe(false);
   });
 });
 

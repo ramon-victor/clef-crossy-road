@@ -1,6 +1,7 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { resolve } from "node:path";
 import {
+  budgetRefusal,
   type CachedEntry,
   type ClefModel,
   FREE_NEURONS_PER_DAY,
@@ -101,7 +102,7 @@ export function devBridge(): Plugin {
               return send(res, 400, { error: `model not allowed: ${model}` });
             if (!ledger.canSpend()) {
               return send(res, 429, {
-                error: `Local daily budget reached: ${Math.round(ledger.spentToday())} of ${FREE_NEURONS_PER_DAY} neurons used today (UTC). Nothing was sent.`,
+                error: budgetRefusal(ledger.spentToday(), FREE_NEURONS_PER_DAY),
               });
             }
             transport ??= createNodeTransport();

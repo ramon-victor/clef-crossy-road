@@ -1,4 +1,12 @@
-export { accountTag, MemoryBudget, type SpendBudget, type SpendEntry, utcDay } from "./budget.ts";
+export {
+  accountTag,
+  budgetRefusal,
+  isBudgetRefusal,
+  MemoryBudget,
+  type SpendBudget,
+  type SpendEntry,
+  utcDay,
+} from "./budget.ts";
 export { type CachedEntry, type DecisionCache, MemoryCache } from "./cache.ts";
 export { ClefClient, type ClefClientOptions } from "./client.ts";
 export { ClefError, type ClefErrorKind } from "./errors.ts";

@@ -45,6 +45,14 @@ export interface SpendBudget {
 
 export const utcDay = (date: Date): string => date.toISOString().slice(0, 10);
 
+const REFUSAL_PREFIX = "Local daily budget reached";
+
+/** The refusal text. The Rust side words it the same way, and the UI recognises it with `isBudgetRefusal`. */
+export const budgetRefusal = (spent: number, limit: number): string =>
+  `${REFUSAL_PREFIX}: ${Math.round(spent)} of ${limit} neurons used today (UTC). Nothing was sent.`;
+
+export const isBudgetRefusal = (message: string): boolean => message.includes(REFUSAL_PREFIX);
+
 /** In-memory ledger. The file-backed one in `@ccr/clef/node` persists across runs. */
 export class MemoryBudget implements SpendBudget {
   readonly dailyLimit: number;
