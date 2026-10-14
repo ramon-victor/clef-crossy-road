@@ -1,7 +1,7 @@
 import {
   alwaysForward,
-  type ClefPolicyConfig,
   clefPolicy,
+  DEFAULT_CLEF,
   decisionCost,
   lookaheadPolicy,
   type PolicyFactory,
@@ -55,49 +55,8 @@ export function nextMapSeed(
   return { seed: random(), free: false };
 }
 
-interface ModelSpec {
-  id: string;
-  label: string;
-  detail: string;
-  config: ClefPolicyConfig;
-  freeReplay: string;
-}
-
-const flash = (
-  encoder: ClefPolicyConfig["encoder"],
-  strategy: ClefPolicyConfig["strategy"],
-): ClefPolicyConfig => ({ model: "clef-flash", encoder, strategy, manual: "full" });
-
-const MODELS: readonly ModelSpec[] = [
-  {
-    id: "clef-flash-json",
-    label: "Clef-flash · JSON",
-    detail: "9B model, observation as JSON, one choice question",
-    config: flash("json", "choice"),
-    freeReplay: "1-100",
-  },
-  {
-    id: "clef-flash-grid",
-    label: "Clef-flash · grid",
-    detail: "9B model, observation drawn as a text grid",
-    config: flash("grid", "choice"),
-    freeReplay: "1-100",
-  },
-  {
-    id: "clef-flash-critic",
-    label: "Clef-flash · critic",
-    detail: "Asks 'does it die?' per move; goes forward unless risk > 50% (our rule)",
-    config: flash("json", "critic-go"),
-    freeReplay: "1-71",
-  },
-  {
-    id: "clef-27b-json",
-    label: "Clef 27B · JSON",
-    detail: "The larger model; about 6x the cost per decision",
-    config: { model: "clef", encoder: "json", strategy: "choice", manual: "full" },
-    freeReplay: "1-40",
-  },
-];
+/** The id of the one model player, which is what `CCR_PLAYER` and `?player=` select. */
+export const CLEF_ID = "clef";
 
 const HUMAN: PolicyChoice = {
   id: "human",
@@ -135,15 +94,25 @@ const REFERENCES: readonly PolicyChoice[] = [
   },
 ];
 
+/**
+ * The model player. There is one on purpose: JSON, grid, critic and the 27B were conditions of the
+ * benchmark, and none played better than "always forward" (docs/07). The seeds in `freeReplay` are
+ * the ones whose decisions that benchmark left in the cache.
+ */
+function clefChoice(client: ClefClient | null): PolicyChoice {
+  return {
+    id: CLEF_ID,
+    label: "Clef-flash",
+    detail:
+      "Cloudflare's 9B decision model picks every move. In our tests it plays about like 'always forward' (3.7 rows)",
+    kind: "model",
+    usesApi: true,
+    neuronsPerDecision: decisionCost(DEFAULT_CLEF).neurons,
+    freeReplay: "1-100",
+    factory: client ? clefPolicy(client, DEFAULT_CLEF) : null,
+  };
+}
+
 export function buildPolicyChoices(client: ClefClient | null): PolicyChoice[] {
-  const models = MODELS.map(
-    ({ config, ...spec }): PolicyChoice => ({
-      ...spec,
-      kind: "model",
-      usesApi: true,
-      neuronsPerDecision: decisionCost(config).neurons,
-      factory: client ? clefPolicy(client, config) : null,
-    }),
-  );
-  return [HUMAN, ...models, ...REFERENCES];
+  return [HUMAN, clefChoice(client), ...REFERENCES];
 }

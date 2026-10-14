@@ -3,12 +3,12 @@ import { isTauri } from "./bridge/tauri.ts";
 import { isSeed, parseSeedText } from "./seed.ts";
 
 export interface LaunchOptions {
-  /** A policy choice id from policies.ts, e.g. "clef-flash-json". */
+  /** A policy choice id from policies.ts, e.g. "clef". */
   player?: string;
   seed?: number;
 }
 
-/** Launch options from a query string such as `?player=clef-flash-json&seed=1`. */
+/** Launch options from a query string such as `?player=clef&seed=1`. */
 export function launchFromQuery(search: string): LaunchOptions {
   const params = new URLSearchParams(search);
   const player = params.get("player");

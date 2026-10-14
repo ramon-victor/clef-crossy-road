@@ -3,10 +3,7 @@ import { launchFromQuery } from "./launch.ts";
 
 describe("launchFromQuery", () => {
   it("reads the player and the seed", () => {
-    expect(launchFromQuery("?player=clef-flash-json&seed=7")).toEqual({
-      player: "clef-flash-json",
-      seed: 7,
-    });
+    expect(launchFromQuery("?player=clef&seed=7")).toEqual({ player: "clef", seed: 7 });
   });
 
   it("asks for nothing by default", () => {

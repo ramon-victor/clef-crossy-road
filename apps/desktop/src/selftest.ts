@@ -3,7 +3,7 @@ import type { GameView } from "@ccr/render";
 import { invoke } from "@tauri-apps/api/core";
 import { isTauri } from "./bridge/tauri.ts";
 import type { Bridge } from "./bridge/types.ts";
-import type { PolicyChoice } from "./policies.ts";
+import { CLEF_ID, type PolicyChoice } from "./policies.ts";
 import type { Session } from "./session.ts";
 
 interface Context {
@@ -117,7 +117,7 @@ async function checkBudget(ctx: Context): Promise<Report> {
  * this exact policy by the benchmark, so every decision should come from the cache.
  */
 async function checkClefFromCache(ctx: Context): Promise<Report> {
-  ctx.select("clef-flash-json");
+  ctx.select(CLEF_ID);
   ctx.session.setSpeed(4);
   ctx.session.start(1);
   const started = performance.now();

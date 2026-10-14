@@ -460,14 +460,6 @@ canvas.game {
   background: var(--good);
 }
 
-.bar > div.risk {
-  background: var(--warn);
-}
-
-.bar-row.chosen-row .bar > div.risk {
-  background: var(--bad);
-}
-
 .bar-num {
   font-variant-numeric: tabular-nums;
   font-size: 13px;
