@@ -1,17 +1,8 @@
-import {
-  createRng,
-  type DeathCause,
-  DOMAIN_COSMETIC,
-  HOP_TICKS,
-  type MoverSnapshot,
-  type RowSnapshot,
-  type Snapshot,
-} from "@ccr/core";
+import { type DeathCause, HOP_TICKS, type Snapshot } from "@ccr/core";
 import {
   AmbientLight,
   DirectionalLight,
   Group,
-  type Object3D,
   OrthographicCamera,
   PCFShadowMap,
   Scene,
@@ -22,17 +13,15 @@ import {
 import { type Assets, loadAssets } from "./assets.ts";
 import {
   cameraTargetX,
-  DROWNED_Y,
-  ENTITY_Y,
   facingFor,
   followFactor,
   heroY,
   hopStretch,
-  PLATFORM_TOP,
   ROW_TOP,
   shortestAngle,
-  trainLightPhase,
+  standingHeight,
 } from "./layout.ts";
+import { buildRowView, type RowView, updateRowView } from "./row-view.ts";
 
 export interface GameViewOptions {
   canvas: HTMLCanvasElement;
@@ -43,20 +32,6 @@ export interface GameViewOptions {
   viewWidthTiles?: number;
   /** How many rows below the screen centre the hero stands (default 1.6). */
   heroRowsBelowCentre?: number;
-}
-
-interface MoverView {
-  object: Object3D;
-  speed: number;
-  baseX: number;
-}
-
-interface RowView {
-  z: number;
-  kind: RowSnapshot["kind"];
-  group: Group;
-  movers: MoverView[];
-  lights?: { inactive: Object3D; a: Object3D; b: Object3D };
 }
 
 export interface ViewStats {
@@ -206,8 +181,6 @@ export class GameView {
     this.renderer.dispose();
   }
 
-  // ------------------------------------------------------------------------------------------
-
   private resetFor(snap: Snapshot): void {
     for (const view of this.rows.values()) this.world.remove(view.group);
     this.rows.clear();
@@ -226,11 +199,11 @@ export class GameView {
       wanted.add(row.z);
       let view = this.rows.get(row.z);
       if (!view) {
-        view = this.buildRow(row, snap.seed);
+        view = buildRowView(this.assets, row, snap.seed, this.rows.get(row.z - 1)?.kind);
         this.rows.set(row.z, view);
         this.world.add(view.group);
       }
-      this.updateRow(view, row, snap.tick, alpha);
+      updateRowView(view, row, snap.tick, alpha);
     }
     for (const [z, view] of this.rows) {
       if (!wanted.has(z)) {
@@ -240,117 +213,19 @@ export class GameView {
     }
   }
 
-  private buildRow(row: RowSnapshot, seed: number): RowView {
-    const group = new Group();
-    group.position.z = row.z;
-    const view: RowView = { z: row.z, kind: row.kind, group, movers: [] };
-    const a = this.assets;
-
-    switch (row.kind) {
-      case "grass": {
-        group.add(a.floors.grass.clone());
-        const rng = createRng(seed, row.z, DOMAIN_COSMETIC);
-        for (const x of row.blocked) {
-          // Upstream: 40% boulders, otherwise one of four trees.
-          const boulder = rng.next() < 0.4;
-          const source = boulder
-            ? a.boulders[rng.int(a.boulders.length)]
-            : a.trees[rng.int(a.trees.length)];
-          if (!source) continue;
-          const tree = source.clone();
-          tree.position.set(x, ENTITY_Y.tree, 0);
-          group.add(tree);
-        }
-        break;
-      }
-      case "road": {
-        const previous = this.rows.get(row.z - 1);
-        const first = previous?.kind !== "road";
-        group.add((first ? a.floors.roadBlank : a.floors.road).clone());
-        for (const m of row.movers) {
-          const car = a.cars[m.variant % a.cars.length]?.clone();
-          if (!car) continue;
-          car.rotation.y = (Math.PI / 2) * Math.sign(m.speed || 1);
-          car.position.set(m.x, ENTITY_Y.car, 0);
-          group.add(car);
-          view.movers.push({ object: car, speed: m.speed, baseX: m.x });
-        }
-        break;
-      }
-      case "water": {
-        group.add(a.floors.river.clone());
-        for (const m of row.movers) {
-          const item =
-            m.kind === "log" ? a.logs[m.variant % a.logs.length]?.clone() : a.lilyPad.clone();
-          if (!item) continue;
-          item.position.set(m.x, m.kind === "log" ? ENTITY_Y.log : ENTITY_Y.lilyPad, 0);
-          if (m.kind === "lily_pad") item.rotation.y = 0.5 + ((m.x * 7 + row.z) % 10) / 10;
-          group.add(item);
-          view.movers.push({ object: item, speed: m.speed, baseX: m.x });
-        }
-        break;
-      }
-      case "rail": {
-        const floor = a.floors.railroad.clone();
-        group.add(floor);
-        const inactive = a.trainLight.inactive.clone();
-        const lightA = a.trainLight.active[0].clone();
-        const lightB = a.trainLight.active[1].clone();
-        for (const light of [inactive, lightA, lightB]) {
-          light.position.z = -0.5;
-          light.rotation.y = Math.PI;
-          group.add(light);
-        }
-        view.lights = { inactive, a: lightA, b: lightB };
-
-        const train = new Group();
-        const middles = row.movers[0]?.variant ?? 2;
-        train.add(a.train.front.clone());
-        let offset = 5; // each segment is spaced by round(width) = 5, as Node/Train.ts
-        for (let i = 0; i < middles; i++) {
-          const mid = a.train.middle.clone();
-          mid.position.x = offset;
-          train.add(mid);
-          offset += 5;
-        }
-        const back = a.train.back.clone();
-        back.position.x = offset;
-        train.add(back);
-        train.position.set(row.movers[0]?.x ?? 0, ENTITY_Y.train, 0.1);
-        group.add(train);
-        view.movers.push({ object: train, speed: row.movers[0]?.speed ?? 0, baseX: 0 });
-        break;
-      }
-    }
-    return view;
-  }
-
-  private updateRow(view: RowView, row: RowSnapshot, tick: number, alpha: number): void {
-    if (row.kind === "grass") return;
-    const movers: readonly MoverSnapshot[] = row.movers;
-    for (let i = 0; i < view.movers.length; i++) {
-      const mv = view.movers[i];
-      const m = movers[i];
-      if (!mv || !m) continue;
-      // Between ticks a mover advances by exactly its speed; a wrap shows as a one-frame jump
-      // far outside the playable area.
-      mv.object.position.x = m.x + m.speed * alpha;
-    }
-    if (row.kind === "rail" && view.lights) {
-      const { inactive, a, b } = view.lights;
-      inactive.visible = !row.lightOn;
-      const phase = trainLightPhase(tick);
-      a.visible = row.lightOn && phase === 0;
-      b.visible = row.lightOn && phase === 1;
-    }
+  /** What carries the hero over water, read from the snapshot's own movers. */
+  private ride(snap: Snapshot): "log" | "lily_pad" | null {
+    const riding = snap.hero.ridingOn;
+    if (!riding) return null;
+    const row = snap.rows.find((r) => r.z === riding.z);
+    const mover = row && row.kind !== "grass" ? row.movers[riding.index] : undefined;
+    return mover?.kind === "log" ? "log" : "lily_pad";
   }
 
   private updateHero(snap: Snapshot, alpha: number): void {
     const h = snap.hero;
     const moving = h.moving;
-    // Interpolate along the current tick's motion (one tick is the unit of the simulation).
-    const x = h.x;
-    const z = h.z;
+    const { x, z } = h;
 
     let hopProgress: number | null = null;
     if (moving) {
@@ -359,24 +234,12 @@ export class GameView {
     }
 
     // Floor height under the hero, blended across row boundaries.
-    const rowBelow = this.rows.get(Math.round(z));
-    let base: number = ROW_TOP.grass;
-    if (rowBelow) {
-      if (rowBelow.kind === "road") base = ROW_TOP.road;
-      else if (rowBelow.kind === "rail") base = ROW_TOP.rail;
-      else if (rowBelow.kind === "water") {
-        base = ROW_TOP.water;
-        if (h.ridingOn) {
-          const platform = this.rows.get(h.ridingOn.z)?.movers[h.ridingOn.index]?.object;
-          base = platform && platform.position.y < 0 ? PLATFORM_TOP.log : PLATFORM_TOP.lilyPad;
-        } else if (!moving && !snap.alive && snap.deathCause === "water") {
-          base = DROWNED_Y;
-        }
-      } else base = ROW_TOP.grass;
-    }
+    const drowned = !moving && !snap.alive && snap.deathCause === "water";
+    const floor = this.rows.get(Math.round(z))?.kind;
+    const base = standingHeight(floor, this.ride(snap), drowned);
     this.heroBaseY += (base - this.heroBaseY) * 0.35;
 
-    this.hero.position.set(x + (moving ? 0 : 0), heroY(this.heroBaseY, hopProgress), z);
+    this.hero.position.set(x, heroY(this.heroBaseY, hopProgress), z);
     const turn = shortestAngle(this.heroBody.rotation.y, this.facing);
     this.heroBody.rotation.y += turn * 0.4;
 

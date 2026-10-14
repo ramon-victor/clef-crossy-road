@@ -1,15 +1,39 @@
 import { describe, expect, it } from "vitest";
 import {
   cameraTargetX,
+  DROWNED_Y,
   FOLLOW_PER_FRAME,
   facingFor,
   followFactor,
   heroY,
   hopArc,
   hopStretch,
+  PLATFORM_TOP,
+  ROW_TOP,
   shortestAngle,
+  standingHeight,
   trainLightPhase,
 } from "./layout.ts";
+
+describe("standingHeight", () => {
+  it("is the floor of the row the hero is over, or grass where nothing is built yet", () => {
+    expect(standingHeight("road", null, false)).toBe(ROW_TOP.road);
+    expect(standingHeight("rail", null, false)).toBe(ROW_TOP.rail);
+    expect(standingHeight("grass", null, false)).toBe(ROW_TOP.grass);
+    expect(standingHeight(undefined, null, false)).toBe(ROW_TOP.grass);
+  });
+
+  it("on water is the platform carrying the hero, else the surface, else the river bed once drowned", () => {
+    expect(standingHeight("water", "log", false)).toBe(PLATFORM_TOP.log);
+    expect(standingHeight("water", "lily_pad", false)).toBe(PLATFORM_TOP.lilyPad);
+    expect(standingHeight("water", null, false)).toBe(ROW_TOP.water);
+    expect(standingHeight("water", null, true)).toBe(DROWNED_Y);
+  });
+
+  it("ignores a ride or a drowning that is not on water", () => {
+    expect(standingHeight("road", "log", true)).toBe(ROW_TOP.road);
+  });
+});
 
 describe("camera follow", () => {
   it("moves 3% per frame at 60 Hz, like the original", () => {

@@ -73,6 +73,21 @@ export function shortestAngle(from: number, to: number): number {
   return d;
 }
 
+/**
+ * Height of the surface the hero stands on: the floor of its row, the platform carrying it on water
+ * (`ride`), or the river bed once it has drowned. A row that has not been built yet counts as grass.
+ */
+export function standingHeight(
+  floor: FloorKind | undefined,
+  ride: "log" | "lily_pad" | null,
+  drowned: boolean,
+): number {
+  if (floor === undefined) return ROW_TOP.grass;
+  if (floor !== "water") return ROW_TOP[floor];
+  if (ride) return ride === "log" ? PLATFORM_TOP.log : PLATFORM_TOP.lilyPad;
+  return drowned ? DROWNED_Y : ROW_TOP.water;
+}
+
 /** Interpolated hero y: floor height blended across the row boundary plus the jump arc. */
 export function heroY(base: number, hopProgress: number | null): number {
   return base + (hopProgress === null ? 0 : hopArc(hopProgress));
