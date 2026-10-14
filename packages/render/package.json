@@ -1,0 +1,24 @@
+{
+  "name": "@ccr/render",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Three.js view of a @ccr/core Snapshot, using the voxel models of Expo-Crossy-Road.",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.test.json",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@ccr/core": "workspace:*",
+    "three": "0.182.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "@types/three": "0.182.0",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.4"
+  }
+}
