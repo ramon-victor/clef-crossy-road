@@ -12,6 +12,7 @@ export interface PanelProps {
   budget: BudgetStatus | null;
   fps: number;
   soundOn: boolean;
+  autoRestart: boolean;
   bridgeKind: "tauri" | "http";
   onSelect(id: string): void;
   onTiming(timing: Timing): void;
@@ -22,6 +23,7 @@ export interface PanelProps {
   onNewMap(): void;
   onSeed(seed: number): void;
   onSound(on: boolean): void;
+  onAutoRestart(on: boolean): void;
 }
 
 const SPEEDS = [0.5, 1, 2, 4];
@@ -78,6 +80,12 @@ export function Panel(props: PanelProps) {
           </optgroup>
         </select>
         {choice && <p class="hint">{choice.detail}</p>}
+        {choice?.freeReplay && (
+          <p class="hint">
+            Seeds {choice.freeReplay} replay from the cache <strong>for free</strong>; other maps
+            ask the model and spend neurons.
+          </p>
+        )}
 
         {!state.human && (
           <fieldset class="segmented">
@@ -226,6 +234,17 @@ export function Panel(props: PanelProps) {
             onChange={(e) => props.onSound((e.currentTarget as HTMLInputElement).checked)}
           />{" "}
           sound
+        </label>
+        <label
+          class="check"
+          title="Only for free players; model players never restart by themselves"
+        >
+          <input
+            type="checkbox"
+            checked={props.autoRestart}
+            onChange={(e) => props.onAutoRestart((e.currentTarget as HTMLInputElement).checked)}
+          />{" "}
+          auto-restart (free players)
         </label>
         <span>{Math.round(props.fps)} fps</span>
         <span>{props.bridgeKind === "tauri" ? "desktop" : "browser dev"}</span>

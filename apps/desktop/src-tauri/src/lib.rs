@@ -286,6 +286,20 @@ async fn clef_run(state: State<'_, AppState>, model: String, body: Value) -> Res
     Ok(RunResponse { status, json, retry_after_ms })
 }
 
+/// Parses a seed given on the command line or in the environment: an unsigned 32-bit integer.
+fn parse_seed(text: &str) -> Option<u32> {
+    text.trim().parse::<u32>().ok()
+}
+
+/// Optional launch settings (`CCR_PLAYER`, `CCR_SEED`) so a shortcut can open the app on a given player and map,
+/// for example Clef-flash replaying seed 1 from the cache.
+#[tauri::command]
+fn launch_options() -> Value {
+    let player = std::env::var("CCR_PLAYER").ok().filter(|s| !s.trim().is_empty());
+    let seed = std::env::var("CCR_SEED").ok().and_then(|s| parse_seed(&s));
+    json!({ "player": player, "seed": seed })
+}
+
 /// True when the app was launched with `CCR_SELFTEST=1` (used by scripted checks, never by players).
 #[tauri::command]
 fn selftest_enabled() -> bool {
@@ -327,6 +341,7 @@ pub fn run() {
             cache_get,
             cache_put,
             budget_status,
+            launch_options,
             selftest_enabled,
             report_selftest
         ])
@@ -358,6 +373,16 @@ mod tests {
         // clef-flash: 3,455 neurons per million tokens; clef: 21,818.
         assert!((neurons_for(0.038, 1_000_000.0) - 3454.5).abs() < 1.0);
         assert!((neurons_for(0.24, 1_000_000.0) - 21818.2).abs() < 1.0);
+    }
+
+    #[test]
+    fn seeds_are_unsigned_32_bit_integers() {
+        assert_eq!(parse_seed("1"), Some(1));
+        assert_eq!(parse_seed(" 4294967295 "), Some(u32::MAX));
+        assert_eq!(parse_seed("4294967296"), None);
+        assert_eq!(parse_seed("-3"), None);
+        assert_eq!(parse_seed("abc"), None);
+        assert_eq!(parse_seed(""), None);
     }
 
     #[test]

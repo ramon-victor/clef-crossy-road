@@ -6,8 +6,9 @@ import { createBridge, createClefClient } from "./bridge/clef.ts";
 import type { BudgetStatus } from "./bridge/types.ts";
 import { randomSeed } from "./format.ts";
 import { GameCanvas } from "./GameCanvas.tsx";
+import { readLaunchOptions } from "./launch.ts";
 import { Panel } from "./Panel.tsx";
-import { buildPolicyChoices } from "./policies.ts";
+import { buildPolicyChoices, freeSeedRange, nextMapSeed } from "./policies.ts";
 import { runSelfTest } from "./selftest.ts";
 import { Session, type SessionState, type Timing } from "./session.ts";
 
@@ -42,6 +43,7 @@ export function App() {
   const [budget, setBudget] = useState<BudgetStatus | null>(null);
   const [fps, setFps] = useState(60);
   const [soundOn, setSoundOn] = useState(true);
+  const [autoRestart, setAutoRestart] = useState(true);
   const viewRef = useRef<GameView | null>(null);
 
   const refreshBudget = useCallback(() => {
@@ -67,24 +69,66 @@ export function App() {
     return () => clearInterval(timer);
   }, [refreshBudget]);
 
-  // Starting policy: the free reference, so opening the app never spends anything.
+  // The last cached ("free") seed opened per player, so "New map" can walk through them in order.
+  const lastFree = useRef(new Map<string, number>());
+  const noteSeed = useCallback(
+    (id: string, seed: number) => {
+      const range = freeSeedRange(choices.find((c) => c.id === id));
+      if (range && seed >= range.min && seed <= range.max) lastFree.current.set(id, seed);
+    },
+    [choices],
+  );
+
+  // Starting point: the free reference unless a shortcut asked for something else (CCR_PLAYER / CCR_SEED).
+  // The default never spends anything.
   useEffect(() => {
-    const initial = choices.find((c) => c.id === "lookahead");
-    if (initial) session.setPolicy(initial.factory);
-  }, [choices, session]);
+    let cancelled = false;
+    void readLaunchOptions().then((options) => {
+      if (cancelled) return;
+      const wanted =
+        choices.find((c) => c.id === options.player) ?? choices.find((c) => c.id === "lookahead");
+      if (!wanted) return;
+      setSelectedId(wanted.id);
+      session.setPolicy(wanted.factory);
+      if (options.seed !== undefined) {
+        noteSeed(wanted.id, options.seed);
+        session.start(options.seed);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [choices, session, noteSeed]);
 
   const select = useCallback(
     (id: string) => {
       const choice = choices.find((c) => c.id === id);
       if (!choice) return;
       setSelectedId(id);
+      lastFree.current.delete(id);
       session.setPolicy(choice.factory);
     },
     [choices, session],
   );
 
   const retry = useCallback(() => session.start(session.state().seed), [session]);
-  const newMap = useCallback(() => session.start(randomSeed()), [session]);
+  const newMap = useCallback(() => {
+    const choice = choices.find((c) => c.id === selectedId);
+    const next = nextMapSeed(choice, lastFree.current.get(selectedId), randomSeed);
+    if (next.free) lastFree.current.set(selectedId, next.seed);
+    session.start(next.seed);
+  }, [choices, selectedId, session]);
+
+  // Attract mode: a finished game by a FREE player (a reference) starts a new map after a short pause,
+  // so the window keeps showing action. Players that call the model never restart by themselves, so an
+  // unattended window cannot use up the day's neurons.
+  const selected = choices.find((c) => c.id === selectedId);
+  const mayAutoRestart = autoRestart && selected !== undefined && !selected.usesApi && !state.human;
+  useEffect(() => {
+    if (state.alive || !mayAutoRestart) return;
+    const timer = setTimeout(newMap, 2200);
+    return () => clearTimeout(timer);
+  }, [state.alive, state.seed, mayAutoRestart, newMap]);
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -133,6 +177,7 @@ export function App() {
         budget={budget}
         fps={fps}
         soundOn={soundOn}
+        autoRestart={autoRestart}
         bridgeKind={bridge.kind}
         onSelect={(id) => {
           select(id);
@@ -144,11 +189,15 @@ export function App() {
         onStep={() => session.stepOnce()}
         onRetry={retry}
         onNewMap={newMap}
-        onSeed={(seed) => session.start(seed)}
+        onSeed={(seed) => {
+          noteSeed(selectedId, seed);
+          session.start(seed);
+        }}
         onSound={(on) => {
           sounds.enabled = on;
           setSoundOn(on);
         }}
+        onAutoRestart={setAutoRestart}
       />
     </div>
   );
