@@ -9,3 +9,7 @@
 *.ttf binary
 *.wav binary
 *.mp3 binary
+
+# Windows batch files need CRLF line endings to run reliably in cmd.exe.
+*.cmd text eol=crlf
+*.bat text eol=crlf
