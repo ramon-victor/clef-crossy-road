@@ -21,8 +21,10 @@ Phases 0-4 are built (186 TS tests + 9 Rust tests). **The gate was NOT passed, i
 critic-go, minimal manual) plays like "always forward" (~3.7 rows), image input is significantly worse, and Clef 27B chose
 "forward" every time (`docs/07-experimentos.md`). Diagnosis: 72-85% of hops into water are fatal and the model's probability
 carries no information about which ones survive (AUC 0.5-0.6 inside water). Only `clef-omni` is untested.
-The repo has `git init` but no commits yet (commits only when the owner asks). `.env` holds a working `CF_API_TOKEN`
-and `CF_ACCOUNT_ID`. Installed: Node 24, pnpm 10, git, MSVC, WebView2, Rust 1.99 (rustup, user-level).
+The owner authorized commits on 2026-10-14 (history is on `main`, Conventional Commits, one logical change each, with the
+`Co-Authored-By` trailer). Pushing still needs their say-so. `.env` holds a working `CF_API_TOKEN` and `CF_ACCOUNT_ID`.
+Installed: Node 24, pnpm 10, git, MSVC, WebView2, Rust 1.99 (rustup, user-level). Git checks out LF (`.gitattributes`), except
+`*.cmd`, which must stay CRLF.
 
 ## Commands
 
@@ -71,7 +73,8 @@ and `CF_ACCOUNT_ID`. Installed: Node 24, pnpm 10, git, MSVC, WebView2, Rust 1.99
 - **Always**: add a golden test per ported rule that cites the source file in Evan's repo; update the matching
   `docs/` page (and its "Verificado em" date) when a contract or rule changes; record benchmark numbers only
   from real runs.
-- **Ask first**: commits and pushes; adding any runtime dependency to `core`; changing the observation schema.
+- **Ask first**: pushes; adding any runtime dependency to `core`; changing the observation schema. Before every commit, scan
+  the staged diff for the token prefix and account ids, and never stage `.env`, `runs/`, `dist/`, `target/` or `public/assets/`.
 - **Never**: spend above the free tier (10,000 neurons per UTC day, see below); commit `.env`; call
   Cloudflare from the webview; add hints about which move is safe; use `Math.random` in `core`; invent
   numbers for latency, cost or scores.
