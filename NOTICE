@@ -1,0 +1,44 @@
+Clef Crossy Road
+================
+
+Parts of this project are a derivative work of Expo-Crossy-Road:
+game rules, constants, row-generation logic and (in later phases) 3D models,
+textures and audio.
+
+  Expo-Crossy-Road
+  https://github.com/EvanBacon/Expo-Crossy-Road
+  Reference revision: 6f2e84e580c9c8f2b432aa365f706d45d96d8bc9
+
+The original source code is licensed under the MIT License:
+
+----------------------------------------------------------------------------
+
+The MIT License (MIT)
+
+Copyright (c) 2016-present Evan Bacon.
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+----------------------------------------------------------------------------
+
+Note on assets: the upstream README states that its game assets are used for
+educational purposes under a fair-use rationale and that the author is not
+associated with Hipster Whale, the makers of the original Crossy Road. The MIT
+license above covers the upstream source code; it does not by itself grant
+rights to the original game's branding or art. See docs/10-seguranca-e-licencas.md.
