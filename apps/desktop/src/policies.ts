@@ -1,6 +1,8 @@
 import {
   alwaysForward,
+  type ClefPolicyConfig,
   clefPolicy,
+  decisionCost,
   lookaheadPolicy,
   type PolicyFactory,
   randomPolicy,
@@ -16,7 +18,7 @@ export interface PolicyChoice {
   kind: ChoiceKind;
   /** True if a fresh decision may spend neurons (cache hits never do). */
   usesApi: boolean;
-  /** Relative cost of an uncached decision, in neurons (measured, see AGENTS.md). */
+  /** Cost of an uncached decision, in neurons (from the tokens measured per decision, see AGENTS.md). */
   neuronsPerDecision?: number;
   /**
    * Seeds whose decisions are already in the cache for this player (from the benchmark runs), so
@@ -25,11 +27,6 @@ export interface PolicyChoice {
   freeReplay?: string;
   factory: PolicyFactory | null;
 }
-
-/** ~1,120 tokens per `choice` and ~3,070 per `critic` decision on clef-flash (3,455 neurons/M tokens). */
-const FLASH_CHOICE = (1120 / 1e6) * 3455;
-const FLASH_CRITIC = (3070 / 1e6) * 3455;
-const CLEF_CHOICE = (1120 / 1e6) * 21818;
 
 /** Parses a `freeReplay` range such as "1-100" into its bounds. */
 export function freeSeedRange(
@@ -58,89 +55,95 @@ export function nextMapSeed(
   return { seed: random(), free: false };
 }
 
-export function buildPolicyChoices(client: ClefClient | null): PolicyChoice[] {
-  const model = (
-    id: string,
-    label: string,
-    detail: string,
-    neurons: number,
-    config: Parameters<typeof clefPolicy>[1],
-    freeReplay: string,
-  ): PolicyChoice => ({
-    id,
-    label,
-    detail,
-    kind: "model",
-    usesApi: true,
-    neuronsPerDecision: neurons,
-    freeReplay,
-    factory: client ? clefPolicy(client, config) : null,
-  });
+interface ModelSpec {
+  id: string;
+  label: string;
+  detail: string;
+  config: ClefPolicyConfig;
+  freeReplay: string;
+}
 
-  return [
-    {
-      id: "human",
-      label: "You",
-      detail: "Arrow keys or WASD",
-      kind: "human",
-      usesApi: false,
-      factory: null,
-    },
-    model(
-      "clef-flash-json",
-      "Clef-flash · JSON",
-      "9B model, observation as JSON, one choice question",
-      FLASH_CHOICE,
-      { model: "clef-flash", encoder: "json", strategy: "choice", manual: "full" },
-      "1-100",
-    ),
-    model(
-      "clef-flash-grid",
-      "Clef-flash · grid",
-      "9B model, observation drawn as a text grid",
-      FLASH_CHOICE * 1.18,
-      { model: "clef-flash", encoder: "grid", strategy: "choice", manual: "full" },
-      "1-100",
-    ),
-    model(
-      "clef-flash-critic",
-      "Clef-flash · critic",
-      "Asks 'does it die?' per move; goes forward unless risk > 50% (our rule)",
-      FLASH_CRITIC,
-      { model: "clef-flash", encoder: "json", strategy: "critic-go", manual: "full" },
-      "1-71",
-    ),
-    model(
-      "clef-27b-json",
-      "Clef 27B · JSON",
-      "The larger model; about 6x the cost per decision",
-      CLEF_CHOICE,
-      { model: "clef", encoder: "json", strategy: "choice", manual: "full" },
-      "1-40",
-    ),
-    {
-      id: "lookahead",
-      label: "Look-ahead (reference)",
-      detail: "Reads the simulator and searches 4 hops ahead. A ceiling, not a model",
-      kind: "reference",
-      usesApi: false,
-      factory: lookaheadPolicy(),
-    },
-    {
-      id: "always-forward",
-      label: "Always forward (baseline)",
-      detail: "The honest floor: about 4 rows on average",
-      kind: "reference",
-      usesApi: false,
-      factory: alwaysForward,
-    },
-    {
-      id: "random",
-      label: "Random (baseline)",
-      detail: "Uniform over the five actions",
-      kind: "reference",
-      usesApi: false,
-      factory: randomPolicy,
-    },
-  ];
+const flash = (
+  encoder: ClefPolicyConfig["encoder"],
+  strategy: ClefPolicyConfig["strategy"],
+): ClefPolicyConfig => ({ model: "clef-flash", encoder, strategy, manual: "full" });
+
+const MODELS: readonly ModelSpec[] = [
+  {
+    id: "clef-flash-json",
+    label: "Clef-flash · JSON",
+    detail: "9B model, observation as JSON, one choice question",
+    config: flash("json", "choice"),
+    freeReplay: "1-100",
+  },
+  {
+    id: "clef-flash-grid",
+    label: "Clef-flash · grid",
+    detail: "9B model, observation drawn as a text grid",
+    config: flash("grid", "choice"),
+    freeReplay: "1-100",
+  },
+  {
+    id: "clef-flash-critic",
+    label: "Clef-flash · critic",
+    detail: "Asks 'does it die?' per move; goes forward unless risk > 50% (our rule)",
+    config: flash("json", "critic-go"),
+    freeReplay: "1-71",
+  },
+  {
+    id: "clef-27b-json",
+    label: "Clef 27B · JSON",
+    detail: "The larger model; about 6x the cost per decision",
+    config: { model: "clef", encoder: "json", strategy: "choice", manual: "full" },
+    freeReplay: "1-40",
+  },
+];
+
+const HUMAN: PolicyChoice = {
+  id: "human",
+  label: "You",
+  detail: "Arrow keys or WASD",
+  kind: "human",
+  usesApi: false,
+  factory: null,
+};
+
+const REFERENCES: readonly PolicyChoice[] = [
+  {
+    id: "lookahead",
+    label: "Look-ahead (reference)",
+    detail: "Reads the simulator and searches 4 hops ahead. A ceiling, not a model",
+    kind: "reference",
+    usesApi: false,
+    factory: lookaheadPolicy(),
+  },
+  {
+    id: "always-forward",
+    label: "Always forward (baseline)",
+    detail: "The honest floor: about 4 rows on average",
+    kind: "reference",
+    usesApi: false,
+    factory: alwaysForward,
+  },
+  {
+    id: "random",
+    label: "Random (baseline)",
+    detail: "Uniform over the five actions",
+    kind: "reference",
+    usesApi: false,
+    factory: randomPolicy,
+  },
+];
+
+export function buildPolicyChoices(client: ClefClient | null): PolicyChoice[] {
+  const models = MODELS.map(
+    ({ config, ...spec }): PolicyChoice => ({
+      ...spec,
+      kind: "model",
+      usesApi: true,
+      neuronsPerDecision: decisionCost(config).neurons,
+      factory: client ? clefPolicy(client, config) : null,
+    }),
+  );
+  return [HUMAN, ...models, ...REFERENCES];
 }

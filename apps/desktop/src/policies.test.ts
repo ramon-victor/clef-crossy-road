@@ -36,6 +36,12 @@ describe("free replay seeds", () => {
     expect(nextMapSeed(byId("human"), 3, random).free).toBe(false);
   });
 
+  it("prices a decision from the measured tokens: critic costs more, the 27B about 6.3 times", () => {
+    const cost = (id: string) => byId(id)?.neuronsPerDecision ?? 0;
+    expect(cost("clef-flash-critic")).toBeGreaterThan(cost("clef-flash-json") * 2);
+    expect(cost("clef-27b-json") / cost("clef-flash-json")).toBeCloseTo(6.32, 1);
+  });
+
   it("every model player advertises a range and reports that it may spend", () => {
     for (const c of choices.filter((x) => x.kind === "model")) {
       expect(c.usesApi).toBe(true);

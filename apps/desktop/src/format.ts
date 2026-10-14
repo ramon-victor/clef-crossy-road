@@ -38,8 +38,10 @@ export const percent = (p: number | undefined): string =>
 export const ms = (v: number | null | undefined): string =>
   v === null || v === undefined ? "–" : `${Math.round(v)} ms`;
 
-export function randomSeed(): number {
-  const buffer = new Uint32Array(1);
-  crypto.getRandomValues(buffer);
-  return (buffer[0] ?? 1) % 1_000_000; // short, easy to read and type
+export type MeterLevel = "ok" | "high" | "full";
+
+/** How alarming the neuron meter should look: high from 70% of the free tier, full once it is spent. */
+export function meterLevel(spent: number, limit: number): MeterLevel {
+  if (spent >= limit) return "full";
+  return spent / limit > 0.7 ? "high" : "ok";
 }

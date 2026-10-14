@@ -1,5 +1,6 @@
 import { alwaysForward, type Decision, type PolicyFactory } from "@ccr/agent";
-import { type Action, Game } from "@ccr/core";
+import { constantPolicy } from "@ccr/agent/testing";
+import { Game } from "@ccr/core";
 import { describe, expect, it } from "vitest";
 import { Session } from "./session.ts";
 
@@ -9,25 +10,39 @@ function run(session: Session, seconds: number): void {
   for (let t = 0; t < seconds; t += FRAME) session.frame(FRAME);
 }
 
-/** A model-like policy whose answer arrives after a controllable delay. */
-function slowPolicy(delayMs: number, action: Action = "hop_forward") {
-  const calls: number[] = [];
-  const factory: PolicyFactory = {
-    id: "slow",
-    create: () => ({
-      kind: "observation",
-      id: "slow",
-      decide: async (): Promise<Decision> => {
-        calls.push(Date.now());
-        await new Promise((r) => setTimeout(r, delayMs));
-        return { action, latencyMs: delayMs, inputTokens: 1000, neurons: 3.4, cached: false };
-      },
-    }),
-  };
-  return { factory, calls };
+/** Lets pending promise callbacks run, without waiting for a timer. */
+async function settle(): Promise<void> {
+  for (let i = 0; i < 5; i++) await Promise.resolve();
 }
 
-const tick = () => new Promise((r) => setTimeout(r, 0));
+/** Plays frames, letting answers arrive in between, until `done` or the frame budget runs out. */
+async function runUntil(session: Session, done: () => boolean, maxFrames = 4000): Promise<void> {
+  for (let i = 0; i < maxFrames && !done(); i++) {
+    session.frame(FRAME);
+    await settle();
+  }
+}
+
+/** A model-like policy whose answers are given by the test, so no real time passes. */
+function controlledPolicy() {
+  const waiting: Array<(decision: Decision) => void> = [];
+  const factory: PolicyFactory = {
+    id: "controlled",
+    create: () => ({
+      kind: "observation",
+      id: "controlled",
+      decide: () => new Promise<Decision>((resolve) => waiting.push(resolve)),
+    }),
+  };
+  return {
+    factory,
+    asked: () => waiting.length,
+    async answer(decision: Decision = { action: "hop_forward" }) {
+      waiting.shift()?.(decision);
+      await settle();
+    },
+  };
+}
 
 describe("Session: human control", () => {
   it("runs the world and applies key input immediately", () => {
@@ -55,33 +70,31 @@ describe("Session: human control", () => {
 });
 
 describe("Session: AI in step timing", () => {
-  it("freezes the world while the policy thinks, then plays the hop out", async () => {
-    const { factory } = slowPolicy(40);
+  it("freezes the world, and asks once, while the policy thinks; then plays the hop out", async () => {
+    const policy = controlledPolicy();
     const s = new Session();
-    s.setPolicy(factory);
+    s.setPolicy(policy.factory);
     s.start(3);
 
-    s.frame(FRAME); // asks the policy
+    run(s, 0.3);
     expect(s.state().phase).toBe("thinking");
-    run(s, 0.02);
+    expect(policy.asked()).toBe(1);
     expect(s.game.tick).toBe(0); // the world did not move while waiting
 
-    await new Promise((r) => setTimeout(r, 60));
+    await policy.answer({ action: "hop_forward" });
     expect(s.state().phase).toBe("hopping");
     run(s, 0.5);
     expect(s.game.tick).toBeGreaterThanOrEqual(12);
-    expect(s.state().decisions).toBeGreaterThanOrEqual(1);
+    expect(s.state().decisions).toBe(1);
     expect(s.state().last?.action).toBe("hop_forward");
+    expect(policy.asked()).toBe(1); // the hop is over, so it asks for the next move
   });
 
   it("matches the benchmark: one decision per 12-tick hop, same result as Game.step", async () => {
     const s = new Session();
     s.setPolicy(alwaysForward);
     s.start(11);
-    for (let i = 0; i < 4000 && s.game.alive; i++) {
-      s.frame(FRAME);
-      await tick();
-    }
+    await runUntil(s, () => !s.game.alive);
     const reference = new Game({ seed: 11 });
     for (let i = 0; i < s.state().decisions; i++) reference.step("hop_forward");
     expect(s.game.score).toBe(reference.score);
@@ -97,22 +110,18 @@ describe("Session: AI in step timing", () => {
     expect(s.state().decisions).toBe(0);
 
     s.stepOnce();
-    for (let i = 0; i < 100; i++) {
-      s.frame(FRAME);
-      await tick();
-    }
-    expect(s.state().decisions).toBe(1);
-    expect(s.state().paused).toBe(true);
+    await runUntil(s, () => false, 100);
+    expect(s.state()).toMatchObject({ decisions: 1, paused: true });
   });
 
   it("discards an answer that arrives after a restart", async () => {
-    const { factory } = slowPolicy(30);
+    const policy = controlledPolicy();
     const s = new Session();
-    s.setPolicy(factory);
+    s.setPolicy(policy.factory);
     s.start(1);
     s.frame(FRAME);
     s.start(2); // restart while the answer is in flight
-    await new Promise((r) => setTimeout(r, 60));
+    await policy.answer();
     expect(s.state().decisions).toBe(0);
     expect(s.game.tick).toBe(0);
   });
@@ -134,7 +143,7 @@ describe("Session: AI in step timing", () => {
     s.setPolicy(failing);
     s.start(1);
     s.frame(FRAME);
-    await tick();
+    await settle();
     expect(s.state().phase).toBe("error");
     expect(s.state().error).toContain("Nothing was sent");
     const before = s.game.tick;
@@ -142,36 +151,47 @@ describe("Session: AI in step timing", () => {
     expect(s.game.tick).toBe(before);
   });
 
-  it("tallies tokens, neurons and latency from model decisions", async () => {
-    const { factory } = slowPolicy(5);
-    const s = new Session();
-    s.setPolicy(factory);
+  it("tallies tokens, neurons, latency and cache hits from model decisions", async () => {
+    let clock = 0;
+    const s = new Session({ now: () => (clock += 7) }); // every answer takes 7 ms of wall time
+    s.setPolicy(
+      constantPolicy("hop_forward", {
+        latencyMs: 300,
+        inputTokens: 1000,
+        neurons: 3.4,
+        cached: false,
+      }),
+    );
     s.start(9);
-    for (let i = 0; i < 600 && s.state().decisions < 3 && s.game.alive; i++) {
-      s.frame(FRAME);
-      await new Promise((r) => setTimeout(r, 1));
-    }
+    await runUntil(s, () => s.state().decisions >= 3 || !s.game.alive);
     const st = s.state();
-    expect(st.decisions).toBeGreaterThanOrEqual(3);
+    expect(st.decisions).toBeGreaterThanOrEqual(2);
     expect(st.avgTokens).toBe(1000);
+    expect(st.avgLatencyMs).toBe(7);
     expect(st.neurons).toBeCloseTo(3.4 * st.decisions, 5);
-    expect(st.avgLatencyMs).not.toBeNull();
+
+    s.setPolicy(constantPolicy("hop_forward", { cached: true, inputTokens: 900 }));
+    s.start(9);
+    await runUntil(s, () => s.state().decisions >= 1);
+    expect(s.state()).toMatchObject({ cacheHits: s.state().decisions, neurons: 0 });
   });
 });
 
 describe("Session: AI in real time", () => {
   it("keeps the world running while a slow answer is in flight", async () => {
-    const { factory } = slowPolicy(120);
+    const policy = controlledPolicy();
     const s = new Session();
     s.setTiming("realtime");
-    s.setPolicy(factory);
+    s.setPolicy(policy.factory);
     s.start(4);
 
     run(s, 0.1); // asks, and the world keeps going
+    expect(policy.asked()).toBe(1);
     expect(s.game.tick).toBeGreaterThan(3);
-    await new Promise((r) => setTimeout(r, 150));
+
+    await policy.answer();
     run(s, 0.05);
-    expect(s.state().decisions).toBeGreaterThanOrEqual(1);
+    expect(s.state().decisions).toBe(1);
   });
 });
 

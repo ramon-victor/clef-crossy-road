@@ -7,6 +7,7 @@ import {
   observe,
   TICKS_PER_SECOND,
 } from "@ccr/core";
+import { EpisodeStats } from "./episode-stats.ts";
 
 /**
  * step:     the world waits while the policy thinks, exactly like the benchmark.
@@ -76,12 +77,7 @@ export class Session {
   private decisions = 0;
   private history: DecisionLog[] = [];
   private last: DecisionLog | null = null;
-  private latencySum = 0;
-  private latencyN = 0;
-  private tokenSum = 0;
-  private tokenN = 0;
-  private neurons = 0;
-  private cacheHits = 0;
+  private stats = new EpisodeStats();
   private readonly listeners = new Set<() => void>();
   private readonly decisionTicks: number;
   private readonly now: () => number;
@@ -116,8 +112,7 @@ export class Session {
     this.decisions = 0;
     this.history = [];
     this.last = null;
-    this.latencySum = this.latencyN = this.tokenSum = this.tokenN = 0;
-    this.neurons = this.cacheHits = 0;
+    this.stats = new EpisodeStats();
     this.emit();
   }
 
@@ -147,8 +142,7 @@ export class Session {
 
   /** Runs exactly one decision (and its hop) while paused. */
   stepOnce(): void {
-    if (!this.policy || this.timing !== "step" || !this.game.alive) return;
-    if (this.phase !== "idle") return;
+    if (!this.stepMode || !this.game.alive || this.phase !== "idle") return;
     this.singleStep = true;
     this.emit();
   }
@@ -167,9 +161,7 @@ export class Session {
    * elapsed (for render interpolation).
    */
   frame(dt: number): number {
-    if (!this.game.alive) return 0;
-    const mayRun = !this.paused || this.singleStep;
-    if (!mayRun) return 0;
+    if (!this.game.alive || (this.paused && !this.singleStep)) return 0;
 
     this.driveAi();
     if (!this.worldRuns()) {
@@ -181,27 +173,11 @@ export class Session {
     let ticks = Math.floor(this.acc);
     this.acc -= ticks;
 
-    if (this.policy && this.timing === "step") ticks = Math.min(ticks, this.hopTicksLeft);
-    const before = this.game.score;
-    for (let i = 0; i < ticks && this.game.alive; i++) {
-      this.game.advance(1);
-      if (this.hopTicksLeft > 0) this.hopTicksLeft--;
-    }
+    if (this.stepMode) ticks = Math.min(ticks, this.hopTicksLeft);
+    this.advance(ticks);
+    if (this.stepMode && this.phase === "hopping" && this.hopTicksLeft === 0) this.finishHop();
 
-    if (
-      this.policy &&
-      this.timing === "step" &&
-      this.phase === "hopping" &&
-      this.hopTicksLeft === 0
-    ) {
-      this.phase = "idle";
-      this.acc = 0;
-      if (this.singleStep) {
-        this.singleStep = false;
-        this.paused = true;
-      }
-    }
-    if (this.game.score !== before) this.best = Math.max(this.best, this.game.score);
+    this.best = Math.max(this.best, this.game.score);
     if (!this.game.alive) this.emit();
     return this.acc;
   }
@@ -225,14 +201,17 @@ export class Session {
       policyId: this.policy?.id ?? null,
       last: this.last,
       history: this.history,
-      avgLatencyMs: this.latencyN > 0 ? this.latencySum / this.latencyN : null,
-      avgTokens: this.tokenN > 0 ? this.tokenSum / this.tokenN : null,
-      neurons: this.neurons,
-      cacheHits: this.cacheHits,
+      avgLatencyMs: this.stats.avgLatencyMs,
+      avgTokens: this.stats.avgTokens,
+      neurons: this.stats.neurons,
+      cacheHits: this.stats.cacheHits,
     };
   }
 
-  // ------------------------------------------------------------------------------------------
+  /** A policy plays and the world waits for it between decisions. */
+  private get stepMode(): boolean {
+    return this.policy !== null && this.timing === "step";
+  }
 
   private worldRuns(): boolean {
     if (!this.policy) return true; // human
@@ -241,10 +220,26 @@ export class Session {
     return this.phase === "hopping";
   }
 
+  private advance(ticks: number): void {
+    for (let i = 0; i < ticks && this.game.alive; i++) {
+      this.game.advance(1);
+      if (this.hopTicksLeft > 0) this.hopTicksLeft--;
+    }
+  }
+
+  private finishHop(): void {
+    this.phase = "idle";
+    this.acc = 0;
+    if (this.singleStep) {
+      this.singleStep = false;
+      this.paused = true;
+    }
+  }
+
   private driveAi(): void {
     const policy = this.policy;
     if (!policy || this.inFlight || this.phase === "error") return;
-    if (this.timing === "step" && this.phase !== "idle") return;
+    if (this.stepMode && this.phase !== "idle") return;
     if (this.paused && !this.singleStep) return;
     this.requestDecision(policy);
   }
@@ -252,7 +247,7 @@ export class Session {
   private requestDecision(policy: Policy): void {
     const epoch = this.epoch;
     this.inFlight = true;
-    if (this.timing === "step") this.phase = "thinking";
+    if (this.stepMode) this.phase = "thinking";
     const started = this.now();
     const asked =
       policy.kind === "oracle" ? policy.decide(this.game) : policy.decide(observe(this.game));
@@ -291,16 +286,7 @@ export class Session {
     this.last = log;
     this.history = [...this.history.slice(-(HISTORY - 1)), log];
 
-    if (decision.cached) this.cacheHits++;
-    else if (decision.latencyMs !== undefined) {
-      this.latencySum += wallMs;
-      this.latencyN++;
-    }
-    if (decision.inputTokens !== undefined) {
-      this.tokenSum += decision.inputTokens;
-      this.tokenN++;
-    }
-    this.neurons += decision.neurons ?? 0;
+    this.stats.add(decision, wallMs);
 
     if (this.timing === "step") {
       this.phase = "hopping";

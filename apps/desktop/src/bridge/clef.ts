@@ -4,6 +4,7 @@ import {
   ClefError,
   type DecisionCache,
   FREE_NEURONS_PER_DAY,
+  isBudgetRefusal,
   type SpendBudget,
   type Transport,
   type TransportRequest,
@@ -15,7 +16,6 @@ import type { Bridge } from "./types.ts";
 
 export const createBridge = (): Bridge => (isTauri() ? tauriBridge : httpBridge);
 
-const BUDGET_MESSAGE = /Local daily budget reached/;
 /** Missing credentials never fix themselves, so they must not be retried like a network blip. */
 const CREDENTIALS_MESSAGE = /CF_API_TOKEN|CF_ACCOUNT_ID/;
 
@@ -32,7 +32,7 @@ class BridgeTransport implements Transport {
       return await this.bridge.run(request.model, request.body);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      if (BUDGET_MESSAGE.test(message)) throw new ClefError("quota", message);
+      if (isBudgetRefusal(message)) throw new ClefError("quota", message);
       if (CREDENTIALS_MESSAGE.test(message)) throw new ClefError("auth", message);
       throw new Error(message);
     }

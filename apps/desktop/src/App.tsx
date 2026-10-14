@@ -1,36 +1,26 @@
-import type { Action } from "@ccr/core";
 import type { GameView } from "@ccr/render";
 import { useCallback, useEffect, useMemo, useRef, useState } from "preact/hooks";
 import { Sounds } from "./audio.ts";
 import { createBridge, createClefClient } from "./bridge/clef.ts";
 import type { BudgetStatus } from "./bridge/types.ts";
-import { randomSeed } from "./format.ts";
 import { GameCanvas } from "./GameCanvas.tsx";
+import { commandForKey } from "./keymap.ts";
 import { readLaunchOptions } from "./launch.ts";
 import { Panel } from "./Panel.tsx";
 import { buildPolicyChoices, freeSeedRange, nextMapSeed } from "./policies.ts";
+import { randomSeed } from "./seed.ts";
 import { runSelfTest } from "./selftest.ts";
 import { Session, type SessionState, type Timing } from "./session.ts";
 
-const KEYS: Readonly<Record<string, Action>> = {
-  ArrowUp: "hop_forward",
-  w: "hop_forward",
-  W: "hop_forward",
-  ArrowDown: "hop_back",
-  s: "hop_back",
-  S: "hop_back",
-  ArrowLeft: "hop_left",
-  a: "hop_left",
-  A: "hop_left",
-  ArrowRight: "hop_right",
-  d: "hop_right",
-  D: "hop_right",
-};
+const DEFAULT_PLAYER = "lookahead";
+/** Pause before an attract-mode game starts the next map, long enough to read the result card. */
+const RESTART_DELAY_MS = 2200;
 
 export function App() {
   const bridge = useMemo(createBridge, []);
   const client = useMemo(() => createClefClient(bridge), [bridge]);
   const choices = useMemo(() => buildPolicyChoices(client), [client]);
+  const byId = useMemo(() => new Map(choices.map((c) => [c.id, c])), [choices]);
   const sounds = useMemo(() => new Sounds(), []);
   const session = useMemo(() => {
     const s = new Session();
@@ -39,7 +29,7 @@ export function App() {
   }, []);
 
   const [state, setState] = useState<SessionState>(() => session.state());
-  const [selectedId, setSelectedId] = useState("lookahead");
+  const [selectedId, setSelectedId] = useState(DEFAULT_PLAYER);
   const [budget, setBudget] = useState<BudgetStatus | null>(null);
   const [fps, setFps] = useState(60);
   const [soundOn, setSoundOn] = useState(true);
@@ -73,10 +63,10 @@ export function App() {
   const lastFree = useRef(new Map<string, number>());
   const noteSeed = useCallback(
     (id: string, seed: number) => {
-      const range = freeSeedRange(choices.find((c) => c.id === id));
+      const range = freeSeedRange(byId.get(id));
       if (range && seed >= range.min && seed <= range.max) lastFree.current.set(id, seed);
     },
-    [choices],
+    [byId],
   );
 
   // Starting point: the free reference unless a shortcut asked for something else (CCR_PLAYER / CCR_SEED).
@@ -85,8 +75,7 @@ export function App() {
     let cancelled = false;
     void readLaunchOptions().then((options) => {
       if (cancelled) return;
-      const wanted =
-        choices.find((c) => c.id === options.player) ?? choices.find((c) => c.id === "lookahead");
+      const wanted = byId.get(options.player ?? "") ?? byId.get(DEFAULT_PLAYER);
       if (!wanted) return;
       setSelectedId(wanted.id);
       session.setPolicy(wanted.factory);
@@ -98,59 +87,70 @@ export function App() {
     return () => {
       cancelled = true;
     };
-  }, [choices, session, noteSeed]);
+  }, [byId, session, noteSeed]);
 
   const select = useCallback(
     (id: string) => {
-      const choice = choices.find((c) => c.id === id);
+      const choice = byId.get(id);
       if (!choice) return;
       setSelectedId(id);
       lastFree.current.delete(id);
       session.setPolicy(choice.factory);
     },
-    [choices, session],
+    [byId, session],
   );
 
   const retry = useCallback(() => session.start(session.state().seed), [session]);
   const newMap = useCallback(() => {
-    const choice = choices.find((c) => c.id === selectedId);
-    const next = nextMapSeed(choice, lastFree.current.get(selectedId), randomSeed);
+    const next = nextMapSeed(byId.get(selectedId), lastFree.current.get(selectedId), randomSeed);
     if (next.free) lastFree.current.set(selectedId, next.seed);
     session.start(next.seed);
-  }, [choices, selectedId, session]);
+  }, [byId, selectedId, session]);
 
   // Attract mode: a finished game by a FREE player (a reference) starts a new map after a short pause,
   // so the window keeps showing action. Players that call the model never restart by themselves, so an
   // unattended window cannot use up the day's neurons.
-  const selected = choices.find((c) => c.id === selectedId);
+  const selected = byId.get(selectedId);
   const mayAutoRestart = autoRestart && selected !== undefined && !selected.usesApi && !state.human;
   useEffect(() => {
     if (state.alive || !mayAutoRestart) return;
-    const timer = setTimeout(newMap, 2200);
+    const timer = setTimeout(newMap, RESTART_DELAY_MS);
     return () => clearTimeout(timer);
   }, [state.alive, state.seed, mayAutoRestart, newMap]);
 
   useEffect(() => {
+    const unlockSound = () => sounds.unlock();
     const onKey = (event: KeyboardEvent) => {
       const target = event.target as HTMLElement | null;
       if (target && (target.tagName === "INPUT" || target.tagName === "SELECT")) return;
-      // Browser/OS shortcuts (Ctrl+R reload, Ctrl+W, Alt+...) are not game input.
-      if (event.ctrlKey || event.metaKey || event.altKey) return;
       sounds.unlock();
-      const action = KEYS[event.key];
-      if (action) {
-        event.preventDefault();
-        session.humanInput(action);
-      } else if (event.key === " ") {
-        event.preventDefault();
-        session.togglePause();
-      } else if (event.key === "n" || event.key === "N") session.stepOnce();
-      else if (event.key === "r" || event.key === "R") retry();
-      else if (event.key === "m" || event.key === "M") newMap();
+      const command = commandForKey(event);
+      if (!command) return;
+      event.preventDefault();
+      switch (command.type) {
+        case "move":
+          session.humanInput(command.action);
+          break;
+        case "pause":
+          session.togglePause();
+          break;
+        case "step":
+          session.stepOnce();
+          break;
+        case "retry":
+          retry();
+          break;
+        case "newMap":
+          newMap();
+          break;
+      }
     };
     window.addEventListener("keydown", onKey);
-    window.addEventListener("pointerdown", () => sounds.unlock(), { once: true });
-    return () => window.removeEventListener("keydown", onKey);
+    window.addEventListener("pointerdown", unlockSound, { once: true });
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      window.removeEventListener("pointerdown", unlockSound);
+    };
   }, [session, sounds, retry, newMap]);
 
   const onReady = useCallback(

@@ -1,3 +1,4 @@
+import { isBudgetRefusal } from "@ccr/clef";
 import type { GameView } from "@ccr/render";
 import { invoke } from "@tauri-apps/api/core";
 import { isTauri } from "./bridge/tauri.ts";
@@ -111,7 +112,7 @@ export async function runSelfTest(ctx: Context): Promise<void> {
         report.refusal = { ok: false, note: "the call was NOT refused" };
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
-        report.refusal = { ok: /Nothing was sent/.test(message), message };
+        report.refusal = { ok: isBudgetRefusal(message), message };
       }
     } else {
       report.refusal = { ok: true, skipped: "budget not exhausted, so no call was attempted" };
