@@ -6,6 +6,7 @@ import { ACTIONS, type Action, Game, type Observation } from "@ccr/core";
 import { afterEach, beforeAll, describe, expect, it } from "vitest";
 import {
   classify,
+  interleaveStrata,
   type ProbeResult,
   type ProbeState,
   pairedGood,
@@ -104,6 +105,27 @@ const state = (overrides: Partial<ProbeState>): ProbeState => ({
   outcomes: { hop_forward: "dies", hop_back: "ok", hop_left: "ok", hop_right: "dies", stay: "ok" },
   good: ["hop_left", "stay"],
   ...overrides,
+});
+
+describe("interleaveStrata", () => {
+  it("puts the first of every stratum first, so any prefix is balanced", () => {
+    const make = (stratum: ProbeState["stratum"], n: number) =>
+      Array.from({ length: n }, (_, i) => state({ id: `${stratum}-${i + 1}`, stratum }));
+    const ordered = interleaveStrata([
+      ...make("water-deadly", 3),
+      ...make("rail", 1),
+      ...make("tree", 2),
+    ]);
+    expect(ordered.map((s) => s.id)).toEqual([
+      "water-deadly-1",
+      "tree-1",
+      "rail-1",
+      "water-deadly-2",
+      "tree-2",
+      "water-deadly-3",
+    ]);
+    expect(interleaveStrata([])).toEqual([]);
+  });
 });
 
 describe("scoring", () => {
@@ -240,6 +262,29 @@ describe("runProbe", () => {
       expect(JSON.parse(shown).memory).toEqual({ recent: [], score: 0, sinceProgress: 0 });
     }
     expect(Object.keys(JSON.parse(seen[0] as string).obs).sort()).toEqual(["player", "rows"]);
+  });
+
+  it("asks state by state, so stopping early leaves every policy with the same states", async () => {
+    const order: string[] = [];
+    const named = (id: string): PolicyFactory => ({
+      id,
+      create: () => ({
+        kind: "observation",
+        id,
+        decide: async () => {
+          order.push(id);
+          return { action: "stay" };
+        },
+      }),
+    });
+    await runProbe({
+      runDir: tempDir(),
+      states,
+      policies: [named("one"), named("two")],
+      concurrency: 1,
+      maxCalls: 100,
+    });
+    expect(order).toEqual(["one", "two", "one", "two"]);
   });
 
   it("rebuilds the world the state describes", () => {

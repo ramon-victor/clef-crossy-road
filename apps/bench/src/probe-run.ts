@@ -4,7 +4,7 @@ import type { PolicyFactory } from "@ccr/agent";
 import { type ClefClient, ClefError } from "@ccr/clef";
 import { appendNdjson, endPartialLine, readNdjson } from "@ccr/clef/node";
 import { observe } from "@ccr/core";
-import { type ProbeResult, type ProbeState, rebuild } from "./probe.ts";
+import { interleaveStrata, type ProbeResult, type ProbeState, rebuild } from "./probe.ts";
 
 export const PROBE_STATES_FILE = "states.ndjson";
 export const PROBE_RESULTS_FILE = "results.ndjson";
@@ -46,8 +46,11 @@ export async function runProbe(options: ProbeRunOptions): Promise<ProbeRunSummar
   const resultsPath = join(runDir, PROBE_RESULTS_FILE);
   endPartialLine(resultsPath);
   const done = new Set(readProbeResults(runDir).map((r) => keyOf(r.policy, r.state)));
-  const queue = policies.flatMap((factory) =>
-    states.filter((s) => !done.has(keyOf(factory.id, s.id))).map((state) => ({ factory, state })),
+  // State by state, every policy on the same state, so a cut-off run still compares like with like.
+  const queue = interleaveStrata(states).flatMap((state) =>
+    policies
+      .filter((factory) => !done.has(keyOf(factory.id, state.id)))
+      .map((factory) => ({ factory, state })),
   );
   const skipped = policies.length * states.length - queue.length;
 

@@ -9,8 +9,9 @@ import {
   remember,
 } from "@ccr/agent";
 import { ACTIONS, type Action, createRng, Game, observe, type RowKind } from "@ccr/core";
+import { auc } from "./diagnose.ts";
 import { code, fixed, markdownTable } from "./format.ts";
-import { bootstrapPairedDiff } from "./stats.ts";
+import { bootstrapPairedDiff, mean } from "./stats.ts";
 
 /**
  * A probe asks a policy about hand-picked decision points instead of playing whole games: about a
@@ -225,6 +226,21 @@ export interface ProbeResult {
   cached?: boolean;
 }
 
+/**
+ * The states in an order where any prefix covers every stratum: the first of each, then the second of
+ * each, and so on. A run that stops early (a call cap, an empty budget) still has a balanced sample.
+ */
+export function interleaveStrata<T extends { stratum: Stratum }>(states: readonly T[]): T[] {
+  const lanes = STRATA.map(({ id }) => states.filter((s) => s.stratum === id));
+  const longest = Math.max(0, ...lanes.map((lane) => lane.length));
+  return Array.from({ length: longest }, (_, i) => lanes.flatMap((lane) => lane[i] ?? [])).flat();
+}
+
+const massOn = (
+  probabilities: Partial<Record<Action, number>>,
+  pick: (action: Action) => boolean,
+): number => ACTIONS.reduce((sum, a) => sum + (pick(a) ? (probabilities[a] ?? 0) : 0), 0);
+
 /** How one answer fares against the labels of its state. */
 export function scoreAnswer(state: ProbeState, result: ProbeResult) {
   const probabilities = result.probabilities;
@@ -233,12 +249,12 @@ export function scoreAnswer(state: ProbeState, result: ProbeResult) {
     good: state.good.includes(result.action),
     bumped: state.outcomes[result.action] === "blocked",
     forward: result.action === "hop_forward",
+    // How much of the model's own distribution sits on dying moves and on good ones: what sampling
+    // from it, instead of taking its top answer, would do.
     deathMass: probabilities
-      ? ACTIONS.reduce(
-          (sum, a) => sum + (state.outcomes[a] === "dies" ? (probabilities[a] ?? 0) : 0),
-          0,
-        )
+      ? massOn(probabilities, (a) => state.outcomes[a] === "dies")
       : undefined,
+    goodMass: probabilities ? massOn(probabilities, (a) => state.good.includes(a)) : undefined,
   };
 }
 
@@ -257,6 +273,9 @@ export interface ProbeSummary {
   fatal: number;
   good: number;
   bumped: number;
+  /** Mean probability the model put on dying moves / on good moves (NaN without probabilities). */
+  deathMass: number;
+  goodMass: number;
 }
 
 export function summarizeProbe(
@@ -286,6 +305,8 @@ export function summarizeProbe(
         fatal: rate(scored.map((s) => s.fatal)),
         good: rate(scored.map((s) => s.good)),
         bumped: rate(scored.map((s) => s.bumped)),
+        deathMass: mean(scored.flatMap((s) => (s.deathMass === undefined ? [] : [s.deathMass]))),
+        goodMass: mean(scored.flatMap((s) => (s.goodMass === undefined ? [] : [s.goodMass]))),
       });
     }
   }
@@ -315,6 +336,30 @@ export function pairedGood(
   return { n: ids.length, diff: bootstrapPairedDiff(flags(mine), flags(theirs)) };
 }
 
+/**
+ * Does P(hop_forward) tell the states where forward is fine from the states where it dies? 0.5 means
+ * no information (the same measure `bench diagnose` uses on whole games).
+ */
+export function forwardAuc(
+  states: readonly ProbeState[],
+  results: readonly ProbeResult[],
+  policy: string,
+  members: readonly Stratum[],
+): number {
+  const byId = new Map(states.map((s) => [s.id, s]));
+  const safe: number[] = [];
+  const unsafe: number[] = [];
+  for (const r of results) {
+    const state = byId.get(r.state);
+    const p = r.probabilities?.hop_forward;
+    if (r.policy !== policy || !state || p === undefined || !members.includes(state.stratum)) {
+      continue;
+    }
+    (state.outcomes.hop_forward === "dies" ? unsafe : safe).push(p);
+  }
+  return auc(safe, unsafe);
+}
+
 export function renderProbeReport(
   title: string,
   states: readonly ProbeState[],
@@ -328,10 +373,12 @@ export function renderProbeReport(
   sections.push(
     "Each row is a policy's answer on states with known outcomes. **fatal** = the move chosen dies; " +
       "**good** = the move chosen is one the look-ahead rates within a row of the best; " +
-      "**bumped** = the move chosen runs into a tree again.",
+      "**bumped** = the move chosen runs into a tree again. " +
+      "**P(dies)** and **P(good)** are the share of the model's own probabilities on dying and on good " +
+      "moves, which is what sampling from its distribution would give instead of taking its top answer.",
     "",
     ...markdownTable(
-      ["Policy", "Stratum", "States", "Fatal", "Good", "Bumped"],
+      ["Policy", "Stratum", "States", "Fatal", "Good", "Bumped", "P(dies)", "P(good)"],
       summary.map((r) => [
         code(r.policy),
         r.stratum,
@@ -339,6 +386,19 @@ export function renderProbeReport(
         pct(r.fatal),
         pct(r.good),
         pct(r.bumped),
+        pct(r.deathMass),
+        pct(r.goodMass),
+      ]),
+    ),
+    "",
+    "## Does P(hop_forward) tell open states from deadly ones? (AUC, 0.5 = no information)",
+    "",
+    ...markdownTable(
+      ["Policy", "Water", "Road"],
+      policies.map((policy) => [
+        code(policy),
+        fixed(forwardAuc(states, results, policy, WATER), 2),
+        fixed(forwardAuc(states, results, policy, ["road-deadly", "road-open"]), 2),
       ]),
     ),
   );
