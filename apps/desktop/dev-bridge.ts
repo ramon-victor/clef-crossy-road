@@ -3,11 +3,18 @@ import { resolve } from "node:path";
 import {
   budgetRefusal,
   type CachedEntry,
+  CLEF_MODELS,
   type ClefModel,
   FREE_NEURONS_PER_DAY,
   neuronsForTokens,
 } from "@ccr/clef";
-import { createNodeTransport, FileBudget, FileCache } from "@ccr/clef/node";
+import {
+  CACHE_FILE,
+  createNodeTransport,
+  FileBudget,
+  FileCache,
+  LEDGER_FILE,
+} from "@ccr/clef/node";
 import type { Plugin } from "vite";
 
 /**
@@ -19,7 +26,6 @@ import type { Plugin } from "vite";
  */
 export function devBridge(): Plugin {
   const root = resolve(import.meta.dirname, "../..");
-  const MODELS: ClefModel[] = ["clef", "clef-flash", "clef-omni"];
 
   let budget: FileBudget | undefined;
   let cache: FileCache | undefined;
@@ -27,12 +33,12 @@ export function devBridge(): Plugin {
 
   const state = () => {
     budget ??= new FileBudget(
-      resolve(root, "runs/cache/spend.ndjson"),
+      resolve(root, LEDGER_FILE),
       FREE_NEURONS_PER_DAY,
       undefined,
       process.env.CF_ACCOUNT_ID,
     );
-    cache ??= new FileCache(resolve(root, "runs/cache/clef.ndjson"));
+    cache ??= new FileCache(resolve(root, CACHE_FILE));
     return { budget, cache };
   };
 
@@ -98,7 +104,7 @@ export function devBridge(): Plugin {
           }
           if (url.pathname === "/run") {
             const model = String(body.model) as ClefModel;
-            if (!MODELS.includes(model))
+            if (!CLEF_MODELS.includes(model))
               return send(res, 400, { error: `model not allowed: ${model}` });
             if (!ledger.canSpend()) {
               return send(res, 429, {

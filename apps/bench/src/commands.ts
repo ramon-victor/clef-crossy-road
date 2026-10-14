@@ -1,7 +1,7 @@
 import { join, resolve } from "node:path";
 import { DEFAULT_MAX_DECISIONS, DEFAULT_STALL_LIMIT, PROMPT_VERSION } from "@ccr/agent";
 import { ClefClient, FREE_NEURONS_PER_DAY } from "@ccr/clef";
-import { createNodeTransport, type FileBudget, FileCache } from "@ccr/clef/node";
+import { CACHE_FILE, createNodeTransport, type FileBudget, FileCache } from "@ccr/clef/node";
 import { DECISION_TICKS } from "@ccr/core";
 import { collectSamples, diagnose, renderDiagnosis } from "./diagnose.ts";
 import { toNdjson, trajectorySteps } from "./export.ts";
@@ -18,7 +18,7 @@ import { planRun, renderPlan } from "./plan.ts";
 import { isClefPolicy, parsePolicy, parseSeeds } from "./registry.ts";
 import { renderReport } from "./report.ts";
 import { type RunMeta, runEpisodes } from "./run.ts";
-import { CACHE_FILE, loadEpisodes, openBudget, runDir, writeOutput } from "./workspace.ts";
+import { loadEpisodes, openBudget, runDir, writeOutput } from "./workspace.ts";
 
 /** Exit codes of `run`, so a script can tell why it stopped. */
 const EXIT_FATAL = 2;

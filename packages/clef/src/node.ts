@@ -56,6 +56,10 @@ export function createNodeTransport(options: NodeTransportOptions = {}): Transpo
   };
 }
 
+/** Where this project keeps what it has spent and what it has already asked, from the workspace root. */
+export const LEDGER_FILE = "runs/cache/spend.ndjson";
+export const CACHE_FILE = "runs/cache/clef.ndjson";
+
 const isObject = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null;
 

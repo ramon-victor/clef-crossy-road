@@ -1,25 +1,19 @@
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import { appendNdjson, endPartialLine, readNdjson } from "./ndjson.ts";
+import { useTempDirs } from "./temp.testing.ts";
 
-const dirs: string[] = [];
+const tempDir = useTempDirs();
 function tempFile(contents?: string): string {
-  const dir = mkdtempSync(join(tmpdir(), "ccr-ndjson-"));
-  dirs.push(dir);
-  const path = join(dir, "data.ndjson");
+  const path = join(tempDir(), "data.ndjson");
   if (contents !== undefined) writeFileSync(path, contents);
   return path;
 }
 
-afterEach(() => {
-  for (const dir of dirs.splice(0)) rmSync(dir, { recursive: true, force: true });
-});
-
 describe("ndjson", () => {
   it("reads nothing from a file that does not exist", () => {
-    expect(readNdjson(join(tmpdir(), "ccr-ndjson-missing.ndjson"))).toEqual([]);
+    expect(readNdjson(tempFile())).toEqual([]);
   });
 
   it("skips blank lines and a line cut short by a crash", () => {
