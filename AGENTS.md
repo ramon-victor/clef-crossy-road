@@ -17,7 +17,7 @@ Language: code, identifiers, commits and this file in English. `docs/` is in Bra
 
 ## Status
 
-Phases 0-4 are built (176 TS tests + 8 Rust tests). **The gate was NOT passed, in 8 conditions**: Clef-flash (JSON, grid,
+Phases 0-4 are built (186 TS tests + 9 Rust tests). **The gate was NOT passed, in 8 conditions**: Clef-flash (JSON, grid,
 critic-go, minimal manual) plays like "always forward" (~3.7 rows), image input is significantly worse, and Clef 27B chose
 "forward" every time (`docs/07-experimentos.md`). Diagnosis: 72-85% of hops into water are fatal and the model's probability
 carries no information about which ones survive (AUC 0.5-0.6 inside water). Only `clef-omni` is untested.
@@ -31,7 +31,10 @@ and `CF_ACCOUNT_ID`. Installed: Node 24, pnpm 10, git, MSVC, WebView2, Rust 1.99
 - `pnpm --filter @ccr/core test`: core only, no network, ~3 s
 - `pnpm bench plan --policies <ids> --seeds 1..100`: estimates neurons and splits a run over days. **Run it before any `run` that uses a model.**
 - `pnpm bench run --run <name> --policies <ids> --seeds 1..100 [--latency fixed:300:pipelined]`, `pnpm bench report --run <name>`,
-  and `pnpm bench diagnose --run <name>` (AUC of the model's P(forward) against real safety; reads files, no API call)
+  `pnpm bench diagnose --run <name>` (AUC of the model's P(forward) against real safety) and
+  `pnpm bench export --run <name> [--policy id] [--min-score n]` (RL trajectories as NDJSON). Both read files only, no API call.
+- `play.cmd` opens the release app; `play-clef.cmd` opens it on Clef-flash, seed 1 (cached, free). `CCR_PLAYER` and `CCR_SEED`
+  pick the starting player and map.
 - `pnpm --filter @ccr/desktop tauri dev` (app window) / `tauri build --no-bundle` (release exe). `CCR_SELFTEST=1` makes the app
   measure FPS, check rendering and the Rust budget refusal, write `runs/selftest.json` and exit.
 - `cargo test --lib` inside `apps/desktop/src-tauri` runs the Rust tests (put `%USERPROFILE%\.cargo\bin` on PATH first).

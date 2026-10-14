@@ -34,6 +34,9 @@ são os do Expo-Crossy-Road, baixados localmente por `node scripts/fetch-assets.
 | Orçamento | Medidor de neurons do dia (UTC), custo estimado por decisão nova, aviso quando o teto é atingido; uma decisão do cache aparece como "cached" e custa 0 |
 | Fim de partida | Cartão com a causa da morte, linhas cruzadas e melhor do dia; repetir a mesma seed ou mapa novo |
 | Som | Sons do original, ligados por padrão após o primeiro gesto do usuário (política dos navegadores) |
+| Reinício automático | Para jogadores **gratuitos** (as referências), a janela abre um mapa novo 2,2 s depois de cada fim de partida, para continuar mostrando ação. Jogadores que chamam o modelo **nunca** reiniciam sozinhos: uma janela esquecida aberta não pode gastar o orçamento do dia |
+| Replays gratuitos | Cada modelo mostra quais seeds já estão no cache (Clef-flash JSON e grade: 1–100; `critic-go`: 1–71; Clef 27B: 1–40). **"Novo mapa" percorre essas seeds em ordem** antes de partir para um mapa aleatório (que gasta neurons) |
+| Atalhos de abertura | `CCR_PLAYER` e `CCR_SEED` (lidos pelo Rust; no navegador de desenvolvimento, `?player=...&seed=...`) escolhem o jogador e o mapa iniciais. `play.cmd` abre o modo normal; `play-clef.cmd` abre o Clef-flash JSON na seed 1 (do cache, sem custo) |
 
 ## Arquitetura do app
 
@@ -61,10 +64,12 @@ O Rust só aceita `clef`, `clef-flash` e `clef-omni`, sem URL arbitrária.
 | Pipeline do Clef dentro do app | Seed 1 com Clef-flash JSON: 2 de 2 decisões vieram do cache, 0 neurons, gasto inalterado, probabilidades reais exibidas |
 | Token fora do webview | O bundle de produção (`dist/`) foi varrido: sem token, sem ID de conta, sem `CF_API_TOKEN=` |
 | Executável de release | `tauri build --no-bundle`: **8,4 MB**, compilado em 2m55s |
-| Testes | 11 testes do `Session` (TS) e 5 testes Rust (datas UTC, taxas de neurons, ledger, linha parcial) |
+| Teclado no executável de release | Autoteste do `.exe` de produção: 4 de 4 teclas tratadas pelo modo humano (eventos sintéticos que chegam ao mesmo `keydown`), a galinha se moveu e o placar subiu; o Clef rodou pelo cache com 0 neurons; 180 fps; 1.056 cores no quadro |
+| Modo Clef por atalho | Verificado com uma captura só da janela (`PrintWindow`): Clef-flash JSON, seed 1, etiqueta "cached", probabilidades reais e `confidence` 0,06, e o cartão "Drowned · 2 rows" |
+| Testes | 16 testes do app (`Session`, sementes gratuitas) e 9 testes Rust (datas UTC, taxas de neurons, ledger por conta, linha parcial, seeds) |
 
-Não verifiquei: a entrada por teclado dentro da janela do Tauri (a lógica do humano é testada no `Session`), o instalador (`tauri build` com
-bundle NSIS) e o app com uma chamada de rede real (o orçamento do dia estava gasto).
+Não verifiquei: teclas físicas do teclado (só eventos sintéticos no mesmo `keydown`), o instalador (`tauri build` com bundle NSIS) e o app com uma
+chamada de rede ao vivo em tempo real (as decisões do Clef na janela vieram do cache; o pipeline de rede é o mesmo do benchmark, já exercitado com a API).
 
 ## Pré-requisitos (todos instalados em 2026-10-14)
 

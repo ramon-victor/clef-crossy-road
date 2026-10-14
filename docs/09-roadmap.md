@@ -11,7 +11,7 @@ A ordem é guiada pelo risco: primeiro descobrir se o modelo consegue jogar, dep
 | 2 | `@ccr/clef`, `@ccr/agent`, `apps/bench`; gate | **Gate** de [07](07-experimentos.md) avaliado, com plano B se falhar | **Concluída, gate NÃO passou** em 8 condições (JSON, grade, imagem, `critic-go`, manual mínimo, Clef 27B). Plano B executado e diagnosticado (AUC) |
 | 3 | Rust, `apps/desktop`, `@ccr/render`, painel, modo humano | 60 fps; token ausente do webview | **Concluída**: 180 fps médios no WebView2; bundle sem token; exe de release de 8,4 MB ([08](08-ui-desktop.md)) |
 | 4 | Matriz de modelos; visão (E2); latência injetada; relatório com IC | Relatório com IC de 95% | **Concluída, exceto o `clef-omni`**: Clef-flash e Clef 27B, imagem, latência injetada (serial e pipelined), `plan`, `diagnose` e relatórios com IC. Resultado negativo para todos os modelos |
-| 5 | Opcional: trajetórias para RL fine-tuning; Jev | — | Não iniciada. O núcleo determinístico e as ações gravadas por partida já são o formato de trajetória |
+| 5 | Opcional: trajetórias para RL fine-tuning; Jev | — | **Parte offline concluída**: `pnpm bench export` gera trajetórias (observação, ação, recompensa, fim) a partir das partidas gravadas, só com fatos físicos na observação (10.625 passos do look-ahead com ≥ 20 ruas, 17 MB). O treino em si depende do programa de RL da Cloudflare ou de hospedar os pesos; o Jev não foi avaliado |
 
 ## Próximos passos
 

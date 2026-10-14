@@ -13,6 +13,18 @@ e quantas ruas ele atravessou. Um benchmark em CLI compara modelos nas mesmas se
   do modelo não distingue os seguros. Leia [docs/07-experimentos.md](docs/07-experimentos.md).
 - **Regra do projeto:** ficar no free tier (10.000 neurons por dia UTC, por conta). O código recusa chamadas além disso ([ADR-0008](docs/adr/0008-orcamento-diario-no-free-tier.md)).
 
+## Ver o jogo rodando
+
+Depois de construir uma vez (comandos abaixo), basta dar **duplo clique**:
+
+| Arquivo | O que abre |
+|---|---|
+| `play.cmd` | O app no modo normal: o look-ahead (referência gratuita) jogando e reiniciando sozinho. Troque o jogador no seletor |
+| `play-clef.cmd` | O **Clef-flash jogando a seed 1**, com as probabilidades reais no painel. Vem do cache, então **não gasta neurons**; a tecla `M` abre o próximo mapa em cache |
+
+No app: setas ou WASD para você jogar, espaço pausa, `N` dá um passo, `R` repete o mapa, `M` abre outro. O painel mostra, a cada decisão, a ação, a probabilidade
+de cada ação, a latência, os tokens e quantos neurons do dia já foram usados.
+
 ## Começar
 
 ```bash
@@ -20,7 +32,9 @@ pnpm install
 node scripts/fetch-assets.mjs          # baixa os modelos do Evan (não vão para o git)
 pnpm typecheck && pnpm lint && pnpm test
 
-pnpm --filter @ccr/desktop tauri dev   # abre o app (precisa do Rust: rustup)
+pnpm --filter @ccr/desktop build
+cd apps/desktop && pnpm tauri build --no-bundle && cd ../..   # gera o .exe de release (precisa do Rust: rustup)
+pnpm --filter @ccr/desktop tauri dev   # ou: abre o app em modo de desenvolvimento
 pnpm bench plan --policies lookahead,always-forward --seeds 1..100
 pnpm bench run  --run minha-execucao --policies always-forward,random,lookahead --seeds 1..100
 pnpm bench report --run minha-execucao
