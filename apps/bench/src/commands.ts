@@ -1,7 +1,13 @@
 import { join, resolve } from "node:path";
 import { DEFAULT_MAX_DECISIONS, DEFAULT_STALL_LIMIT, PROMPT_VERSION } from "@ccr/agent";
 import { ClefClient, FREE_NEURONS_PER_DAY } from "@ccr/clef";
-import { CACHE_FILE, createNodeTransport, type FileBudget, FileCache } from "@ccr/clef/node";
+import {
+  CACHE_FILE,
+  createNodeTransport,
+  type FileBudget,
+  FileCache,
+  readNdjson,
+} from "@ccr/clef/node";
 import { DECISION_TICKS } from "@ccr/core";
 import { collectSamples, diagnose, renderDiagnosis } from "./diagnose.ts";
 import { toNdjson, trajectorySteps } from "./export.ts";
@@ -15,6 +21,8 @@ import {
   runNames,
 } from "./options.ts";
 import { planRun, renderPlan } from "./plan.ts";
+import { type ProbeState, renderProbeReport, STRATA, sampleStates } from "./probe.ts";
+import { PROBE_STATES_FILE, readProbeResults, runProbe } from "./probe-run.ts";
 import { isClefPolicy, parsePolicy, parseSeeds } from "./registry.ts";
 import { renderReport } from "./report.ts";
 import { type RunMeta, runEpisodes } from "./run.ts";
@@ -87,19 +95,16 @@ function lazy<T>(create: () => T) {
   return { get: (): T => (value ??= create()), created: (): T | undefined => value };
 }
 
-export async function runCommand(root: string, v: CliValues): Promise<void> {
-  if (!v.run || !v.policies || !v.seeds) throw new Error("run needs --run, --policies and --seeds");
-  const ids = csv(v.policies);
-  const seeds = parseSeeds(v.seeds);
-  const usesApi = ids.some(isClefPolicy);
-  const concurrency = intOption("concurrency", v.concurrency, usesApi ? 4 : 1, 1);
-  // The ceiling can be lowered but never raised above the free tier from the command line.
-  const dailyNeurons = Math.min(
+/** The ceiling can be lowered but never raised above the free tier from the command line. */
+const dailyCeiling = (v: CliValues): number =>
+  Math.min(
     intOption("daily-neurons", v["daily-neurons"], FREE_NEURONS_PER_DAY),
     FREE_NEURONS_PER_DAY,
   );
-  const budget = openBudget(root, dailyNeurons);
-  const client = lazy(
+
+/** The only way these commands reach the API: through the client, the cache and the spend ledger. */
+function apiClient(root: string, v: CliValues, budget: FileBudget, concurrency: number) {
+  return lazy(
     () =>
       new ClefClient({
         transport: createNodeTransport(),
@@ -108,6 +113,17 @@ export async function runCommand(root: string, v: CliValues): Promise<void> {
         concurrency,
       }),
   );
+}
+
+export async function runCommand(root: string, v: CliValues): Promise<void> {
+  if (!v.run || !v.policies || !v.seeds) throw new Error("run needs --run, --policies and --seeds");
+  const ids = csv(v.policies);
+  const seeds = parseSeeds(v.seeds);
+  const usesApi = ids.some(isClefPolicy);
+  const concurrency = intOption("concurrency", v.concurrency, usesApi ? 4 : 1, 1);
+  const dailyNeurons = dailyCeiling(v);
+  const budget = openBudget(root, dailyNeurons);
+  const client = apiClient(root, v, budget, concurrency);
 
   const latency = parseLatency(v.latency);
   const episode = {
@@ -169,4 +185,94 @@ function printApiUsage(client: ClefClient, budget: FileBudget, dailyNeurons: num
   console.log(
     `budget: ${Math.round(budget.spentToday())} / ${dailyNeurons} neurons spent today (UTC)`,
   );
+}
+
+const PROBE_DIR = join("runs", "probe");
+
+const asNdjson = (items: readonly unknown[]): string =>
+  items
+    .map(
+      (item) => `${JSON.stringify(item)}
+`,
+    )
+    .join("");
+
+const statesPath = (root: string, v: CliValues): string =>
+  resolve(root, v.states ?? join(PROBE_DIR, PROBE_STATES_FILE));
+
+function loadProbeStates(root: string, v: CliValues): ProbeState[] {
+  const states = readNdjson(statesPath(root, v)) as ProbeState[];
+  if (states.length === 0) throw new Error("No probe states found; run `probe-sample` first");
+  return states;
+}
+
+/** Picks the probe states from the games of the free players. Makes no API call. */
+export async function probeSampleCommand(root: string, v: CliValues): Promise<void> {
+  const seeds = parseSeeds(v.seeds ?? "1..300");
+  const states = await sampleStates({ seeds });
+  const out = v.out ?? join(PROBE_DIR, PROBE_STATES_FILE);
+  console.log(`${states.length} states written to ${writeOutput(root, out, asNdjson(states))}`);
+  for (const { id, quota } of STRATA) {
+    const found = states.filter((s) => s.stratum === id).length;
+    console.log(
+      `  ${id.padEnd(13)} ${found}/${quota}${found < quota ? "  (fewer than wanted)" : ""}`,
+    );
+  }
+}
+
+/** Asks each policy about each probe state. Goes through the same client, cache and ledger as `run`. */
+export async function probeRunCommand(root: string, v: CliValues): Promise<void> {
+  if (!v.run || !v.policies) throw new Error("probe-run needs --run and --policies");
+  const ids = csv(v.policies);
+  const states = loadProbeStates(root, v);
+  const usesApi = ids.some(isClefPolicy);
+  const concurrency = intOption("concurrency", v.concurrency, usesApi ? 4 : 1, 1);
+  const dailyNeurons = dailyCeiling(v);
+  const budget = openBudget(root, dailyNeurons);
+  const client = apiClient(root, v, budget, concurrency);
+  const policies = ids.map((id) => parsePolicy(id, client.get));
+  if (usesApi) {
+    console.log(
+      `budget: ${Math.round(budget.spentToday())} / ${dailyNeurons} neurons already spent today (UTC); ` +
+        "cache hits are free, new calls are refused once the limit is reached",
+    );
+  }
+
+  const summary = await runProbe({
+    runDir: join(root, PROBE_DIR, v.run),
+    states,
+    policies,
+    concurrency,
+    maxCalls: intOption("max-calls", v["max-calls"], 400),
+    client: client.created(),
+    log: (line) => console.log(line),
+  });
+  console.log(
+    `finished: ${summary.asked} answered, ${summary.skipped} already on disk, ${summary.failed} failed (${summary.stoppedBecause})`,
+  );
+  const used = client.created();
+  if (used) printApiUsage(used, budget, dailyNeurons);
+  if (summary.fatal) {
+    console.error(`STOPPED: ${summary.fatal}`);
+    process.exitCode = EXIT_FATAL;
+  } else if (summary.stoppedBecause === "budget") {
+    console.error("STOPPED: reached --max-calls; re-run the same command to continue.");
+    process.exitCode = EXIT_CALL_CAP;
+  }
+}
+
+/** Scores the recorded answers against the labels. Reads files only: no API call. */
+export function probeReportCommand(root: string, v: CliValues): void {
+  const names = runNames(v);
+  const states = loadProbeStates(root, v);
+  const results = names.flatMap((name) => readProbeResults(join(root, PROBE_DIR, name)));
+  if (results.length === 0)
+    throw new Error(`No probe answers found for run(s): ${names.join(", ")}`);
+  const text = renderProbeReport(
+    `Probe: ${names.join(" + ")}`,
+    states,
+    results,
+    v.ref ?? "clef:clef-flash:json:choice:full",
+  );
+  publish(root, v.out ?? join("reports", `probe-${names.join("+")}.md`), text);
 }

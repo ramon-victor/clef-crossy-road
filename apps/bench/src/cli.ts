@@ -3,6 +3,9 @@ import {
   diagnoseCommand,
   exportCommand,
   planCommand,
+  probeReportCommand,
+  probeRunCommand,
+  probeSampleCommand,
   reportCommand,
   runCommand,
 } from "./commands.ts";
@@ -16,6 +19,9 @@ const COMMANDS: Readonly<
   plan: planCommand,
   diagnose: diagnoseCommand,
   export: exportCommand,
+  "probe-sample": probeSampleCommand,
+  "probe-run": probeRunCommand,
+  "probe-report": probeReportCommand,
 };
 
 async function main(): Promise<void> {

@@ -1,0 +1,376 @@
+import {
+  actionValues,
+  alwaysForward,
+  emptyMemory,
+  lookaheadPolicy,
+  type Memory,
+  type PolicyFactory,
+  randomPolicy,
+  remember,
+} from "@ccr/agent";
+import { ACTIONS, type Action, createRng, Game, observe, type RowKind } from "@ccr/core";
+import { code, fixed, markdownTable } from "./format.ts";
+import { bootstrapPairedDiff } from "./stats.ts";
+
+/**
+ * A probe asks a policy about hand-picked decision points instead of playing whole games: about a
+ * tenth of the cost, and it says where a view helps. The states are sampled from the games of three
+ * free players, and each one carries labels worked out on the simulator. The labels only mark the
+ * answers; they are never part of what a model reads.
+ */
+export type Outcome = "dies" | "blocked" | "ok";
+
+export const STRATA = [
+  { id: "water-deadly", quota: 24, about: "water ahead, hopping forward drowns" },
+  { id: "water-open", quota: 12, about: "water ahead, a platform is under the column" },
+  { id: "road-deadly", quota: 12, about: "road ahead, a vehicle is there when the hop lands" },
+  { id: "road-open", quota: 8, about: "road ahead, it is clear" },
+  { id: "tree", quota: 10, about: "a tree straight ahead (first time)" },
+  { id: "tree-stuck", quota: 10, about: "the same tree after 1 or 3 bumps, so the memory says so" },
+  { id: "grass-open", quota: 8, about: "open grass ahead" },
+  { id: "rail", quota: 6, about: "rail ahead" },
+] as const;
+
+export type Stratum = (typeof STRATA)[number]["id"];
+
+/** Hops that the stuck states have already bumped, cycling through these. */
+const BUMPS = [1, 3] as const;
+
+/** A good move is one the look-ahead rates within one row of the best (a row is worth 10). */
+const GOOD_MARGIN = 10;
+
+const PROBE_DOMAIN = 0x50524f42; // "PROB": independent of every game stream
+
+export interface ProbeState {
+  id: string;
+  stratum: Stratum;
+  seed: number;
+  /** Full hops played from the start (decision-length steps) to reach the state. */
+  actions: Action[];
+  /** What each action does here on the simulator. Labels, never shown to a model. */
+  outcomes: Record<Action, Outcome>;
+  /** The actions the look-ahead rates within a row of the best one. Labels. */
+  good: Action[];
+}
+
+/** The world and the memory of a probe state, rebuilt by replaying its actions. */
+export function rebuild(state: Pick<ProbeState, "seed" | "actions">): {
+  game: Game;
+  memory: Memory;
+} {
+  const game = new Game({ seed: state.seed });
+  let memory = emptyMemory();
+  for (const action of state.actions) {
+    const { outcome } = game.step(action);
+    memory = remember(memory, { action, outcome }, game.score);
+  }
+  return { game, memory };
+}
+
+function outcomesAt(game: Game): Record<Action, Outcome> {
+  const outcomes = {} as Record<Action, Outcome>;
+  for (const action of ACTIONS) {
+    const probe = game.clone();
+    const { outcome } = probe.step(action);
+    outcomes[action] = outcome === "blocked" ? "blocked" : probe.alive ? "ok" : "dies";
+  }
+  return outcomes;
+}
+
+export function classify(ahead: RowKind | undefined, forward: Outcome): Stratum | undefined {
+  switch (ahead) {
+    case "water":
+      return forward === "dies" ? "water-deadly" : "water-open";
+    case "road":
+      return forward === "dies" ? "road-deadly" : "road-open";
+    case "rail":
+      return "rail";
+    case "grass":
+      return forward === "blocked" ? "tree" : forward === "ok" ? "grass-open" : undefined;
+    default:
+      return undefined;
+  }
+}
+
+interface Candidate {
+  stratum: Stratum;
+  seed: number;
+  actions: Action[];
+  outcomes: Record<Action, Outcome>;
+}
+
+const FREE_PLAYERS: readonly PolicyFactory[] = [alwaysForward, randomPolicy, lookaheadPolicy()];
+
+/** Every decision point the free players reach on these seeds, sorted into strata. */
+async function candidatesFor(seeds: readonly number[], maxDecisions: number): Promise<Candidate[]> {
+  const found: Candidate[] = [];
+  for (const factory of FREE_PLAYERS) {
+    for (const seed of seeds) {
+      const game = new Game({ seed });
+      const policy = factory.create(seed);
+      const actions: Action[] = [];
+      let memory = emptyMemory();
+      for (let i = 0; i < maxDecisions && game.alive; i++) {
+        const outcomes = outcomesAt(game);
+        const stratum = classify(game.row(game.heroRow + 1)?.kind, outcomes.hop_forward);
+        if (stratum) found.push({ stratum, seed, actions: [...actions], outcomes });
+        const decision =
+          policy.kind === "oracle"
+            ? await policy.decide(game)
+            : await policy.decide(observe(game), memory);
+        const { outcome } = game.step(decision.action);
+        actions.push(decision.action);
+        memory = remember(memory, { action: decision.action, outcome }, game.score);
+      }
+    }
+  }
+  return found;
+}
+
+/** The first candidate of each seed, in the order given. */
+function onePerSeed(candidates: readonly Candidate[]): Candidate[] {
+  const seen = new Set<number>();
+  return candidates.filter((c) => {
+    if (seen.has(c.seed)) return false;
+    seen.add(c.seed);
+    return true;
+  });
+}
+
+function shuffled<T>(items: readonly T[], rng: ReturnType<typeof createRng>): T[] {
+  const copy = [...items];
+  for (let i = copy.length - 1; i > 0; i--) {
+    const j = rng.int(i + 1);
+    [copy[i], copy[j]] = [copy[j] as T, copy[i] as T];
+  }
+  return copy;
+}
+
+/** Bumps into the tree ahead `count` times, so the state has the memory of having been stuck. */
+function bumped(candidate: Candidate, count: number): Candidate {
+  const actions = [...candidate.actions, ...Array<Action>(count).fill("hop_forward")];
+  const { game } = rebuild({ seed: candidate.seed, actions });
+  return { ...candidate, stratum: "tree-stuck", actions, outcomes: outcomesAt(game) };
+}
+
+function labelled(candidate: Candidate): Omit<ProbeState, "id"> {
+  const { game } = rebuild(candidate);
+  const values = actionValues(game);
+  const best = Math.max(...Object.values(values));
+  const good = ACTIONS.filter((a) => {
+    const value = values[a];
+    return value !== undefined && value >= best - GOOD_MARGIN;
+  });
+  return {
+    stratum: candidate.stratum,
+    seed: candidate.seed,
+    actions: candidate.actions,
+    outcomes: candidate.outcomes,
+    good,
+  };
+}
+
+export interface SampleOptions {
+  seeds: readonly number[];
+  /** Decisions followed per game when collecting decision points. */
+  maxDecisions?: number;
+  /** Replaces the default quota of a stratum (tests use small ones). */
+  quotas?: Partial<Record<Stratum, number>>;
+  /** Picks which of the candidates are kept. The same value gives the same states. */
+  pickSeed?: number;
+}
+
+/**
+ * A fixed-size, stratified, deterministic sample of decision points: the same seeds and options give
+ * the same states, at most one per seed in each stratum so they do not all look alike.
+ */
+export async function sampleStates(options: SampleOptions): Promise<ProbeState[]> {
+  const rng = createRng(options.pickSeed ?? 1, 0, PROBE_DOMAIN);
+  const candidates = await candidatesFor(options.seeds, options.maxDecisions ?? 60);
+  const quota = (id: Stratum): number =>
+    options.quotas?.[id] ?? (STRATA.find((s) => s.id === id)?.quota as number);
+
+  const chosen: Candidate[] = [];
+  for (const { id } of STRATA) {
+    const stuck = id === "tree-stuck";
+    // Both tree strata come from the same candidates; the stuck ones skip the seeds already used.
+    const usedSeeds = new Set(chosen.filter((c) => c.stratum === "tree").map((c) => c.seed));
+    const pool = onePerSeed(
+      shuffled(
+        candidates.filter(
+          (c) => c.stratum === (stuck ? "tree" : id) && !(stuck && usedSeeds.has(c.seed)),
+        ),
+        rng,
+      ),
+    ).slice(0, quota(id));
+    chosen.push(
+      ...(stuck ? pool.map((c, i) => bumped(c, BUMPS[i % BUMPS.length] as number)) : pool),
+    );
+  }
+  const counts = new Map<Stratum, number>();
+  return chosen.map((candidate) => {
+    const n = (counts.get(candidate.stratum) ?? 0) + 1;
+    counts.set(candidate.stratum, n);
+    return { id: `${candidate.stratum}-${n}`, ...labelled(candidate) };
+  });
+}
+
+export interface ProbeResult {
+  policy: string;
+  state: string;
+  action: Action;
+  probabilities?: Partial<Record<Action, number>>;
+  inputTokens?: number;
+  neurons?: number;
+  cached?: boolean;
+}
+
+/** How one answer fares against the labels of its state. */
+export function scoreAnswer(state: ProbeState, result: ProbeResult) {
+  const probabilities = result.probabilities;
+  return {
+    fatal: state.outcomes[result.action] === "dies",
+    good: state.good.includes(result.action),
+    bumped: state.outcomes[result.action] === "blocked",
+    forward: result.action === "hop_forward",
+    deathMass: probabilities
+      ? ACTIONS.reduce(
+          (sum, a) => sum + (state.outcomes[a] === "dies" ? (probabilities[a] ?? 0) : 0),
+          0,
+        )
+      : undefined,
+  };
+}
+
+const rate = (flags: readonly boolean[]): number =>
+  flags.length === 0 ? Number.NaN : flags.filter(Boolean).length / flags.length;
+
+const pct = (value: number): string =>
+  Number.isNaN(value) ? "n/a" : `${Math.round(value * 100)}%`;
+
+const WATER: readonly Stratum[] = ["water-deadly", "water-open"];
+
+export interface ProbeSummary {
+  policy: string;
+  stratum: Stratum | "water";
+  n: number;
+  fatal: number;
+  good: number;
+  bumped: number;
+}
+
+export function summarizeProbe(
+  states: readonly ProbeState[],
+  results: readonly ProbeResult[],
+): ProbeSummary[] {
+  const byId = new Map(states.map((s) => [s.id, s]));
+  const policies = [...new Set(results.map((r) => r.policy))].sort();
+  const rows: ProbeSummary[] = [];
+  const groups: Array<[ProbeSummary["stratum"], readonly Stratum[]]> = [
+    ...STRATA.map((s): [Stratum, readonly Stratum[]] => [s.id, [s.id]]),
+    ["water", WATER],
+  ];
+  for (const policy of policies) {
+    for (const [stratum, members] of groups) {
+      const scored = results
+        .filter((r) => r.policy === policy)
+        .flatMap((r) => {
+          const state = byId.get(r.state);
+          return state && members.includes(state.stratum) ? [scoreAnswer(state, r)] : [];
+        });
+      if (scored.length === 0) continue;
+      rows.push({
+        policy,
+        stratum,
+        n: scored.length,
+        fatal: rate(scored.map((s) => s.fatal)),
+        good: rate(scored.map((s) => s.good)),
+        bumped: rate(scored.map((s) => s.bumped)),
+      });
+    }
+  }
+  return rows;
+}
+
+/** Paired difference in the share of good moves (policy minus control) over the same states. */
+export function pairedGood(
+  states: readonly ProbeState[],
+  results: readonly ProbeResult[],
+  policy: string,
+  control: string,
+  members: readonly Stratum[],
+) {
+  const byId = new Map(states.map((s) => [s.id, s]));
+  const answer = (p: string) =>
+    new Map(results.filter((r) => r.policy === p).map((r) => [r.state, r]));
+  const mine = answer(policy);
+  const theirs = answer(control);
+  const ids = states.filter(
+    (s) => members.includes(s.stratum) && mine.has(s.id) && theirs.has(s.id),
+  );
+  const flags = (from: Map<string, ProbeResult>) =>
+    ids.map((s) =>
+      scoreAnswer(byId.get(s.id) as ProbeState, from.get(s.id) as ProbeResult).good ? 1 : 0,
+    );
+  return { n: ids.length, diff: bootstrapPairedDiff(flags(mine), flags(theirs)) };
+}
+
+export function renderProbeReport(
+  title: string,
+  states: readonly ProbeState[],
+  results: readonly ProbeResult[],
+  control: string,
+): string {
+  const summary = summarizeProbe(states, results);
+  const policies = [...new Set(results.map((r) => r.policy))].sort();
+  const sections = [`# ${title}`, ""];
+
+  sections.push(
+    "Each row is a policy's answer on states with known outcomes. **fatal** = the move chosen dies; " +
+      "**good** = the move chosen is one the look-ahead rates within a row of the best; " +
+      "**bumped** = the move chosen runs into a tree again.",
+    "",
+    ...markdownTable(
+      ["Policy", "Stratum", "States", "Fatal", "Good", "Bumped"],
+      summary.map((r) => [
+        code(r.policy),
+        r.stratum,
+        r.n,
+        pct(r.fatal),
+        pct(r.good),
+        pct(r.bumped),
+      ]),
+    ),
+  );
+
+  const others = policies.filter((p) => p !== control);
+  if (policies.includes(control) && others.length > 0) {
+    const groups: Array<[string, readonly Stratum[]]> = [
+      ["water", WATER],
+      ["tree-stuck", ["tree-stuck"]],
+      ["all", STRATA.map((s) => s.id)],
+    ];
+    sections.push(
+      "",
+      `## Share of good moves, paired against ${code(control)} (95% bootstrap CI)`,
+      "",
+      ...markdownTable(
+        ["Policy", "Strata", "States", "Δ good [95% CI]"],
+        others.flatMap((policy) =>
+          groups.map(([name, members]) => {
+            const { n, diff } = pairedGood(states, results, policy, control, members);
+            return [
+              code(policy),
+              name,
+              n,
+              n === 0
+                ? "n/a"
+                : `${fixed(diff.estimate * 100, 0)} pts [${fixed(diff.lo * 100, 0)}, ${fixed(diff.hi * 100, 0)}]`,
+            ];
+          }),
+        ),
+      ),
+    );
+  }
+  return sections.join("\n");
+}
