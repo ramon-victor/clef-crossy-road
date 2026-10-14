@@ -19,6 +19,8 @@ no core e entra na métrica de movimentos inválidos. Um teste congela as chaves
 
 Mudar a **representação** (JSON → grade → imagem → JSON com colunas relativas) é permitido, mas aparece no relatório como condição própria.
 
+**Além da `Observation`** (a [ADR-0009](adr/0009-percepcao-memoria-e-julgamento.md)): o modelo também pode receber o que um jogador percebe e lembra, em três níveis que o relatório mostra: `now` (os fatos do instante), `memory` (mais as últimas jogadas e o que cada uma fez, as linhas cruzadas e há quantas jogadas não ganha linha) e `forecast` (mais onde cada objeto estará daqui a 0,2 s). Julgamento ("seguro", "morre se", tempo-até-colisão, "alcançável", jogadas válidas) continua proibido.
+
 ## Observação (E0, JSON)
 
 ```json
@@ -47,6 +49,9 @@ Mudar a **representação** (JSON → grade → imagem → JSON com colunas rela
 | E1 | Grade ASCII (13 colunas) centrada no jogador, mais os números exatos de cada linha | Implementado e avaliado no gate: indistinguível de E0 |
 | E2 | **Vista de cima em PNG**, 416×384 px (13×12 quadrados de 32 px), desenhada só a partir da observação | Implementado (`packages/agent/src/image.ts`) e **avaliado: significativamente pior** que "sempre em frente" (−0,42 ruas) e com probabilidades quase uniformes. ~159 tokens de imagem (`(w/32)·(h/32)+3`) |
 | E3 (`json-rel`) | O mesmo JSON, com toda coluna medida **a partir da coluna da galinha**: `dcol` no lugar de `col` e `blocked_dcols` no lugar de `blocked_cols` (`player.col` continua absoluto, por causa da borda do mundo) | Implementado e **avaliado em 40 seeds: indistinguível de "sempre em frente"** (3,20 contra 3,30) e sem sinal dentro da água (AUC 0,54). ~1.163 tokens por decisão |
+| E4 (`view`) | A tela inteira como mapa de texto centrado na galinha (colunas −5 a +5, linhas dz −3 a +8), com os números exatos dos objetos e a memória em frases | Implementado e **avaliado em 90 estados (sonda)**: sem ganho na água; a memória em texto quase não tirou o modelo da árvore (90% repetem) |
+| E5 (`view-fx`) | `view` mais um segundo mapa dos objetos que se movem, daqui a 0,2 s | Idem: sem ganho na água (AUC 0,41) |
+| E6 (`json-fx`) | `json-rel` mais a coluna de cada objeto daqui a 0,2 s (`dcol_after`) e a memória em campos (`last_moves`, `rows_crossed`, `moves_since_new_row`) | **O Clef do app.** 100 partidas: 3,73 ruas, igual a `always-forward`. Na sonda, tirou o modelo do laço da árvore em metade dos casos |
 
 **E3 em detalhe.** A hipótese era que o modelo erra a água por ter de subtrair `col_da_plataforma − col_da_galinha`; com `dcol`, o teste "a plataforma
 da linha da frente me cobre?" vira `|dcol| < half_extent`. É só uma troca de origem: desfazê-la devolve exatamente a observação (teste), então nada é
@@ -90,7 +95,7 @@ trabalho, não para concluir.** Detalhes e números em [00](00-viabilidade.md).
   que grama), mas não a **cinemática** (carro se afastando recebe tanto risco quanto carro iminente).
 - Árvores (`blocked_cols`) foram ignoradas.
 
-**O gate confirmou a sonda** ([07](07-experimentos.md)): E0, E1, E3, `critic-go`, o manual `minimal` e o Clef 27B ficam indistinguíveis de
+**O gate confirmou a sonda** ([07](07-experimentos.md)): E0, E1, E3, E6, `critic-go`, o manual `minimal` e o Clef 27B ficam indistinguíveis de
 "sempre em frente", e E2 (imagem) fica pior. O diagnóstico de AUC mostra que as probabilidades dos modelos separam **tipos de terreno**, mas não
 dizem quais saltos para a água sobrevivem. O resultado negativo é o achado do projeto, e o caminho natural é o fine-tuning com este núcleo como ambiente
 ([ADR-0006](adr/0006-sem-fine-tuning-nem-self-host.md)).

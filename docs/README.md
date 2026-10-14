@@ -35,6 +35,7 @@
 | [0006](adr/0006-sem-fine-tuning-nem-self-host.md) | Sem fine-tuning nem self-host por ora |
 | [0007](adr/0007-desktop-tauri-token-no-rust.md) | Desktop em Tauri, token no Rust |
 | [0008](adr/0008-orcamento-diario-no-free-tier.md) | Orçamento diário no free tier, imposto antes da chamada |
+| [0009](adr/0009-percepcao-memoria-e-julgamento.md) | Percepção e memória entram na vista do modelo; julgamento não |
 
 ## Como manter
 

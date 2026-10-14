@@ -35,5 +35,6 @@ lets a person play.
 - `Session` is framework-free on purpose; `App.tsx` only subscribes to it. Real-time and step timing share the same loop.
 - In step timing the world waits for the model; in real-time it keeps running at 60 Hz and the action lands whenever the answer arrives.
 - The scene follows the hero with upstream's 3% per frame easing, expressed frame-rate independently (`followFactor`).
-- There is **one** model player (`CLEF_ID`, built from `DEFAULT_CLEF`). JSON, grid, critic and the 27B are benchmark conditions; do not add them back as players. An unknown `CCR_PLAYER` falls back to the free look-ahead.
+- There is **one** model player (`CLEF_ID`, built from `DEFAULT_CLEF`). The other views, the critic and the 27B are benchmark conditions; do not add them back as players. An unknown `CCR_PLAYER` falls back to the free look-ahead.
 - Human key presses go straight to `Game.act`; holding a key or pressing faster than a hop just keeps one input queued in the core.
+- `Session` keeps the same `Memory` the benchmark runner builds and hands it to the policy (a test pins this: it is what makes the benchmark's cached answers valid in the app). An AI that goes `DEFAULT_STALL_LIMIT` decisions without a new row is stopped (`stalled`) and stops spending.

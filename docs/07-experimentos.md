@@ -19,8 +19,9 @@ pnpm bench report --run <nome>[,<nome>...] --ref always-forward
 ```
 
 Políticas: `always-forward`, `random`, `lookahead`, `lookahead-comp:<ms>` e `clef:<modelo>:<encoder>:<estratégia>[:<manual>]`
-(modelo `clef-flash|clef|clef-omni`; encoder `json|json-rel|grid|image`; estratégia `choice|critic|critic-go`). O id curto `clef` é o Clef padrão do app
-(`clef:clef-flash:json:choice:full`); os relatórios gravam sempre o id por extenso.
+(modelo `clef-flash|clef|clef-omni`; encoder `json|json-rel|grid|image|view|view-fx|json-fx`; estratégia `choice|critic|critic-go`). O id curto `clef` é o Clef padrão do app
+(`clef:clef-flash:json-fx:choice:full`); os relatórios gravam sempre o id por extenso e mostram o **nível de percepção** (`now`, `memory`, `forecast`) de cada condição.
+`rule-view` e `rule-view-fx` são jogadores roteirizados de referência. `pnpm bench probe-sample`, `probe-run` e `probe-report` medem escolhas em estados rotulados.
 Resultados em `runs/<nome>/episodes.ndjson` (retomável) e `reports/`. As ações de cada partida ficam gravadas: qualquer partida se reproduz exatamente.
 
 ## Regras do benchmark
@@ -51,8 +52,10 @@ Resultados em `runs/<nome>/episodes.ndjson` (retomável) e `reports/`. As açõe
 | `clef-flash` · **imagem (E2)** · `choice` | 3,36 | **−0,42 [−0,82, −0,05]** | **pior** (83% afogamento, 12% carro) |
 | **Clef 27B** · JSON · `choice` (40 seeds) | — | 0,00 [0,00, 0,00] | idêntico: escolheu avançar em todas as decisões |
 | `clef-flash` · **JSON relativo (`json-rel`)** · `choice` (40 seeds) | 3,20 (referência nas mesmas 40 seeds: 3,30) | −0,10 [−0,30, 0,00] | indistinguível |
+| `clef-flash` · **vista de jogador (`json-fx`)** · `choice` | 3,73 | −0,05 [−0,21, 0,08] | indistinguível |
+| **Clef 27B** · vista de jogador (`json-fx`) (8 seeds) | 2,63 | 0,00 [0,00, 0,00] | idêntico (preliminar: só 8 partidas) |
 
-**Resultado: o gate NÃO passou, em nenhuma das 9 condições testadas** (as quatro primeiras de 2026-10-14 na conta antiga, as demais na conta nova). Com estes prompts o Clef-flash se comporta como `always-forward`:
+**Resultado: o gate NÃO passou, em nenhuma das 11 condições testadas** (as quatro primeiras de 2026-10-14 na conta antiga, as demais nas contas novas; a última, só em 8 partidas, por custo). Com estes prompts o Clef-flash se comporta como `always-forward`:
 - No `choice`, escolhe `hop_forward` em quase todas as decisões (a taxa de movimentos inválidos de 5% a 16% mostra que às vezes tenta outro caminho e bate numa árvore).
 - No `critic`, o modelo dá ao "avançar em grama aberta" risco de 0,30 contra 0,05 para um passo lateral, então uma regra de menor risco nunca avança. Com a regra `critic-go` (avançar a menos que o risco passe de 50%) ele sempre avança, porque o risco de avançar nunca passa de 50%.
 - Os modelos separam **tipo de terreno**, não **cinemática** ([06](06-observacao-e-prompts.md)).
@@ -110,6 +113,57 @@ Protocolo combinado antes de rodar: `bench plan` (coube: 1.625 neurons no pior c
 As duas condições de parada foram atendidas, então **a execução parou em 40 seeds** (poupou os ~1.000 neurons estimados para o resto). O Clef padrão do app continua sendo o
 `json`. Leitura: dar a subtração pronta não ensina o modelo a olhar **onde a tora estará** quando o salto pousar (0,2 s depois), que é o que decide a água; ele continua
 tratando "água à frente" como um tipo de terreno. Gasto da conta `df5a…` no dia 2026-10-14 (UTC): **7.261 de 10.000** (6.716 antes desta execução).
+
+### Vista de jogador: tela inteira, movimento previsto e memória (2026-10-14)
+
+Pedido do dono depois de ver o app: o Clef "buga fácil, trava em pedra, cai na água". O critério passou a ser **tudo o que um jogador normal vê e sabe**
+([ADR-0009](adr/0009-percepcao-memoria-e-julgamento.md)). As vistas novas ([06](06-observacao-e-prompts.md), E4 a E6) dão ao modelo a tela inteira como mapa,
+**onde cada objeto estará daqui a 0,2 s** e **a memória das últimas jogadas**. Tudo medido pelo cliente com orçamento, em ordem:
+
+**1. Suficiência, grátis (100 seeds).** `rule-view` e `rule-view-fx` são jogadores roteirizados que leem só o que cada vista mostra; dizem se a vista tem informação bastante.
+
+| Política | Vê | Ruas [IC 95%] | Δ vs `always-forward` [IC 95%] |
+|---|---|---|---|
+| `always-forward` | nada | 3,78 [3,39, 4,24] | — |
+| `rule-view` | mapa agora (roteirizado) | 13,53 [11,39, 15,78] | +9,75 [7,57, 12,02] |
+| `rule-view-fx` | mapa + 0,2 s (roteirizado) | 18,63 [15,43, 22,04] | +14,85 [11,65, 18,20] |
+| `lookahead` | o simulador | 44,75 [37,50, 52,27] | +40,97 [33,75, 48,44] |
+
+Um leitor simples faz de 3,6× a 4,9× o piso com essas vistas, então a informação está lá. O movimento previsto vale ~5 ruas para o leitor roteirizado.
+
+**2. Sondas** (`pnpm bench probe-*`, 90 estados rotulados pelo simulador, uma pergunta por estado e condição; o rótulo nunca vai ao modelo). "Fatal" é escolher uma jogada que morre; "boa" é escolher uma que o look-ahead
+dá como a melhor, com margem de uma linha; AUC é a de P(avançar) entre estados abertos e mortais (0,5 = nenhuma informação).
+
+| Condição | Água mortal: escolha fatal (n=24) | Boa jogada na água (n=36) | AUC água | Rua mortal: fatal (n=12) | Árvore, 2ª tentativa: repete a jogada (n=10) | Boa jogada, todos |
+|---|---|---|---|---|---|---|
+| Flash · `json` (controle, nível `now`) | 96% | 36% | 0,61 | 100% | 100% | 38% |
+| Flash · `view` (memória) | 88% | 36% | 0,40 | 75% | 90% | 43% |
+| Flash · `view-fx` (+ movimento) | 88% | 33% | 0,41 | 67% | 100% | 39% |
+| Flash · `json-fx` (+ movimento, JSON) | 96% | 36% | 0,66 | 100% | **50%** | **44%** (Δ +7 [1, 13]) |
+| **Clef 27B** · `json-fx` | **71%** | 47% (Δ +11 [−3, 28]) | **0,74** | 92% | **30%** | **51%** (Δ +13 [4, 22]) |
+| Clef-omni · imagem (46 estados) | 100% (n=6) | 50% (n=12) | 0,39 | 100% (n=6) | 100% (n=6) | 48% |
+
+- **Água:** nenhuma vista fez o Clef-flash escolher menos saltos fatais de forma mensurável (Δ da boa jogada na água: 0 [−8, 8] com `json-fx`). O modelo põe a maior probabilidade em avançar mesmo com a água e a plataforma escritas na frente dele.
+- **Pedra:** a memória em campos de JSON (`json-fx`) tirou o modelo do laço em metade dos casos (Δ +50 pontos [20, 80]); a memória em texto (`view`) quase não mudou nada (90%).
+- **Rua:** a vista ajuda um pouco (AUC de 0,63 para 0,85), mas as escolhas fatais seguem altas.
+- **Tamanho:** o 27B com `json-fx` é o único que se mexe na água (71% fatal contra 96%, AUC 0,74), com a melhor taxa de boa jogada. A imagem no Clef-omni não muda nada.
+
+**3. Partidas completas.** Para conferir as sondas (pela regra combinada antes de gastar, nenhuma condição passou: a melhoria na água ficou abaixo de 25 pontos):
+
+| Condição | Seeds | Ruas | Δ vs `always-forward` [IC 95%] | Mortes |
+|---|---|---|---|---|
+| Flash · `json-fx` | 100 | **3,73** [3,39, 4,11] | −0,05 [−0,21, 0,08] **indistinguível** | 96% afogamento, 4% carro |
+| Clef 27B · `json-fx` | 8 (só 8, por custo) | 2,63 | 0,00 [0,00, 0,00] | 100% afogamento no primeiro rio |
+
+No 27B, o motivo é visível nos registros: no primeiro rio, com lírios a uma coluna de distância, a probabilidade de avançar foi de **0,68 a 0,80** nas oito partidas. Ele sabe pouco mais que o Flash sobre
+estados mortais difíceis, mas no rio mais simples ainda confia no "avançar". O que cada vista **não** conseguiu foi fazer o modelo usar a plataforma que está escrita ali.
+
+**Custo.** Tokens por decisão: `json-fx` 1.425 (100 partidas), `view` 1.367, `view-fx` 1.540 (nos 90 estados), 27B `json-fx` ~1.410; Clef-omni com imagem 970. Neurons usados nestes testes: **1.271 na conta `df5a…`** (que o app do
+dono também usou no mesmo dia: 8.739 de 10.000) e **6.763 na conta `f173…`** (sondas do Flash `json-fx` 485, do 27B e do Clef-omni 3.669, partidas do Flash `json-fx` 1.963, do 27B 646). Nenhuma conta passou de 10.000.
+O 27B custa ~30 neurons por decisão (o free tier de uma conta dá ~300 decisões por dia), então 100 partidas dele não cabem em menos de vários dias.
+
+**Decisão sobre o app.** O Clef do app passou a ser o `json-fx` (a vista de jogador): no placar ele é igual ao `json` (3,73 contra 3,70), as decisões das seeds 1 a 100 estão no cache para essa vista (replays seguem grátis) e a memória
+ajuda onde o modelo mais trava. É uma escolha sobre o que o modelo vê, não sobre pontuação.
 
 ## Atraso: a pergunta do modo tempo real
 

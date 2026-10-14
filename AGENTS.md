@@ -17,13 +17,15 @@ Language: code, identifiers, commits and this file in English. `docs/` is in Bra
 
 ## Status
 
-Phases 0-4 are built (331 TS tests + 20 Rust tests). **The gate was NOT passed, in 9 conditions**: Clef-flash (JSON, grid,
-critic-go, minimal manual, JSON with columns relative to the chicken) plays like "always forward" (~3.7 rows), image input is significantly worse, and Clef 27B chose
-"forward" every time (`docs/07-experimentos.md`). Diagnosis: 72-85% of hops into water are fatal and the model's probability
-carries no information about which ones survive (AUC 0.5-0.6 inside water). Only `clef-omni` is untested.
-The app offers **one** Clef (`DEFAULT_CLEF`: clef-flash, json, choice, full manual); encoders, strategies and the 27B are benchmark axes, not players.
+Phases 0-4 are built (380 TS tests + 20 Rust tests). **The gate was NOT passed, in 11 conditions**: Clef-flash (JSON, grid,
+critic-go, minimal manual, relative columns, and the player's view with the whole screen, motion and memory) plays like "always forward" (~3.7 rows),
+image input is significantly worse, and Clef 27B chose "forward" every time (`docs/07-experimentos.md`). Diagnosis: 72-96% of hops into water are
+fatal and the model puts its top probability on "forward" even when the platform is written right in front of it. Scripted readers of the same views make
+13-19 rows, so the information is in the view and the model does not use it. Clef 27B is the only one that moves in the probes (71% fatal choices into
+deadly water against 96%) and it costs ~30 neurons per decision. `clef-omni` with a picture did not change anything.
+The app offers **one** Clef (`DEFAULT_CLEF`: clef-flash, `json-fx` view, choice, full manual); other views, strategies and the 27B are benchmark axes, not players.
 The owner authorized commits on 2026-10-14 (history is on `main`, Conventional Commits, one logical change each, with the
-`Co-Authored-By` trailer). Pushing still needs their say-so. `.env` holds a working `CF_API_TOKEN` and `CF_ACCOUNT_ID`.
+`Co-Authored-By` trailer). Pushing still needs their say-so. `.env` holds a working `CF_API_TOKEN` and `CF_ACCOUNT_ID`; `.env.second` (gitignored) holds a second account's.
 Installed: Node 24, pnpm 10, git, MSVC, WebView2, Rust 1.99 (rustup, user-level). Git checks out LF (`.gitattributes`), except
 `*.cmd`, which must stay CRLF.
 
@@ -32,10 +34,13 @@ Installed: Node 24, pnpm 10, git, MSVC, WebView2, Rust 1.99 (rustup, user-level)
 - `pnpm install`; `node scripts/fetch-assets.mjs` once, to download Evan's models/audio locally (gitignored)
 - `pnpm typecheck` / `pnpm lint` / `pnpm test`: run all three before declaring work done
 - `pnpm --filter @ccr/core test`: core only, no network, ~3 s
-- `pnpm bench plan --policies <ids> --seeds 1..100`: estimates neurons and splits a run over days. **Run it before any `run` that uses a model.**
+- `pnpm bench plan --policies <ids> --seeds 1..100`: estimates neurons and splits a run over days. **Run it before any `run` or `probe-run` that uses a model.**
+  For the second account: `node --env-file=.env --env-file=.env.second apps/bench/src/cli.ts <command>` (the last file wins).
 - `pnpm bench run --run <name> --policies <ids> --seeds 1..100 [--latency fixed:300:pipelined]`, `pnpm bench report --run <name>`,
   `pnpm bench diagnose --run <name>` (AUC of the model's P(forward) against real safety) and
   `pnpm bench export --run <name> [--policy id] [--min-score n]` (RL trajectories as NDJSON). Both read files only, no API call.
+- `pnpm bench probe-sample` (90 labelled decision points from the free players' games, no API call), `probe-run --run <name> --policies <ids> --max-calls n`
+  (one question per policy and state, same client, cache and ledger as `run`) and `probe-report --run <name>` (no API call): about a tenth of the cost of whole games.
 - `play.cmd` opens the release app; `play-clef.cmd` opens it on Clef-flash, seed 1 (cached, free). `CCR_PLAYER` and `CCR_SEED`
   pick the starting player and map.
 - `pnpm --filter @ccr/desktop tauri dev` (app window) / `tauri build --no-bundle` (release exe). `CCR_SELFTEST=1` makes the app
@@ -46,10 +51,11 @@ Installed: Node 24, pnpm 10, git, MSVC, WebView2, Rust 1.99 (rustup, user-level)
 
 - `packages/core`: pure deterministic game simulation, zero dependencies. Own `AGENTS.md`.
 - `packages/clef`: Workers AI client (schema, retry, cache, **spend budget**) with a `Transport` interface. Own `AGENTS.md`.
-- `packages/agent`: `Policy` types, baselines (random, always-forward, lookahead, latency-compensated lookahead), encoders
-  (`json`, `json-rel`, `grid`, `image`), `DEFAULT_CLEF`, versioned prompts, `ClefPolicy`, episode runner with latency injection.
+- `packages/agent`: `Policy` types, baselines (random, always-forward, lookahead, latency-compensated lookahead), scripted readers
+  (`rule-view`, `rule-view-fx`: references, not models), `Memory`, `worldAfter` (the 0.2 s forecast), encoders (`json`, `json-rel`, `grid`, `image`,
+  `view`, `view-fx`, `json-fx`, each with a perception level), `DEFAULT_CLEF`, versioned prompts, `ClefPolicy`, episode runner with latency injection.
 - `packages/render`: Three.js scene built from a read-only `Snapshot`, using Evan's models.
-- `apps/bench`: Node CLI (`run`, `report`, `plan`). `apps/desktop`: Tauri v2 app (Preact UI + Rust commands). Own `AGENTS.md`.
+- `apps/bench`: Node CLI (`run`, `report`, `plan`, `diagnose`, `export`, `probe-*`). `apps/desktop`: Tauri v2 app (Preact UI + Rust commands). Own `AGENTS.md`.
 - `docs/`: specs, ADRs, references. `runs/` and `reports/` are generated and gitignored.
 - Package boundaries come from pnpm's strict `node_modules`: a package can only import what its `package.json` declares.
 
@@ -61,7 +67,9 @@ Installed: Node 24, pnpm 10, git, MSVC, WebView2, Rust 1.99 (rustup, user-level)
 2. **Fairness rule** (`docs/adr/0005`): an `Observation` contains only measured physical facts (terrain,
    positions, extents, velocities in tiles/s, signal phase). It must never contain anything derived from the
    candidate actions: no "safe/unsafe" labels, no legal-move list, no time-to-collision with the player.
-   Do not change the observation schema without updating that ADR and the schema test.
+   Do not change the observation schema without updating that ADR and the schema test. What the model is shown beyond the
+   `Observation` follows `docs/adr/0009`: perception (the whole screen, where things will be in 0.2 s) and memory (its last moves)
+   may enter; judgement (safe, reachable, valid moves, time-to-collision) never. Every encoder declares a perception level.
 3. **Secrets**: `CF_API_TOKEN` and `CF_ACCOUNT_ID` live only in `.env` (gitignored). Read them only in Node
    (bench) or Rust (desktop). Never log them, put them in docs, or send them to the webview.
 4. **Dependency direction**: `core` imports nothing; `clef` imports nothing of ours; `render` imports `core`;
@@ -89,10 +97,11 @@ The owner's rule is **stay inside the free tier: 10,000 neurons per UTC day** (r
   The desktop app's Rust side enforces the same ceiling (a constant) and writes the same ledger.
 - Never write throwaway scripts or `curl` calls that hit the API directly; they bypass the ledger.
 - `pnpm bench plan` first, `pnpm bench run` second. The ledger is **per Cloudflare account** (a short hash of the account id
-  tags each entry; an untagged entry counts for every account). The old account (`0ba9...`) is over for 2026-10-14; the account now in
-  `.env` (`df5a...`) has used 6,673 of 10,000 today. Runs use `--daily-neurons 9000` to keep a margin. See `docs/adr/0008`.
+  tags each entry; an untagged entry counts for every account). On 2026-10-14 the old account (`0ba9...`) is over, `df5a...` (`.env`) used
+  8,739 of 10,000 (the app included) and `f173...` (`.env.second`) 6,763. Runs use `--daily-neurons 9000` to keep a margin and no single step
+  uses more than about a sixth of a day. See `docs/adr/0008`.
 - Before a run, estimate: `calls x tokens/decision x neurons per million tokens / 1e6`. Measured: ~1,120 tokens per
-  `choice` decision and ~3,070 per `critic` decision on clef-flash (3,455 neurons per million tokens); the 27B
+  `choice` decision (JSON; ~1,425 for the player's view) and ~3,070 per `critic` decision on clef-flash (3,455 neurons per million tokens); the 27B
   model costs 6.3x more. If the estimate does not fit in what is left of today, shrink the run or wait.
 - History: on 2026-10-14 this project overspent (~26,300 neurons, about US$ 0.18 billed). Do not repeat it.
 

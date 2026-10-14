@@ -8,9 +8,11 @@ e quantas ruas ele atravessou. Um benchmark em CLI compara modelos nas mesmas se
 ## Onde estamos (2026-10-14)
 
 - **Construído e testado:** núcleo determinístico, cliente do Clef com orçamento por conta, agentes, benchmark com IC de 95% e diagnóstico, app desktop a 180 fps.
-- **Resultado:** **nenhum modelo testado supera "sempre em frente"** (~3,8 ruas; o teto de referência exato faz ~45). Clef-flash em JSON, grade, colunas relativas à galinha ou manual mínimo
-  empata; com imagem é pior; o Clef 27B escolheu avançar em todas as decisões. A causa medida: 72% a 85% dos saltos para a água são fatais e a probabilidade
-  do modelo não distingue os seguros. Leia [docs/07-experimentos.md](docs/07-experimentos.md).
+- **Resultado:** **nenhum modelo testado supera "sempre em frente"** (~3,8 ruas; o teto de referência exato faz ~45). Clef-flash em JSON, grade, colunas relativas à galinha, manual mínimo
+  ou com **a vista de um jogador** (a tela inteira, onde as coisas estarão em 0,2 s e a memória das últimas jogadas) empata; com imagem é pior; o Clef 27B escolheu avançar em todas as partidas.
+  A causa medida: 72% a 96% dos saltos para a água são fatais e o modelo põe a maior probabilidade em avançar mesmo com a plataforma escrita na frente dele. Jogadores roteirizados que leem
+  as mesmas vistas fazem 13 a 19 ruas: a informação está lá, o modelo não a usa. Leia [docs/07-experimentos.md](docs/07-experimentos.md).
+- **O app tem um só Clef** (a vista de jogador). Um jogador de IA que passa 40 decisões sem uma linha nova (por exemplo, batendo numa árvore) encerra a partida com o cartão "Preso" e para de gastar.
 - **Regra do projeto:** ficar no free tier (10.000 neurons por dia UTC, por conta). O código recusa chamadas além disso ([ADR-0008](docs/adr/0008-orcamento-diario-no-free-tier.md)).
 
 ## Ver o jogo rodando

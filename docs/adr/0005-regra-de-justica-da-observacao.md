@@ -20,8 +20,13 @@ e deve ser descrita no relatório.
 ## Atualização (2026-10-14)
 
 O encoder `json-rel` (colunas medidas a partir da galinha, `dcol`) é uma **mudança de representação**, permitida acima: ele só troca a origem das colunas, desfazê-la devolve a
-observação (há um teste), e nenhum campo depende de uma ação candidata. Uma posição **prevista** (onde a tora estará no pouso) ou um "alcançável" seriam derivados e continuam proibidos.
-Resultado: [07](../07-experimentos.md).
+observação (há um teste), e nenhum campo depende de uma ação candidata. Resultado: [07](../07-experimentos.md). (Ao contrário do que esta página dizia antes, uma posição **prevista** passou a ser permitida: ver a revisão abaixo.)
+
+## Revisão (2026-10-14)
+
+A [ADR-0009](0009-percepcao-memoria-e-julgamento.md) separa **percepção**, **memória** e **julgamento** e passa a valer para tudo o que o modelo lê além da
+`Observation`. A previsão de onde cada objeto estará daqui a 0,2 s e as últimas jogadas são percepção e memória: entram. O que esta ADR proíbe, o
+julgamento ("seguro", "alcançável", tempo-até-colisão, lista de jogadas válidas), continua proibido, e a `Observation` continua com as chaves congeladas por teste.
 
 ## Consequências
 
