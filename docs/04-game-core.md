@@ -1,6 +1,6 @@
 # 04 · Núcleo do jogo (`@ccr/core`)
 
-> **Status:** implementado (Fase 1), 60 testes passando · **Verificado em:** 2026-10-14
+> **Status:** implementado (Fase 1), 77 testes passando · **Verificado em:** 2026-10-14
 > **Fonte das regras:** [EvanBacon/Expo-Crossy-Road](https://github.com/EvanBacon/Expo-Crossy-Road) na revisão `6f2e84e` (2026-03-25), lido por inteiro em `src/` (engine, mapa, jogador, linhas, nós, ajustes). Código em `packages/core/src/`.
 
 ## Por que não usar a engine original
@@ -53,7 +53,7 @@ Desempenho medido na Fase 1 (Node 24, uma máquina de desenvolvimento): **0,3 a 
 | Início | `x = 0`, `z = 8` (`startingRow`), largura do herói 0,7 |
 | Salto | 2 tweens de 0,1 s = **12 ticks**: 75% do caminho no primeiro, o resto no segundo, ambos `ease-out` (`Power1.easeOut`, `p·(2−p)`) |
 | Posição durante o salto | A **posição de colisão** é a do tween; a posição lógica (destino) vale desde o comando |
-| Entrada durante um salto | Termina o salto em curso (crédito de score) e começa o novo; entradas nunca são descartadas |
+| Entrada durante um salto | **Fica na fila** (1 vaga, a última vence) e começa no tick em que o salto em curso pousa, **depois** de o pouso ser checado (desvio D9). O original teletransportava o herói ao destino |
 | Para frente/trás | `x` é arredondado com `Math.round`; para os lados, `x ± 1` sem arredondar (relevante sobre toras) |
 | Bloqueio | `treeCollision`: trunca o destino (`\|0`) e só linhas de grama bloqueiam. Bloqueado ⇒ o herói fica parado |
 | Score | `max(⌊z⌋ − 8, 0)`, creditado **só quando um salto termina** e o herói está vivo; é o máximo já alcançado |
@@ -78,6 +78,7 @@ Desempenho medido na Fase 1 (Node 24, uma máquina de desenvolvimento): **0,3 a 
 | D4 | Fase inicial do trem sorteada em [−110, 110). No original é a posição que o objeto do pool tinha (0 no primeiro uso) | Fase reproduzível e não dependente do histórico do pool |
 | D5 | Salto discretizado a 60 Hz (k/6 por tick). O original usa tempo real do GSAP | Determinismo; coincide em tela de 60 Hz |
 | D6 | Nova entrada durante o salto não deixa tweens antigos brigando | O original reposiciona o herói mas não cancela as animações anteriores |
+| D9 | Entrada durante um salto vai para uma fila de 1 vaga e começa quando o salto pousa. O original (`skipPendingMovement`) teletransporta o herói ao alvo **sem rodar nenhum tick** e deixa `moving` ligado | Com `moving` ligado a água não afoga e, sem ticks, carros e trens não checam a linha: apertar a seta rápido atravessava rios e ruas (medido: 20 apertos/s dava 29,3 ruas e 20% vivos em 100 seeds; agora 3,72 contra 3,78 do passo normal). Apertar mais rápido que o salto dá exatamente a trajetória de saltos seguidos (teste de equivalência) |
 | D7 | Sem animações, partículas, som, vibração, afundamento e o carro "carregando" o corpo após a morte | Visual, só depois do fim |
 | D8 | Bugs do original não reproduzidos: `TweenLite` sem import, `entities[0]` em linha sem entidades | Não afetam a jogabilidade lógica |
 
@@ -94,6 +95,7 @@ Desempenho medido na Fase 1 (Node 24, uma máquina de desenvolvimento): **0,3 a 
 const game = new Game({ seed: 1042 });        // uint32
 game.step("hop_forward");                      // aplica a ação e avança 12 ticks (DECISION_TICKS)
 game.act("hop_left"); game.advance(5);         // controle fino (tempo real / latência injetada)
+game.act("hop_forward");                       // com o salto no ar devolve "queued": começa quando ele pousar
 const obs = observe(game, { behind: 3, ahead: 8 });   // só fatos físicos (ADR-0005)
 const snap = game.snapshot();                  // dados puros para render e hash
 const future = game.clone();                   // para o baseline de look-ahead

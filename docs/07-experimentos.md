@@ -93,10 +93,11 @@ O modelo responde em ~330 ms (mediana medida do Brasil, [05](05-integracao-clef.
 | Política | sem atraso | 300 ms serial | 300 ms pipelined | 800 ms serial | 800 ms pipelined |
 |---|---|---|---|---|---|
 | `always-forward` | 3,78 | 3,32 | 3,57 | 3,37 | 3,39 |
-| `lookahead` (estado velho) | 44,75 | 6,48 | 8,33 | 4,25 | 4,52 |
+| `lookahead` (estado velho) | 44,75 | 6,48 | 11,70 | 4,25 | 4,60 |
 | `lookahead-comp` (planeja sobre o estado previsto) | — | 11,92 | **20,52** | 7,35 | 8,64 |
 
 - **Serial**: a pergunta sai, o mundo corre pela latência com o herói parado, a ação vale depois. **Pipelined** (como o app em tempo real): a próxima pergunta sai logo após a ação, então o salto acontece durante a espera.
+- **Correção de 2026-10-14 (fila de entrada, [04](04-game-core.md) D9):** as duas células `lookahead` em *pipelined* eram 8,33 e 4,52; com o núcleo corrigido ficaram 11,70 e 4,60. O planejador pergunta com o herói ainda no ar e simula a ação sobre esse estado: antes, o "salto encadeado" do original lhe parecia um atalho que o jogo real não oferece; agora o plano é feito sobre a mesma física. As demais células (serial, `always-forward`, `lookahead-comp`) não mudaram.
 - Dois efeitos distintos: (1) **informação velha**: o plano vem de um estado que já mudou (a compensação recupera parte); (2) **exposição**: o herói fica parado em estrada, trilho ou tora enquanto espera (nenhuma previsão elimina isso; só o pipelining ajuda).
 - Mesmo um planejador exato e compensado perde mais da metade da pontuação com 300 ms e quase tudo com 800 ms. **Qualquer expectativa de bom desempenho em tempo real precisa partir disso**, e é por isso que o gate usa passo-a-passo.
 

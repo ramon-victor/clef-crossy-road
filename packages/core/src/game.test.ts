@@ -86,18 +86,6 @@ describe("hero movement", () => {
     expect(g.alive).toBe(true);
   });
 
-  it("a new input mid-hop finishes the hop in flight first, then starts the next one", () => {
-    const g = gameWith({});
-    g.act("hop_forward");
-    g.advance(5);
-    expect(g.score).toBe(0);
-    g.act("hop_forward");
-    expect(g.score).toBe(1); // first hop completed and credited
-    g.advance(HOP_TICKS);
-    expect(g.heroRow).toBe(START_ROW + 2);
-    expect(g.score).toBe(2);
-  });
-
   it("dies out of bounds when |x| > 5 and not before", () => {
     const g = gameWith({});
     for (let i = 0; i < 5; i++) g.step("hop_left");
@@ -211,6 +199,129 @@ describe("hazards", () => {
     const g = gameWith({ 9: railRow(9, trainAt(60, 0, 110)) });
     g.step("hop_forward");
     expect(g.alive).toBe(true);
+  });
+});
+
+describe("input during a hop", () => {
+  it("is queued and starts on the tick the hop in flight lands", () => {
+    const g = gameWith({});
+    g.act("hop_forward");
+    g.advance(5);
+    expect(g.act("hop_forward")).toBe("queued");
+    expect(g.score).toBe(0); // the first hop is still in the air
+    g.advance(HOP_TICKS - 5);
+    expect(g.score).toBe(1);
+    expect(g.heroMoving).toBe(true); // the queued hop began on the landing tick
+    g.advance(HOP_TICKS);
+    expect(g.heroMoving).toBe(false);
+    expect(g.heroRow).toBe(START_ROW + 2);
+    expect(g.score).toBe(2);
+  });
+
+  it("keeps only the last input", () => {
+    const g = gameWith({});
+    g.act("hop_forward");
+    g.advance(2);
+    g.act("hop_left");
+    g.act("hop_right");
+    g.advance(HOP_TICKS - 2 + HOP_TICKS);
+    expect(g.heroX).toBe(-1);
+    expect(g.heroRow).toBe(START_ROW + 1);
+  });
+
+  it("counts a queued hop that a tree blocks as an invalid move and stays put", () => {
+    const g = gameWith({ 10: treeAt(10, 0) });
+    g.act("hop_forward");
+    g.act("hop_forward");
+    g.advance(HOP_TICKS);
+    expect(g.invalidMoves).toBe(1);
+    expect(g.heroMoving).toBe(false);
+    expect(g.heroRow).toBe(START_ROW + 1);
+  });
+
+  // Upstream finishes the hop in flight by teleporting the hero to its target and keeps `moving` on,
+  // so a fast key press crossed rivers (water only kills a hero that is not moving) and skipped the
+  // ticks in which a car could hit. Every cadence below must meet the hazards, including 0 ticks.
+  it.each([0, 1, 2, 3, 6, 11])(
+    "a river is not skipped when forward is pressed every %i ticks",
+    (every) => {
+      const g = gameWith({
+        9: waterRow(9, [padAt(5)], "lily_pads"),
+        10: waterRow(10, [padAt(5)], "lily_pads"),
+        11: waterRow(11, [padAt(5)], "lily_pads"),
+      });
+      for (let i = 0; i < 60 && g.alive; i++) {
+        g.act("hop_forward");
+        g.advance(every);
+      }
+      g.advance(HOP_TICKS * 3);
+      expect(g.deathCause).toBe("water");
+      expect(g.heroRow).toBe(START_ROW + 1);
+      expect(g.tick).toBe(HOP_TICKS);
+    },
+  );
+
+  it.each([0, 1, 2, 3, 6, 11])(
+    "a car is not skipped when forward is pressed every %i ticks",
+    (every) => {
+      const g = gameWith({ 9: roadRow(9, [carAt(0)]) });
+      for (let i = 0; i < 60 && g.alive; i++) {
+        g.act("hop_forward");
+        g.advance(every);
+      }
+      g.advance(HOP_TICKS * 3);
+      expect(g.deathCause).toBe("car");
+      expect(g.score).toBe(0);
+    },
+  );
+
+  it("a death empties the queue", () => {
+    const g = gameWith({ 9: roadRow(9, [carAt(0)]) });
+    g.act("hop_forward");
+    g.advance(2);
+    g.act("hop_forward");
+    g.advance(1);
+    expect(g.alive).toBe(false);
+    expect(g.snapshot().hero.queued).toBeNull();
+  });
+
+  it("pressing forward faster than the hop is the same game as stepping forward", () => {
+    for (let seed = 1; seed <= 50; seed++) {
+      const stepped = new Game({ seed });
+      for (let i = 0; i < 40 && stepped.alive; i++) stepped.step("hop_forward");
+      const pressed = new Game({ seed });
+      for (let t = 0; t < 40 * HOP_TICKS && pressed.alive; t += 3) {
+        pressed.act("hop_forward");
+        pressed.advance(3);
+      }
+      expect(
+        {
+          score: pressed.score,
+          alive: pressed.alive,
+          cause: pressed.deathCause,
+          tick: pressed.tick,
+        },
+        `seed ${seed}`,
+      ).toEqual({
+        score: stepped.score,
+        alive: stepped.alive,
+        cause: stepped.deathCause,
+        tick: stepped.tick,
+      });
+      expect(pressed.heroX).toBe(stepped.heroX);
+    }
+  });
+
+  it("travels with a clone, which then plays out the same way", () => {
+    const g = gameWith({});
+    g.act("hop_forward");
+    g.advance(2);
+    g.act("hop_left");
+    const copy = g.clone();
+    g.advance(40);
+    copy.advance(40);
+    expect(hashValue(copy.snapshot())).toBe(hashValue(g.snapshot()));
+    expect(g.heroX).toBe(1);
   });
 });
 

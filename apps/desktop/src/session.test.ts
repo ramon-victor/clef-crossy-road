@@ -54,6 +54,21 @@ describe("Session: human control", () => {
     expect(s.state().human).toBe(true);
   });
 
+  it("holding forward plays exactly like hopping forward one hop at a time", () => {
+    for (const seed of [1, 2, 3, 4, 5, 6]) {
+      const s = new Session();
+      s.start(seed);
+      for (let frame = 0; frame < 20 * 60 && s.game.alive; frame++) {
+        s.humanInput("hop_forward"); // a key repeat on every frame, far faster than a hop
+        s.frame(FRAME);
+      }
+      const stepped = new Game({ seed });
+      while (stepped.alive && stepped.tick < s.game.tick) stepped.step("hop_forward");
+      expect(s.game.score, `seed ${seed}`).toBe(stepped.score);
+      expect(s.game.deathCause, `seed ${seed}`).toBe(stepped.deathCause);
+    }
+  });
+
   it("ignores input while paused and while a policy is playing", () => {
     const s = new Session();
     s.start(7);

@@ -13,8 +13,8 @@ export const ACTIONS: readonly Action[] = [
 
 export type DeathCause = "car" | "water" | "train" | "out_of_bounds";
 
-/** What `act` did with the requested action. */
-export type MoveOutcome = "hop" | "blocked" | "stay" | "ignored";
+/** What `act` did with the requested action. `queued`: a hop is in flight, so it starts when that one lands. */
+export type MoveOutcome = "hop" | "queued" | "blocked" | "stay" | "ignored";
 
 export interface StepResult {
   readonly outcome: MoveOutcome;
@@ -68,6 +68,8 @@ export interface Snapshot {
     readonly fromZ: number;
     readonly targetX: number;
     readonly targetZ: number;
+    /** An input that arrived mid-hop and starts when it lands. */
+    readonly queued: Action | null;
     readonly ridingOn: { readonly z: number; readonly index: number } | null;
   };
   readonly rows: readonly RowSnapshot[];

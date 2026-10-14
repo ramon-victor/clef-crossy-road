@@ -38,7 +38,8 @@ export interface EpisodeOptions {
  *   action is applied and its hop plays out. Cadence = latency + hop.
  * pipelined: like the desktop app in real-time mode. The next question is asked as soon as an action
  *   is applied, so the hop plays out WHILE the model thinks; the hero idles only if the answer takes
- *   longer than the hop. Cadence = max(latency, hop). A new action interrupts a hop in flight.
+ *   longer than the hop. Cadence = max(latency, hop). An action that arrives mid-hop waits in the
+ *   game's input queue and starts when that hop lands.
  */
 export type LatencyModel =
   | { kind: "none" }

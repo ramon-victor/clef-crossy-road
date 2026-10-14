@@ -43,8 +43,12 @@ interface Hero {
   targetZ: number;
   hopTick: number;
   moving: boolean;
+  /** An input that arrived mid-hop. It starts on the tick that hop lands. */
+  queued: Hop | null;
   ridingOn: Riding | null;
 }
+
+type Hop = Exclude<Action, "stay">;
 
 /** Lazily generated, memoised rows. Rows are immutable, so clones can share one cache. */
 class RowCache {
@@ -89,7 +93,8 @@ function hopAxis(from: number, to: number, k: number): number {
  * Deterministic, headless Crossy Road. One `tick` is 1/60 s.
  *
  * Update order inside a tick mirrors upstream `Engine.tick`: hop animation, then the hazards of
- * the hero's row (rail, road, water), then riding/out-of-frame checks (only when not mid-hop).
+ * the hero's row (rail, road, water), then riding/out-of-frame checks (only when not mid-hop),
+ * then the input queued during the hop, if any, starts.
  */
 export class Game {
   readonly seed: number;
@@ -116,6 +121,7 @@ export class Game {
       targetZ: START_ROW,
       hopTick: 0,
       moving: false,
+      queued: null,
       ridingOn: null,
     };
   }
@@ -164,15 +170,24 @@ export class Game {
 
   /**
    * Applies an input immediately (GameEngine.moveWithDirection) without advancing time.
-   * A new input while a hop is in flight finishes that hop first, as upstream does.
+   * An input that arrives mid-hop waits in a one-slot queue (the last one wins) and starts on the
+   * tick that hop lands, after the landing was checked. Upstream instead teleports the hero to the
+   * end of the hop and keeps it "moving", so a fast key press skipped the water, car and train
+   * checks of every row it chained through (docs/04, D9).
    */
   act(action: Action): MoveOutcome {
     if (this.ended) return "ignored";
     if (action === "stay") return "stay";
+    if (this.hero.moving) {
+      this.hero.queued = action;
+      return "queued";
+    }
+    return this.startHop(action);
+  }
 
+  private startHop(action: Hop): "hop" | "blocked" {
     const hero = this.hero;
     hero.ridingOn = null;
-    if (hero.moving) this.completeHop();
 
     let tx = hero.x;
     let tz = hero.z;
@@ -245,6 +260,10 @@ export class Game {
       // Engine.tick: moveOnEntity(), then checkIfUserHasFallenOutOfFrame().
       if (hero.ridingOn) hero.x += hero.ridingOn.mover.speed;
       if (hero.z < MIN_Z || hero.x < -MAX_ABS_X || hero.x > MAX_ABS_X) this.die("out_of_bounds");
+
+      const queued = hero.queued; // a death above has emptied it
+      hero.queued = null;
+      if (queued) this.startHop(queued);
     }
   }
 
@@ -304,6 +323,7 @@ export class Game {
     this.alive = false;
     this.deathCause = cause;
     this.hero.moving = false; // Engine.gameOver: stop the hero finishing its movement
+    this.hero.queued = null;
   }
 
   /** CrossyGameMap.treeCollision: truncates the target to integers, only grass rows block. */
@@ -338,6 +358,7 @@ export class Game {
         fromZ: hero.fromZ,
         targetX: hero.targetX,
         targetZ: hero.targetZ,
+        queued: hero.queued,
         ridingOn: hero.ridingOn ? { z: hero.ridingOn.z, index: hero.ridingOn.index } : null,
       },
       rows,
