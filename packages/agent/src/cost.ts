@@ -12,17 +12,17 @@ export interface DecisionCost {
 
 /**
  * Input tokens per `choice` decision on Clef-flash, read from `usage.input_tokens` on 2026-10-14
- * (docs/05). The `view` and `json-fx` figures are estimates from the size of their text, scaled by the
- * ratio the measured encoders showed, until a run reads the real count.
+ * (docs/05). `json-fx` comes from 100 full games; `view` and `view-fx` from the 90 probe states, which
+ * sit deeper in a game than a typical decision, so they may be a little high for a short game.
  */
 const CHOICE_TOKENS: Readonly<Record<EncoderId, { tokens: number; measured: boolean }>> = {
   json: { tokens: 1120, measured: true },
   grid: { tokens: 1320, measured: true },
   image: { tokens: 972, measured: true },
   "json-rel": { tokens: 1163, measured: true },
-  view: { tokens: 1450, measured: false },
-  "view-fx": { tokens: 1550, measured: false },
-  "json-fx": { tokens: 1550, measured: false },
+  view: { tokens: 1367, measured: true },
+  "view-fx": { tokens: 1540, measured: true },
+  "json-fx": { tokens: 1425, measured: true },
 };
 
 /** The critic asks five questions, so it repeats the instructions five times. Only measured with `json`. */

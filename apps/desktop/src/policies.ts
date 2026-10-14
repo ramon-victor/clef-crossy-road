@@ -95,16 +95,16 @@ const REFERENCES: readonly PolicyChoice[] = [
 ];
 
 /**
- * The model player. There is one on purpose: JSON, grid, critic and the 27B were conditions of the
- * benchmark, and none played better than "always forward" (docs/07). The seeds in `freeReplay` are
- * the ones whose decisions that benchmark left in the cache.
+ * The model player. There is one on purpose: the other views, the critic and the 27B were conditions of
+ * the benchmark, and none played better than "always forward" (docs/07). The seeds in `freeReplay` are
+ * the ones whose decisions that benchmark left in the cache for this exact view.
  */
 function clefChoice(client: ClefClient | null): PolicyChoice {
   return {
     id: CLEF_ID,
     label: "Clef-flash",
     detail:
-      "Cloudflare's 9B decision model picks every move. In our tests it plays about like 'always forward' (3.7 rows)",
+      "Cloudflare's 9B decision model picks every move. It sees the whole screen, where things will be in 0.2 s and its last moves, and still plays about like 'always forward' (3.7 rows)",
     kind: "model",
     usesApi: true,
     neuronsPerDecision: decisionCost(DEFAULT_CLEF).neurons,

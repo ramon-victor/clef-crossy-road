@@ -41,13 +41,15 @@ export interface ClefPolicyConfig {
 }
 
 /**
- * The one Clef the desktop app plays and the bare `clef` policy means on the bench command line:
- * the plainest condition (the model's own argmax over the five actions, the full manual, no rule of
- * ours on top). Every other combination is an experiment axis of the benchmark (docs/07).
+ * The one Clef the desktop app plays and the bare `clef` policy means on the bench command line: the
+ * model's own argmax over the five actions, the full manual, no rule of ours on top, and the view a
+ * player has (the screen, where things will be in 0.2 s, and the last moves: ADR-0009). Over 100 games
+ * it plays exactly like the plain `json` view (docs/07), so this is a choice about what the model is
+ * shown, not about score. Every other combination is an experiment axis of the benchmark.
  */
 export const DEFAULT_CLEF: ClefPolicyConfig = {
   model: "clef-flash",
-  encoder: "json",
+  encoder: "json-fx",
   strategy: "choice",
   manual: "full",
 };

@@ -50,7 +50,7 @@ describe("parsePolicy", () => {
     const transport: Transport = { post: async () => ({ status: 200, json: null }) };
     const client = new ClefClient({ transport });
     expect(isClefPolicy("clef")).toBe(true);
-    expect(parsePolicy("clef", () => client).id).toBe("clef:clef-flash:json:choice:full");
+    expect(parsePolicy("clef", () => client).id).toBe("clef:clef-flash:json-fx:choice:full");
   });
 
   it("rejects unknown and malformed ids", () => {

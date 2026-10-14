@@ -12,6 +12,9 @@ describe("decisionCost", () => {
     expect(cost("grid", "choice")).toMatchObject({ tokens: 1320, measured: true });
     expect(cost("image", "choice")).toMatchObject({ tokens: 972, measured: true });
     expect(cost("json-rel", "choice")).toMatchObject({ tokens: 1163, measured: true });
+    expect(cost("json-fx", "choice")).toMatchObject({ tokens: 1425, measured: true });
+    expect(cost("view", "choice")).toMatchObject({ tokens: 1367, measured: true });
+    expect(cost("view-fx", "choice")).toMatchObject({ tokens: 1540, measured: true });
     expect(cost("json", "critic")).toMatchObject({ tokens: 3070, measured: true });
     expect(cost("json", "critic-go").tokens).toBe(3070);
   });

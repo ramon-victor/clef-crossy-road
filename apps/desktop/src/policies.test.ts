@@ -22,7 +22,7 @@ describe("who can play", () => {
     const clef = byId(CLEF_ID);
     expect(clef?.usesApi).toBe(true);
     expect(clef?.neuronsPerDecision).toBeCloseTo(
-      decisionCost({ model: "clef-flash", encoder: "json", strategy: "choice" }).neurons,
+      decisionCost({ model: "clef-flash", encoder: "json-fx", strategy: "choice" }).neurons,
       5,
     );
     for (const c of choices.filter((x) => x.kind !== "model")) expect(c.usesApi).toBe(false);
