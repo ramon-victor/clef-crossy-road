@@ -1,6 +1,7 @@
 import {
   alwaysForward,
   clefPolicy,
+  DEFAULT_CLEF_ID,
   lookaheadPolicy,
   type PolicyFactory,
   parseClefPolicyId,
@@ -8,12 +9,13 @@ import {
 } from "@ccr/agent";
 import type { ClefClient } from "@ccr/clef";
 
-export const isClefPolicy = (id: string): boolean => id.startsWith("clef:");
+export const isClefPolicy = (id: string): boolean =>
+  id === DEFAULT_CLEF_ID || id.startsWith("clef:");
 
 /**
  * Policy ids accepted on the command line:
  *   always-forward | random | lookahead | lookahead-<depth> | lookahead-comp:<ms>
- *   clef:<model>:<encoder>:<strategy>[:<manual>]   e.g. clef:clef-flash:json:choice:full
+ *   clef | clef:<model>:<encoder>:<strategy>[:<manual>]   e.g. clef:clef-flash:json:choice:full
  */
 export function parsePolicy(id: string, getClient: () => ClefClient): PolicyFactory {
   if (id === "always-forward") return alwaysForward;
@@ -25,7 +27,7 @@ export function parsePolicy(id: string, getClient: () => ClefClient): PolicyFact
   if (compensated) return lookaheadPolicy(4, undefined, Number(compensated[1]));
   if (isClefPolicy(id)) return clefPolicy(getClient(), parseClefPolicyId(id));
   throw new Error(
-    `Unknown policy "${id}". Try always-forward, random, lookahead, or clef:<model>:<encoder>:<strategy>[:<manual>].`,
+    `Unknown policy "${id}". Try always-forward, random, lookahead, clef, or clef:<model>:<encoder>:<strategy>[:<manual>].`,
   );
 }
 

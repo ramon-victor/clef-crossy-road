@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
+import type { StrategyId } from "./clef-policy.ts";
 import { decisionCost } from "./cost.ts";
+import type { EncoderId } from "./encode.ts";
 
-const cost = (encoder: "json" | "grid" | "image", strategy: "choice" | "critic" | "critic-go") =>
+const cost = (encoder: EncoderId, strategy: StrategyId) =>
   decisionCost({ model: "clef-flash", encoder, strategy });
 
 describe("decisionCost", () => {
@@ -13,9 +15,10 @@ describe("decisionCost", () => {
     expect(cost("json", "critic-go").tokens).toBe(3070);
   });
 
-  it("flags the critic with a picture or a grid as an estimate", () => {
+  it("flags the critic with a picture or a grid, and relative JSON, as estimates", () => {
     expect(cost("image", "critic")).toMatchObject({ tokens: 3070, measured: false });
     expect(cost("grid", "critic-go").measured).toBe(false);
+    expect(cost("json-rel", "choice")).toMatchObject({ tokens: 1120, measured: false });
   });
 
   it("prices tokens at the published rate: Clef costs 6.3 times Clef-flash", () => {

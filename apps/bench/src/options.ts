@@ -9,8 +9,9 @@ export const USAGE = `Usage:
   pnpm bench export   --run <name>[,<name>...] [--policy <id>] [--min-score n]   (RL trajectories as NDJSON, no API call)
 
 Policies: always-forward, random, lookahead, lookahead-<depth>,
+          clef   (the app's Clef: clef-flash, json, choice, full manual),
           clef:<model>:<encoder>:<strategy>[:<manual>]   (model: clef-flash|clef|clef-omni,
-          encoder: json|grid|image, strategy: choice|critic|critic-go, manual: full|minimal)
+          encoder: json|json-rel|grid|image, strategy: choice|critic|critic-go, manual: full|minimal)
 
 run options:
   --concurrency <n>      parallel episodes (default 1 for baselines, 4 when a Clef policy is used)

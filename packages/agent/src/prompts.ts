@@ -42,11 +42,23 @@ export const ACTION_CRITERIA: Readonly<Record<Action, string>> = {
   stay: "Do not move during this decision step.",
 };
 
-const withLegend = (manual: ManualId, encoder?: EncoderId): string =>
-  encoder === "image" ? `${MANUALS[manual]} ${IMAGE_LEGEND}` : MANUALS[manual];
+/** How the chicken's column is used in the `json-rel` view. A description of the coordinates, nothing more. */
+const RELATIVE_NOTE =
+  "In this view every entity position is given as dcol (blocked_dcols for trees): the entity's column minus the chicken's own column, so dcol 0 is straight ahead of the chicken, and the chicken's centre is inside an entity when |dcol| < half_extent. player.col is still the chicken's absolute column.";
+
+const ENCODER_NOTES: Readonly<Partial<Record<EncoderId, string>>> = {
+  image: IMAGE_LEGEND,
+  "json-rel": RELATIVE_NOTE,
+};
+
+/** The manual, plus what the reader needs to know about how this encoder writes the world. */
+const withEncoderNote = (manual: ManualId, encoder?: EncoderId): string => {
+  const note = encoder === undefined ? undefined : ENCODER_NOTES[encoder];
+  return note === undefined ? MANUALS[manual] : `${MANUALS[manual]} ${note}`;
+};
 
 export function choiceInstructions(manual: ManualId, encoder?: EncoderId): string {
-  return `${withLegend(manual, encoder)} Choose the single best action for this decision step.`;
+  return `${withEncoderNote(manual, encoder)} Choose the single best action for this decision step.`;
 }
 
 const ACTION_VERB: Readonly<Record<Action, string>> = {
@@ -58,7 +70,7 @@ const ACTION_VERB: Readonly<Record<Action, string>> = {
 };
 
 export function riskInstructions(manual: ManualId, action: Action, encoder?: EncoderId): string {
-  return `${withLegend(manual, encoder)} Answer yes if the chicken dies during this decision step when it ${ACTION_VERB[action]}. If the move is blocked by a tree the chicken stays where it is.`;
+  return `${withEncoderNote(manual, encoder)} Answer yes if the chicken dies during this decision step when it ${ACTION_VERB[action]}. If the move is blocked by a tree the chicken stays where it is.`;
 }
 
 export function riskQuestionId(action: Action): string {

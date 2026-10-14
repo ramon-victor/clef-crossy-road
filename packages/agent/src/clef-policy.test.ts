@@ -5,6 +5,8 @@ import {
   type ClefPolicyConfig,
   clefPolicy,
   clefPolicyId,
+  DEFAULT_CLEF,
+  DEFAULT_CLEF_ID,
   parseClefPolicyId,
   selectByRisk,
   selectGoUnlessRisky,
@@ -53,6 +55,12 @@ describe("Clef policy ids", () => {
   it("parsing is the inverse of building", () => {
     expect(clefPolicyId(config)).toBe("clef:clef-flash:json:choice:full");
     expect(parseClefPolicyId(clefPolicyId(config))).toEqual(config);
+  });
+
+  it("`clef` alone is the default Clef, which is the plainest condition", () => {
+    expect(parseClefPolicyId(DEFAULT_CLEF_ID)).toEqual(DEFAULT_CLEF);
+    expect(DEFAULT_CLEF).toMatchObject({ model: "clef-flash", strategy: "choice", manual: "full" });
+    expect(parseClefPolicyId(clefPolicyId(DEFAULT_CLEF))).toEqual(DEFAULT_CLEF);
   });
 
   it("the manual defaults to full", () => {

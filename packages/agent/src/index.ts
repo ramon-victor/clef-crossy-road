@@ -3,6 +3,8 @@ export {
   type ClefPolicyConfig,
   clefPolicy,
   clefPolicyId,
+  DEFAULT_CLEF,
+  DEFAULT_CLEF_ID,
   GO_RISK_LIMIT,
   parseClefPolicyId,
   RISK_TOLERANCE,

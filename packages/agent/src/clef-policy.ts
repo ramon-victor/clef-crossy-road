@@ -39,6 +39,21 @@ export interface ClefPolicyConfig {
   manual: ManualId;
 }
 
+/**
+ * The one Clef the desktop app plays and the bare `clef` policy means on the bench command line:
+ * the plainest condition (the model's own argmax over the five actions, the full manual, no rule of
+ * ours on top). Every other combination is an experiment axis of the benchmark (docs/07).
+ */
+export const DEFAULT_CLEF: ClefPolicyConfig = {
+  model: "clef-flash",
+  encoder: "json",
+  strategy: "choice",
+  manual: "full",
+};
+
+/** The short policy id that `parseClefPolicyId` reads as `DEFAULT_CLEF`. */
+export const DEFAULT_CLEF_ID = "clef";
+
 /** `clef:<model>:<encoder>:<strategy>[:<manual>]`, e.g. `clef:clef-flash:json:choice:full`. */
 export function clefPolicyId(config: ClefPolicyConfig): string {
   return `clef:${config.model}:${config.encoder}:${config.strategy}:${config.manual}`;
@@ -55,8 +70,12 @@ function oneOf<T extends string>(
   return found;
 }
 
-/** Inverse of `clefPolicyId`. The manual defaults to `full`; anything unknown throws. */
+/**
+ * Inverse of `clefPolicyId`, and `clef` alone for `DEFAULT_CLEF`. The manual defaults to `full`;
+ * anything unknown throws.
+ */
 export function parseClefPolicyId(id: string): ClefPolicyConfig {
+  if (id === DEFAULT_CLEF_ID) return { ...DEFAULT_CLEF };
   const [prefix, model, encoder, strategy, manual = "full"] = id.split(":");
   if (prefix !== "clef") throw new Error(`Not a Clef policy id: "${id}"`);
   return {

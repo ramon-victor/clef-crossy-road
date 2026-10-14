@@ -1,7 +1,7 @@
-import type { Observation, ObsRow } from "@ccr/core";
+import type { Observation, ObsMover, ObsRow } from "@ccr/core";
 import { renderSceneImage } from "./image.ts";
 
-export const ENCODER_IDS = ["json", "grid", "image"] as const;
+export const ENCODER_IDS = ["json", "grid", "image", "json-rel"] as const;
 export type EncoderId = (typeof ENCODER_IDS)[number];
 
 /**
@@ -11,6 +11,7 @@ export type EncoderId = (typeof ENCODER_IDS)[number];
  * - `json` (E0): the observation as is (rows are an array, because the service sorts object keys).
  * - `grid` (E1): a spatial text picture of the same facts, plus the exact numbers per row.
  * - `image` (E2): a top-down PNG of the same facts (see image.ts).
+ * - `json-rel` (E3): the same JSON with every column measured from the chicken's own column.
  */
 export function encodeState(encoder: EncoderId, obs: Observation): unknown {
   return encodeRequest(encoder, obs).state;
@@ -21,12 +22,54 @@ export function encodeRequest(
   encoder: EncoderId,
   obs: Observation,
 ): { state: unknown; images?: string[] } {
-  if (encoder === "json") return { state: obs };
-  if (encoder === "grid") return { state: renderGrid(obs) };
-  return {
-    state: "The current view of the world is the attached picture.",
-    images: [renderSceneImage(obs).dataUrl],
-  };
+  switch (encoder) {
+    case "json":
+      return { state: obs };
+    case "json-rel":
+      return { state: relativeState(obs) };
+    case "grid":
+      return { state: renderGrid(obs) };
+    case "image":
+      return {
+        state: "The current view of the world is the attached picture.",
+        images: [renderSceneImage(obs).dataUrl],
+      };
+  }
+}
+
+/** `column - origin`, to the observation's two decimals and never -0. */
+const offset = (column: number, origin: number): number => {
+  const rounded = Math.round((column - origin) * 100) / 100;
+  return rounded === 0 ? 0 : rounded;
+};
+
+/**
+ * The observation with entity columns as `dcol` (and `blocked_dcols` for trees): the offset from the
+ * chicken's column. A change of origin only; it adds nothing derived from the actions (ADR-0005).
+ * `player.col` stays absolute because the world edge is defined on it.
+ */
+function relativeState(obs: Observation): unknown {
+  const origin = obs.player.col;
+  return { player: obs.player, rows: obs.rows.map((row) => relativeRow(row, origin)) };
+}
+
+function relativeRow(row: ObsRow, origin: number): unknown {
+  const shift = <T extends ObsMover>({ col, ...rest }: T) => ({
+    dcol: offset(col, origin),
+    ...rest,
+  });
+  switch (row.kind) {
+    case "grass": {
+      const { blocked_cols, ...rest } = row;
+      return { ...rest, blocked_dcols: blocked_cols.map((c) => offset(c, origin)) };
+    }
+    case "road":
+      return { ...row, vehicles: row.vehicles.map(shift) };
+    case "water":
+      return { ...row, platforms: row.platforms.map(shift) };
+    case "rail":
+      return { ...row, train: shift(row.train) };
+  }
 }
 
 const GRID_MIN_COL = -6;

@@ -44,6 +44,13 @@ describe("parsePolicy", () => {
     expect(isClefPolicy("lookahead")).toBe(false);
   });
 
+  it("reads the bare `clef` as the default Clef and records the spelled-out id", () => {
+    const transport: Transport = { post: async () => ({ status: 200, json: null }) };
+    const client = new ClefClient({ transport });
+    expect(isClefPolicy("clef")).toBe(true);
+    expect(parsePolicy("clef", () => client).id).toBe("clef:clef-flash:json:choice:full");
+  });
+
   it("rejects unknown and malformed ids", () => {
     expect(() => parsePolicy("nope", noClient)).toThrow(/Unknown policy/);
     expect(() =>
