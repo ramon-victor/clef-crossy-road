@@ -1,0 +1,160 @@
+import { GameView } from "@ccr/render";
+import { useEffect, useRef, useState } from "preact/hooks";
+import type { Sounds } from "./audio.ts";
+import { ACTION_GLYPH, DEATH_TEXT, percent } from "./format.ts";
+import type { Session, SessionState } from "./session.ts";
+
+export interface GameCanvasProps {
+  session: Session;
+  state: SessionState;
+  sounds: Sounds;
+  onReady?: (view: GameView) => void;
+  onFps?: (fps: number) => void;
+  onRetry: () => void;
+  onNewMap: () => void;
+}
+
+/** Owns the WebGL view and the animation loop; everything else is plain DOM on top of it. */
+export function GameCanvas(props: GameCanvasProps) {
+  const { session, state } = props;
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const bubbleRef = useRef<HTMLDivElement>(null);
+  const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
+  const [errorText, setErrorText] = useState("");
+  const latest = useRef(props);
+  latest.current = props;
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    let disposed = false;
+    let frameId = 0;
+    let view: GameView | null = null;
+    let observer: ResizeObserver | null = null;
+
+    GameView.create({ canvas, assetBase: "/assets" })
+      .then((created) => {
+        if (disposed) {
+          created.dispose();
+          return;
+        }
+        view = created;
+        const resizeToCanvas = () => {
+          const box = canvas.getBoundingClientRect();
+          view?.resize(box.width, box.height, Math.min(window.devicePixelRatio || 1, 2));
+        };
+        resizeToCanvas();
+        observer = new ResizeObserver(resizeToCanvas);
+        observer.observe(canvas);
+        setStatus("ready");
+        latest.current.onReady?.(created);
+
+        let last = performance.now();
+        let fpsEma = 60;
+        let wasMoving = false;
+        let wasAlive = true;
+        let lastReport = last;
+
+        const loop = (now: number) => {
+          frameId = requestAnimationFrame(loop);
+          const dt = (now - last) / 1000;
+          last = now;
+          if (dt > 0) fpsEma += (1 / dt - fpsEma) * 0.1;
+
+          const alpha = session.frame(dt);
+          const snap = session.game.snapshot();
+          view?.update(snap, alpha, dt);
+          view?.render();
+
+          const { sounds } = latest.current;
+          if (snap.hero.moving && !wasMoving) sounds.hop();
+          wasMoving = snap.hero.moving;
+          if (wasAlive && !snap.alive) sounds.death(snap.deathCause);
+          wasAlive = snap.alive;
+
+          const bubble = bubbleRef.current;
+          const pos = view?.heroScreenPosition();
+          if (bubble && pos) bubble.style.transform = `translate(${pos.x}px, ${pos.y}px)`;
+
+          if (now - lastReport > 500) {
+            lastReport = now;
+            latest.current.onFps?.(fpsEma);
+          }
+        };
+        frameId = requestAnimationFrame(loop);
+      })
+      .catch((error: unknown) => {
+        setStatus("error");
+        setErrorText(error instanceof Error ? error.message : String(error));
+      });
+
+    return () => {
+      disposed = true;
+      cancelAnimationFrame(frameId);
+      observer?.disconnect();
+      view?.dispose();
+    };
+  }, [session]);
+
+  const last = state.last;
+  const showBubble = status === "ready" && state.alive && !state.human && last !== null;
+  const chosenP = last?.decision.probabilities?.[last.action];
+
+  return (
+    <div class="stage">
+      <canvas ref={canvasRef} class="game" />
+
+      <div class="hud">
+        <div class="hud-score">{state.score}</div>
+        <div class="hud-sub">
+          rows · best {state.best} · seed {state.seed}
+        </div>
+      </div>
+
+      <div ref={bubbleRef} class="bubble-anchor">
+        {showBubble && last && (
+          <div class="bubble" key={last.index}>
+            <span class="bubble-arrow">{ACTION_GLYPH[last.action]}</span>
+            {chosenP !== undefined && <span class="bubble-p">{percent(chosenP)}</span>}
+          </div>
+        )}
+        {status === "ready" && state.phase === "thinking" && (
+          <div class="bubble thinking">
+            <span class="dots">
+              <i />
+              <i />
+              <i />
+            </span>
+          </div>
+        )}
+      </div>
+
+      {status === "loading" && <div class="overlay-note">Loading models…</div>}
+      {status === "error" && (
+        <div class="overlay-card">
+          <h2>Could not start the view</h2>
+          <p>{errorText}</p>
+          <p class="small">If the models are missing, run: node scripts/fetch-assets.mjs</p>
+        </div>
+      )}
+
+      {status === "ready" && !state.alive && (
+        <div class="overlay-card over">
+          <div class="over-title">
+            {state.deathCause ? DEATH_TEXT[state.deathCause] : "Game over"}
+          </div>
+          <div class="over-score">{state.score}</div>
+          <div class="over-sub">rows crossed · best {state.best}</div>
+          <div class="over-actions">
+            <button type="button" class="btn primary" onClick={props.onRetry}>
+              Retry same map
+            </button>
+            <button type="button" class="btn" onClick={props.onNewMap}>
+              New map
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

@@ -1,0 +1,31 @@
+{
+  "name": "@ccr/desktop",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Tauri desktop app: watch Clef play (or play yourself), with a live decision panel.",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.test.json",
+    "test": "vitest run",
+    "tauri": "tauri"
+  },
+  "dependencies": {
+    "@ccr/agent": "workspace:*",
+    "@ccr/clef": "workspace:*",
+    "@ccr/core": "workspace:*",
+    "@ccr/render": "workspace:*",
+    "@preact/signals": "^2.11.3",
+    "@tauri-apps/api": "^2.12.3",
+    "preact": "^11.0.1"
+  },
+  "devDependencies": {
+    "@preact/preset-vite": "^2.10.6",
+    "@tauri-apps/cli": "^2.12.2",
+    "@types/node": "^24.0.0",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.4",
+    "vitest": "^5.0.4"
+  }
+}
