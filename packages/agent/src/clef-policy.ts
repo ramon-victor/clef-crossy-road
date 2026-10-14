@@ -14,8 +14,7 @@ import {
 
 /**
  * choice:    one `choice` question over the five actions; the action is the model's argmax.
- * critic:    five 
-          oul` questions ("does the chicken die if it does X?") plus a selection rule that
+ * critic:    five `noul` questions ("does the chicken die if it does X?") plus a selection rule that
  *            is OUR logic: the lowest-risk action (see selectByRisk).
  * critic-go: the same questions, but with a bias towards progress: hop forward unless the model
  *            says it is more likely than not to die (see selectGoUnlessRisky).

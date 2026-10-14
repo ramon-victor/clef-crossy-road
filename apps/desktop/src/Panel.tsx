@@ -146,7 +146,9 @@ export function Panel(props: PanelProps) {
           class="seed"
           onSubmit={(e) => {
             e.preventDefault();
-            const n = Number(seedText);
+            const text = seedText.trim();
+            // An empty box must not start seed 0 (Number("") is 0).
+            const n = text === "" ? Number.NaN : Number(text);
             if (Number.isInteger(n) && n >= 0 && n < 2 ** 32) props.onSeed(n);
             setSeedText("");
           }}

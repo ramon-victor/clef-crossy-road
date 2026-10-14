@@ -7,9 +7,9 @@ async function call<T>(path: string, body?: unknown): Promise<T> {
     ...(body === undefined ? {} : { body: JSON.stringify(body) }),
   });
   const json = (await response.json()) as T & { error?: string };
-  if (!response.ok && path !== "/run")
-    throw new Error(json.error ?? `bridge error ${response.status}`);
-  if (path === "/run" && response.status === 429 && json.error) throw new Error(json.error);
+  // The dev bridge answers a relayed Workers AI call with 200 (the real status is inside the body), so
+  // any other status is the bridge itself refusing or failing: surface its message, never a fake response.
+  if (!response.ok) throw new Error(json.error ?? `bridge error ${response.status}`);
   return json;
 }
 

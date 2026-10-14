@@ -134,6 +134,8 @@ export function App() {
     const onKey = (event: KeyboardEvent) => {
       const target = event.target as HTMLElement | null;
       if (target && (target.tagName === "INPUT" || target.tagName === "SELECT")) return;
+      // Browser/OS shortcuts (Ctrl+R reload, Ctrl+W, Alt+...) are not game input.
+      if (event.ctrlKey || event.metaKey || event.altKey) return;
       sounds.unlock();
       const action = KEYS[event.key];
       if (action) {
