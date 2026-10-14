@@ -19,7 +19,8 @@ pnpm bench report --run <nome>[,<nome>...] --ref always-forward
 ```
 
 Políticas: `always-forward`, `random`, `lookahead`, `lookahead-comp:<ms>` e `clef:<modelo>:<encoder>:<estratégia>[:<manual>]`
-(modelo `clef-flash|clef|clef-omni`; encoder `json|grid|image`; estratégia `choice|critic|critic-go`).
+(modelo `clef-flash|clef|clef-omni`; encoder `json|json-rel|grid|image`; estratégia `choice|critic|critic-go`). O id curto `clef` é o Clef padrão do app
+(`clef:clef-flash:json:choice:full`); os relatórios gravam sempre o id por extenso.
 Resultados em `runs/<nome>/episodes.ndjson` (retomável) e `reports/`. As ações de cada partida ficam gravadas: qualquer partida se reproduz exatamente.
 
 ## Regras do benchmark
@@ -49,8 +50,9 @@ Resultados em `runs/<nome>/episodes.ndjson` (retomável) e `reports/`. As açõe
 | `clef-flash` · JSON · manual **mínimo** · `choice` | 3,71 | −0,07 [−0,22, 0,02] | indistinguível |
 | `clef-flash` · **imagem (E2)** · `choice` | 3,36 | **−0,42 [−0,82, −0,05]** | **pior** (83% afogamento, 12% carro) |
 | **Clef 27B** · JSON · `choice` (40 seeds) | — | 0,00 [0,00, 0,00] | idêntico: escolheu avançar em todas as decisões |
+| `clef-flash` · **JSON relativo (`json-rel`)** · `choice` (40 seeds) | 3,20 (referência nas mesmas 40 seeds: 3,30) | −0,10 [−0,30, 0,00] | indistinguível |
 
-**Resultado: o gate NÃO passou, em nenhuma das 8 condições testadas** (as quatro primeiras de 2026-10-14 na conta antiga, as três últimas na conta nova). Com estes prompts o Clef-flash se comporta como `always-forward`:
+**Resultado: o gate NÃO passou, em nenhuma das 9 condições testadas** (as quatro primeiras de 2026-10-14 na conta antiga, as demais na conta nova). Com estes prompts o Clef-flash se comporta como `always-forward`:
 - No `choice`, escolhe `hop_forward` em quase todas as decisões (a taxa de movimentos inválidos de 5% a 16% mostra que às vezes tenta outro caminho e bate numa árvore).
 - No `critic`, o modelo dá ao "avançar em grama aberta" risco de 0,30 contra 0,05 para um passo lateral, então uma regra de menor risco nunca avança. Com a regra `critic-go` (avançar a menos que o risco passe de 50%) ele sempre avança, porque o risco de avançar nunca passa de 50%.
 - Os modelos separam **tipo de terreno**, não **cinemática** ([06](06-observacao-e-prompts.md)).
@@ -75,6 +77,7 @@ aleatório (voltar, voltar, avançar) até se afogar.
 | Flash · JSON, manual mínimo | 416 | 77% | 0,43 | 0,56 (121 / 95) |
 | Flash · grade ASCII | 503 | 78% | 0,61 | 0,52 (129 / 105) |
 | Flash · imagem | 619 | 82% | 0,49 | 0,52 (138 / 100) |
+| Flash · JSON relativo (40 seeds) | 169 | 77% | 0,35 | 0,54 (44 / 39) |
 | **Clef 27B** · JSON | 143 | 68% | **0,75** | 0,51 (54 / 46) |
 
 Leitura:
@@ -85,6 +88,28 @@ Leitura:
 
 Isso confirma, com dados, a hipótese do [00](00-viabilidade.md): modelos de decisão treinados para triagem leem **categorias**, não **cinemática**.
 Uma estratégia que apenas use "P(avançar) abaixo de um limiar" para vetar saltos poderia evitar parte dos saltos para a água, mas muda as trajetórias e não pode ser avaliada com os dados atuais; ficaria como o próximo experimento barato.
+
+### Uma melhoria justa: colunas relativas à galinha (`json-rel`, 2026-10-14)
+
+Pedido do dono depois de ver o app: o Clef "anda reto e se joga na água". Antes de mexer em qualquer coisa, o app foi reduzido a **um** Clef (as outras
+condições são eixos do benchmark, não jogadores) e testou-se **uma** melhoria que respeita a regra de justiça: escrever as colunas como `dcol`, o deslocamento até a
+galinha ([06](06-observacao-e-prompts.md), E3). Só uma mudança de origem; nenhuma informação derivada das ações.
+
+Protocolo combinado antes de rodar: `bench plan` (coube: 1.625 neurons no pior caso para 100 seeds, com 2.284 disponíveis sob o teto de 9.000); 40 seeds primeiro, com
+`--max-calls 250`; **parar** se a média ficasse em torno de "sempre em frente" **e** a AUC dentro da água em torno de 0,5; seguir até 100 seeds só se houvesse sinal.
+
+| Medida (40 seeds, mesmo mapa de `always-forward`) | Resultado |
+|---|---|
+| Ruas, média [IC 95%] | `json-rel` **3,20** [2,77, 3,70] contra `always-forward` **3,30** [2,85, 3,80] |
+| Diferença pareada | −0,10 [−0,30, 0,00]: **indistinguível** |
+| Mortes | 98% afogamento, 3% estagnação; 0% carro |
+| Movimentos inválidos | 23% das decisões (tenta avançar contra árvore; o `json` ficava entre 5% e 16%) |
+| Saltos para a água | 44, dos quais **39 fatais (89%)**; AUC de P(avançar) dentro da água **0,54** |
+| Custo | 131 chamadas, 157.869 tokens (**1.163 por decisão**), **545 neurons**; latência p50 783 ms, p95 2.201 ms (sob 4 chamadas paralelas) |
+
+As duas condições de parada foram atendidas, então **a execução parou em 40 seeds** (poupou os ~1.000 neurons estimados para o resto). O Clef padrão do app continua sendo o
+`json`. Leitura: dar a subtração pronta não ensina o modelo a olhar **onde a tora estará** quando o salto pousar (0,2 s depois), que é o que decide a água; ele continua
+tratando "água à frente" como um tipo de terreno. Gasto da conta `df5a…` no dia 2026-10-14 (UTC): **7.261 de 10.000** (6.716 antes desta execução).
 
 ## Atraso: a pergunta do modo tempo real
 
@@ -105,7 +130,7 @@ O modelo responde em ~330 ms (mediana medida do Brasil, [05](05-integracao-clef.
 
 Regra do dono: ficar no free tier, **10.000 neurons por dia UTC** (renova às 21:00 no Brasil).
 
-- Medido: ~1.120 tokens por decisão `choice` (JSON), ~1.320 (grade), ~3.070 (`critic`); Clef-flash a 3.455 neurons por milhão de tokens e Clef 27B a 21.818 (6,3×).
+- Medido: ~1.120 tokens por decisão `choice` (JSON), ~1.163 (JSON relativo), ~1.320 (grade), ~3.070 (`critic`); Clef-flash a 3.455 neurons por milhão de tokens e Clef 27B a 21.818 (6,3×).
 - O `bench` recusa a chamada **antes de enviá-la** quando o ledger (`runs/cache/spend.ndjson`) chega ao limite; o teto só pode ser reduzido (`--daily-neurons`). As execuções da conta nova usaram `--daily-neurons 9000` (10% de folga).
 - O ledger é **por conta** (a cota gratuita é por conta): o gasto da conta antiga continua marcado como dela e não bloqueia a nova, nem some.
 - O app desktop aplica o mesmo teto no Rust, como constante, com a mesma marcação por conta.

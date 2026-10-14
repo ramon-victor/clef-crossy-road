@@ -27,16 +27,17 @@ são os do Expo-Crossy-Road, baixados localmente por `node scripts/fetch-assets.
 
 | Recurso | Como funciona |
 |---|---|
-| Quem joga | Modelos (Clef-flash JSON, grade, `critic-go`, Clef 27B), **você** (setas/WASD) e as referências sem API (look-ahead, sempre em frente, aleatório). O padrão ao abrir é o look-ahead: **abrir o app nunca gasta nada** |
+| Quem joga | **Um** Clef (Clef-flash, JSON, escolha direta, sem regra nossa por cima), **você** (setas/WASD) e as referências sem API (look-ahead, sempre em frente, aleatório). JSON x grade x imagem, `critic` e o 27B eram condições do benchmark, não jogadores: ficam em `pnpm bench`. O padrão ao abrir é o look-ahead: **abrir o app nunca gasta nada** |
 | Tempo | **Step**: o mundo espera o modelo, como no benchmark. **Real-time**: o mundo corre a 60 Hz e a ação vale quando a resposta chega |
 | Controles | Pausa (espaço), passo-a-passo (N, só em Step e pausado), retry da mesma seed (R), mapa novo (M), seed editável, velocidade 0,5× a 4× |
-| Painel | Barras com as `probabilities` **reais** do modelo (ou o risco de morrer por jogada, no `critic`); `confidence` rotulado como não documentado; histórico das últimas 14 jogadas; tag "cached" |
+| Teclado | Setas ou WASD. Apertar mais rápido que o salto, ou segurar a tecla, deixa a jogada **na fila** (1 vaga, a última vence) e ela começa quando o salto pousa, depois de o pouso ser checado: não dá para atravessar água nem rua encadeando saltos ([04](04-game-core.md), D9) |
+| Painel | Barras com as `probabilities` **reais** do modelo; `confidence` rotulado como não documentado; histórico das últimas 14 jogadas; tag "cached" |
 | Orçamento | Medidor de neurons do dia (UTC), custo estimado por decisão nova, aviso quando o teto é atingido; uma decisão do cache aparece como "cached" e custa 0 |
 | Fim de partida | Cartão com a causa da morte, linhas cruzadas e melhor do dia; repetir a mesma seed ou mapa novo |
 | Som | Sons do original, ligados por padrão após o primeiro gesto do usuário (política dos navegadores) |
 | Reinício automático | Para jogadores **gratuitos** (as referências), a janela abre um mapa novo 2,2 s depois de cada fim de partida, para continuar mostrando ação. Jogadores que chamam o modelo **nunca** reiniciam sozinhos: uma janela esquecida aberta não pode gastar o orçamento do dia |
-| Replays gratuitos | Cada modelo mostra quais seeds já estão no cache (Clef-flash JSON e grade: 1–100; `critic-go`: 1–71; Clef 27B: 1–40). **"Novo mapa" percorre essas seeds em ordem** antes de partir para um mapa aleatório (que gasta neurons) |
-| Atalhos de abertura | `CCR_PLAYER` e `CCR_SEED` (lidos pelo Rust; no navegador de desenvolvimento, `?player=...&seed=...`) escolhem o jogador e o mapa iniciais. `play.cmd` abre o modo normal; `play-clef.cmd` abre o Clef-flash JSON na seed 1 (do cache, sem custo) |
+| Replays gratuitos | O Clef mostra quais seeds já estão no cache (1–100, do benchmark). **"Novo mapa" percorre essas seeds em ordem** antes de partir para um mapa aleatório (que gasta neurons) |
+| Atalhos de abertura | `CCR_PLAYER` e `CCR_SEED` (lidos pelo Rust; no navegador de desenvolvimento, `?player=...&seed=...`) escolhem o jogador e o mapa iniciais. `play.cmd` abre o modo normal; `play-clef.cmd` abre o Clef (`CCR_PLAYER=clef`) na seed 1 (do cache, sem custo). Um id que não existe (por exemplo os antigos `clef-flash-json`) cai no look-ahead gratuito |
 
 ## Arquitetura do app
 

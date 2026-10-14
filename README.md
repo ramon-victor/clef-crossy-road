@@ -8,7 +8,7 @@ e quantas ruas ele atravessou. Um benchmark em CLI compara modelos nas mesmas se
 ## Onde estamos (2026-10-14)
 
 - **Construído e testado:** núcleo determinístico, cliente do Clef com orçamento por conta, agentes, benchmark com IC de 95% e diagnóstico, app desktop a 180 fps.
-- **Resultado:** **nenhum modelo testado supera "sempre em frente"** (~3,8 ruas; o teto de referência exato faz ~45). Clef-flash em JSON, grade ou manual mínimo
+- **Resultado:** **nenhum modelo testado supera "sempre em frente"** (~3,8 ruas; o teto de referência exato faz ~45). Clef-flash em JSON, grade, colunas relativas à galinha ou manual mínimo
   empata; com imagem é pior; o Clef 27B escolheu avançar em todas as decisões. A causa medida: 72% a 85% dos saltos para a água são fatais e a probabilidade
   do modelo não distingue os seguros. Leia [docs/07-experimentos.md](docs/07-experimentos.md).
 - **Regra do projeto:** ficar no free tier (10.000 neurons por dia UTC, por conta). O código recusa chamadas além disso ([ADR-0008](docs/adr/0008-orcamento-diario-no-free-tier.md)).

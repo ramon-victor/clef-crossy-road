@@ -37,3 +37,4 @@ It has **no runtime dependencies** and must stay renderer-agnostic.
 - Upstream's `Fill.empty` is never read: rows 5-9 still get random interior trees. This is intentional.
 - A train's lethal zone is centred on its origin, not on its body. This is intentional.
 - `Game.step` advances `DECISION_TICKS` (12 = one full hop) after applying the action. `act` + `advance` give finer control.
+- An input that arrives while a hop is in the air is **queued** (one slot, the last wins) and starts on the tick that hop lands, after the landing was checked. Upstream teleports the hero to the end of the hop instead, which let fast key presses cross water and roads; do not bring that back (`docs/04`, D9).

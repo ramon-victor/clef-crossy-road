@@ -124,7 +124,7 @@ perguntas e a versão do prompt.
 |---|---|
 | **Erro de capacidade, código 3040** | `HTTP 429` com "AiError: Capacity temporarily exceeded, please try again". Apareceu em ~1 de 30 chamadas durante rajadas, **mesmo com 4 requisições em paralelo**, enquanto 16 em paralelo logo depois passaram todas. É capacidade momentânea do serviço, não o limite da conta: o cliente repete com backoff e **não reduz a concorrência** (tipo `capacity`) |
 | Latência sob carga | Com 4–6 requisições em paralelo, a mediana subiu para ~930 ms (p95 ~3,3 s) e com prompts de ~1.100 tokens. A mediana de 326 ms é de chamadas **sequenciais** com um prompt pequeno. Para medir latência, rodar com `--concurrency 1` |
-| Tokens reais por decisão | `choice` JSON: **~1.120** (estado de 12 linhas); `choice` grade: ~1.320; `critic` (cinco perguntas `noul`): **~3.070**. O estado mínimo da sonda tinha 444 |
+| Tokens reais por decisão | `choice` JSON: **~1.120** (estado de 12 linhas); `choice` JSON relativo (`json-rel`): ~1.163; `choice` grade: ~1.320; `critic` (cinco perguntas `noul`): **~3.070**. O estado mínimo da sonda tinha 444 |
 | Cobrança além do free tier (conta antiga) | As chamadas **continuaram funcionando** após passar de 10.000 neurons no dia (foram ~26.300). Quer dizer que aquela conta era cobrada além do free tier (~US$ 0,18 no total), e por isso o projeto agora impõe o teto sozinho ([ADR-0008](adr/0008-orcamento-diario-no-free-tier.md)) |
 | Respostas determinísticas | A mesma requisição devolve as mesmas probabilidades, então o cache de decisões é válido |
 | Imagens | **Funcionam como `data:image/png;base64,...`** (verificado em 2026-10-14, 365 chamadas no Clef-flash). A imagem E2 de 416×384 custa ~972 tokens por decisão no total, com o texto das instruções |

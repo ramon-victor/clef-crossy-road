@@ -17,6 +17,12 @@ Mudar a representação (JSON, grade, imagem) é permitido, mas é uma condiçã
 A estratégia S2 (`ClefCritic`) usa uma regra de seleção nossa sobre as respostas do modelo; ela é uma condição distinta
 e deve ser descrita no relatório.
 
+## Atualização (2026-10-14)
+
+O encoder `json-rel` (colunas medidas a partir da galinha, `dcol`) é uma **mudança de representação**, permitida acima: ele só troca a origem das colunas, desfazê-la devolve a
+observação (há um teste), e nenhum campo depende de uma ação candidata. Uma posição **prevista** (onde a tora estará no pouso) ou um "alcançável" seriam derivados e continuam proibidos.
+Resultado: [07](../07-experimentos.md).
+
 ## Consequências
 
 - (+) O resultado mede a capacidade do modelo.

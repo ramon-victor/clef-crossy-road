@@ -17,7 +17,7 @@ O experimento mede o modelo, não a nossa lógica. Por isso a `Observation` só 
 Árvores aparecem como colunas ocupadas (geometria), não como "movimento bloqueado". Um movimento inválido vira no-op
 no core e entra na métrica de movimentos inválidos. Um teste congela as chaves permitidas do schema.
 
-Mudar a **representação** (JSON → grade → imagem) é permitido, mas aparece no relatório como condição própria.
+Mudar a **representação** (JSON → grade → imagem → JSON com colunas relativas) é permitido, mas aparece no relatório como condição própria.
 
 ## Observação (E0, JSON)
 
@@ -46,6 +46,12 @@ Mudar a **representação** (JSON → grade → imagem) é permitido, mas aparec
 | E0 | JSON acima | Condição base |
 | E1 | Grade ASCII (13 colunas) centrada no jogador, mais os números exatos de cada linha | Implementado e avaliado no gate: indistinguível de E0 |
 | E2 | **Vista de cima em PNG**, 416×384 px (13×12 quadrados de 32 px), desenhada só a partir da observação | Implementado (`packages/agent/src/image.ts`) e **avaliado: significativamente pior** que "sempre em frente" (−0,42 ruas) e com probabilidades quase uniformes. ~159 tokens de imagem (`(w/32)·(h/32)+3`) |
+| E3 (`json-rel`) | O mesmo JSON, com toda coluna medida **a partir da coluna da galinha**: `dcol` no lugar de `col` e `blocked_dcols` no lugar de `blocked_cols` (`player.col` continua absoluto, por causa da borda do mundo) | Implementado e **avaliado em 40 seeds: indistinguível de "sempre em frente"** (3,20 contra 3,30) e sem sinal dentro da água (AUC 0,54). ~1.163 tokens por decisão |
+
+**E3 em detalhe.** A hipótese era que o modelo erra a água por ter de subtrair `col_da_plataforma − col_da_galinha`; com `dcol`, o teste "a plataforma
+da linha da frente me cobre?" vira `|dcol| < half_extent`. É só uma troca de origem: desfazê-la devolve exatamente a observação (teste), então nada é
+somado nem perdido e a regra de justiça ([ADR-0005](adr/0005-regra-de-justica-da-observacao.md)) fica intacta. As instruções ganham **uma frase** que descreve essa
+coordenada, só para este encoder, de modo que os prompts e o cache das outras condições seguem válidos.
 
 **E2 em detalhe.** Cada quadrado é uma coluna e uma linha. Desenha terreno, árvores nas colunas bloqueadas, a **zona de acerto** de cada
 veículo, tora, vitória-régia e trem (o mesmo `half_extent` do JSON), o ponto do semáforo (aceso ou apagado) e a galinha. Como uma
@@ -84,7 +90,7 @@ trabalho, não para concluir.** Detalhes e números em [00](00-viabilidade.md).
   que grama), mas não a **cinemática** (carro se afastando recebe tanto risco quanto carro iminente).
 - Árvores (`blocked_cols`) foram ignoradas.
 
-**O gate confirmou a sonda** ([07](07-experimentos.md)): E0, E1, `critic-go`, o manual `minimal` e o Clef 27B ficam indistinguíveis de
+**O gate confirmou a sonda** ([07](07-experimentos.md)): E0, E1, E3, `critic-go`, o manual `minimal` e o Clef 27B ficam indistinguíveis de
 "sempre em frente", e E2 (imagem) fica pior. O diagnóstico de AUC mostra que as probabilidades dos modelos separam **tipos de terreno**, mas não
 dizem quais saltos para a água sobrevivem. O resultado negativo é o achado do projeto, e o caminho natural é o fine-tuning com este núcleo como ambiente
 ([ADR-0006](adr/0006-sem-fine-tuning-nem-self-host.md)).

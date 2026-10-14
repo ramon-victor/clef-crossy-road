@@ -17,10 +17,11 @@ Language: code, identifiers, commits and this file in English. `docs/` is in Bra
 
 ## Status
 
-Phases 0-4 are built (307 TS tests + 20 Rust tests). **The gate was NOT passed, in 8 conditions**: Clef-flash (JSON, grid,
-critic-go, minimal manual) plays like "always forward" (~3.7 rows), image input is significantly worse, and Clef 27B chose
+Phases 0-4 are built (331 TS tests + 20 Rust tests). **The gate was NOT passed, in 9 conditions**: Clef-flash (JSON, grid,
+critic-go, minimal manual, JSON with columns relative to the chicken) plays like "always forward" (~3.7 rows), image input is significantly worse, and Clef 27B chose
 "forward" every time (`docs/07-experimentos.md`). Diagnosis: 72-85% of hops into water are fatal and the model's probability
 carries no information about which ones survive (AUC 0.5-0.6 inside water). Only `clef-omni` is untested.
+The app offers **one** Clef (`DEFAULT_CLEF`: clef-flash, json, choice, full manual); encoders, strategies and the 27B are benchmark axes, not players.
 The owner authorized commits on 2026-10-14 (history is on `main`, Conventional Commits, one logical change each, with the
 `Co-Authored-By` trailer). Pushing still needs their say-so. `.env` holds a working `CF_API_TOKEN` and `CF_ACCOUNT_ID`.
 Installed: Node 24, pnpm 10, git, MSVC, WebView2, Rust 1.99 (rustup, user-level). Git checks out LF (`.gitattributes`), except
@@ -46,7 +47,7 @@ Installed: Node 24, pnpm 10, git, MSVC, WebView2, Rust 1.99 (rustup, user-level)
 - `packages/core`: pure deterministic game simulation, zero dependencies. Own `AGENTS.md`.
 - `packages/clef`: Workers AI client (schema, retry, cache, **spend budget**) with a `Transport` interface. Own `AGENTS.md`.
 - `packages/agent`: `Policy` types, baselines (random, always-forward, lookahead, latency-compensated lookahead), encoders
-  (`json`, `grid`, `image`), versioned prompts, `ClefPolicy`, episode runner with latency injection.
+  (`json`, `json-rel`, `grid`, `image`), `DEFAULT_CLEF`, versioned prompts, `ClefPolicy`, episode runner with latency injection.
 - `packages/render`: Three.js scene built from a read-only `Snapshot`, using Evan's models.
 - `apps/bench`: Node CLI (`run`, `report`, `plan`). `apps/desktop`: Tauri v2 app (Preact UI + Rust commands). Own `AGENTS.md`.
 - `docs/`: specs, ADRs, references. `runs/` and `reports/` are generated and gitignored.
