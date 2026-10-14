@@ -63,13 +63,38 @@ export function readEpisodes(runDir: string): EpisodeResult[] {
   return episodes;
 }
 
+/**
+ * Resuming a run under different episode rules would mix incomparable episodes under one meta.json.
+ * Only the settings the stored file records are compared (older files predate some of them).
+ */
+function assertSameSettings(metaPath: string, meta: RunMeta): void {
+  let stored: Partial<RunMeta>;
+  try {
+    stored = JSON.parse(readFileSync(metaPath, "utf8")) as Partial<RunMeta>;
+  } catch {
+    return;
+  }
+  const old = (stored.episode ?? {}) as Record<string, unknown>;
+  const now = meta.episode as Record<string, unknown>;
+  const changed = Object.keys(old).filter(
+    (key) => JSON.stringify(old[key]) !== JSON.stringify(now[key]),
+  );
+  if (changed.length > 0) {
+    throw new Error(
+      `Run "${meta.runId}" was started with different episode settings (${changed.join(", ")}); ` +
+        "resuming it would mix incomparable episodes. Use the same options or a new --run name.",
+    );
+  }
+}
+
 /** Plays every (policy, seed) pair that is not already on disk. Safe to interrupt and re-run. */
 export async function runEpisodes(meta: RunMeta, options: RunOptions): Promise<RunSummary> {
   const { runDir, policies, seeds, concurrency, client } = options;
   const log = options.log ?? (() => {});
   mkdirSync(runDir, { recursive: true });
   const metaPath = join(runDir, "meta.json");
-  if (!existsSync(metaPath)) writeFileSync(metaPath, `${JSON.stringify(meta, null, 2)}\n`);
+  if (existsSync(metaPath)) assertSameSettings(metaPath, meta);
+  else writeFileSync(metaPath, `${JSON.stringify(meta, null, 2)}\n`);
 
   // A run killed mid-write leaves a partial last line; end it so the next record is not glued to it.
   const episodesPath = join(runDir, EPISODES_FILE);

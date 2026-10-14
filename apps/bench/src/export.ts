@@ -1,4 +1,4 @@
-import type { EpisodeResult } from "@ccr/agent";
+import type { DecisionRecord, EpisodeResult } from "@ccr/agent";
 import {
   type Action,
   DECISION_TICKS,
@@ -31,6 +31,27 @@ export interface TrajectoryStep {
   probabilities?: Partial<Record<Action, number>>;
 }
 
+/** Policy ids get "@lat[p]..." appended by the bench; the "p" marks the pipelined latency model. */
+export const isPipelined = (policyId: string): boolean => /@latp(\d+|rec)$/.test(policyId);
+
+/**
+ * Re-plays one stored decision exactly as `playEpisode` did: the world first runs for the ticks the
+ * model took to answer (`waitedTicks`, latency injection), then the action is applied (pipelined: the
+ * hop plays out during the next wait; serial: it plays out now). Without this, runs made with
+ * `--latency` would be replayed on a different game than the one the policy actually saw.
+ */
+export function replayDecision(
+  game: Game,
+  action: Action,
+  record: Pick<DecisionRecord, "waitedTicks"> | undefined,
+  options: { decisionTicks: number; pipelined: boolean },
+): void {
+  const waited = record?.waitedTicks ?? 0;
+  if (waited > 0) game.advance(waited);
+  if (options.pipelined) game.act(action);
+  else game.step(action, options.decisionTicks);
+}
+
 export interface ExportOptions {
   /** Keep only episodes whose score is at least this (e.g. to imitate the good ones). */
   minScore?: number;
@@ -49,11 +70,12 @@ export function* trajectorySteps(
     if (options.minScore !== undefined && episode.score < options.minScore) continue;
 
     const game = new Game({ seed: episode.seed });
+    const pipelined = isPipelined(episode.policy);
     let best = 0;
     for (let i = 0; i < episode.actions.length; i++) {
       const action = episode.actions[i] as Action;
       const observation = observe(game);
-      game.step(action, ticks);
+      replayDecision(game, action, episode.records[i], { decisionTicks: ticks, pipelined });
       const reward = Math.max(0, game.score - best);
       best = Math.max(best, game.score);
       const done = !game.alive;

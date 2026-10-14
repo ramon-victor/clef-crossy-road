@@ -82,6 +82,7 @@ async function main(): Promise<void> {
 
 interface ExportValues {
   run: string;
+  "decision-ticks"?: string;
   policy?: string;
   "min-score"?: string;
   out?: string;
@@ -95,6 +96,7 @@ function exportCommand(root: string, v: ExportValues): void {
     trajectorySteps(episodes, {
       ...(v.policy ? { policy: v.policy } : {}),
       ...(v["min-score"] ? { minScore: Number(v["min-score"]) } : {}),
+      decisionTicks: intOption("decision-ticks", v["decision-ticks"], 12, 1),
     }),
   );
   if (count === 0) throw new Error("No steps matched; check --run, --policy and --min-score");
@@ -108,7 +110,7 @@ function exportCommand(root: string, v: ExportValues): void {
 function diagnoseCommand(root: string, v: ReportValues): void {
   const names = v.run.split(",").map((s) => s.trim());
   const episodes = names.flatMap((name) => readEpisodes(join(root, "runs", name)));
-  const samples = collectSamples(episodes);
+  const samples = collectSamples(episodes, intOption("decision-ticks", v["decision-ticks"], 12, 1));
   if (samples.length === 0) throw new Error("No decisions with probabilities found in those runs");
   const policies = [...new Set(samples.map((s) => s.policy))].sort();
   const text = renderDiagnosis(policies.map((p) => diagnose(p, samples)));
@@ -144,6 +146,16 @@ function planCommand(root: string, v: PlanValues): void {
     ...(v["assume-decisions"] ? { decisionsPerEpisode: Number(v["assume-decisions"]) } : {}),
   });
   console.log(renderPlan(plan, spent));
+}
+
+/** A non-negative integer option; NaN would silently turn a cap into "no cap" or an episode into nothing. */
+function intOption(name: string, raw: string | undefined, fallback: number, min = 0): number {
+  if (raw === undefined) return fallback;
+  const n = Number(raw);
+  if (raw.trim() === "" || !Number.isInteger(n) || n < min) {
+    throw new Error(`Bad --${name} "${raw}": expected an integer >= ${min}`);
+  }
+  return n;
 }
 
 function parseLatency(spec: string | undefined): LatencyModel | undefined {
@@ -189,6 +201,7 @@ interface RunValues {
 
 interface ReportValues {
   run: string;
+  "decision-ticks"?: string;
   ref?: string;
   out?: string;
 }
@@ -199,7 +212,7 @@ async function runCommand(root: string, v: RunValues): Promise<void> {
   const seeds = parseSeeds(v.seeds);
 
   let client: ClefClient | undefined;
-  const concurrency = Number(v.concurrency ?? (ids.some(isClefPolicy) ? 4 : 1));
+  const concurrency = intOption("concurrency", v.concurrency, ids.some(isClefPolicy) ? 4 : 1, 1);
   // The ceiling can be lowered but never raised above the free tier from the command line.
   const requested = Number(v["daily-neurons"] ?? FREE_NEURONS_PER_DAY);
   const dailyNeurons = Math.min(Number.isFinite(requested) ? requested : 0, FREE_NEURONS_PER_DAY);
@@ -223,9 +236,9 @@ async function runCommand(root: string, v: RunValues): Promise<void> {
   const factories = ids.map((id) => withSuffix(parsePolicy(id, getClient), suffix));
 
   const episode = {
-    decisionTicks: Number(v["decision-ticks"] ?? 12),
-    maxDecisions: Number(v["max-decisions"] ?? 300),
-    stallLimit: Number(v["stall-limit"] ?? 40),
+    decisionTicks: intOption("decision-ticks", v["decision-ticks"], 12, 1),
+    maxDecisions: intOption("max-decisions", v["max-decisions"], 300, 1),
+    stallLimit: intOption("stall-limit", v["stall-limit"], 40),
     ...(latency ? { latency } : {}),
   };
   const meta: RunMeta = {
@@ -250,7 +263,7 @@ async function runCommand(root: string, v: RunValues): Promise<void> {
     seeds,
     concurrency,
     episode,
-    maxCalls: Number(v["max-calls"] ?? 1500),
+    maxCalls: intOption("max-calls", v["max-calls"], 1500),
     client,
     log: (line) => console.log(line),
   });

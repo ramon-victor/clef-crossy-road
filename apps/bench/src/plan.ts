@@ -44,7 +44,9 @@ export function estimatePolicy(id: string, decisionsOverride?: number): Estimate
     decisions = DECISIONS_PER_EPISODE.critic;
   }
   if (encoder === "image") {
-    tokens = 900; // ~159 image tokens + the instruction text; not measured yet
+    // ~159 image tokens + the instruction text; not measured yet. The five critic questions repeat
+    // the instructions, so that strategy keeps the measured critic size as its (conservative) estimate.
+    tokens = strategy === "critic" || strategy === "critic-go" ? tokens : 900;
     measured = false;
     decisions = DECISIONS_PER_EPISODE.image;
   }

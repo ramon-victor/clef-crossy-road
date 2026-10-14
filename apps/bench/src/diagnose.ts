@@ -1,5 +1,6 @@
 import type { EpisodeResult } from "@ccr/agent";
 import { DECISION_TICKS, Game, type RowKind } from "@ccr/core";
+import { isPipelined, replayDecision } from "./export.ts";
 
 /**
  * Does the model's P(hop_forward) carry any information about whether hopping forward is safe?
@@ -18,15 +19,19 @@ export interface Sample {
   ahead: RowKind | "unknown";
 }
 
-export function collectSamples(episodes: readonly EpisodeResult[]): Sample[] {
+export function collectSamples(
+  episodes: readonly EpisodeResult[],
+  decisionTicks: number = DECISION_TICKS,
+): Sample[] {
   const samples: Sample[] = [];
   for (const episode of episodes) {
     const game = new Game({ seed: episode.seed });
+    const replay = { decisionTicks, pipelined: isPipelined(episode.policy) };
     episode.records.forEach((record, index) => {
       const pForward = record.probabilities?.hop_forward;
       if (pForward !== undefined && game.alive) {
         const probe = game.clone();
-        probe.step("hop_forward", DECISION_TICKS);
+        replayDecision(probe, "hop_forward", record, replay);
         samples.push({
           policy: episode.policy,
           seed: episode.seed,
@@ -37,7 +42,7 @@ export function collectSamples(episodes: readonly EpisodeResult[]): Sample[] {
         });
       }
       const action = episode.actions[index];
-      if (action) game.step(action, DECISION_TICKS);
+      if (action) replayDecision(game, action, record, replay);
     });
   }
   return samples;
