@@ -575,3 +575,8 @@ fieldset.speeds {
   clip-path: inset(50%);
   white-space: nowrap;
 }
+
+/* A [hidden] bars block must not be re-shown by the .bars display rule above. */
+.bars[hidden] {
+  display: none;
+}
