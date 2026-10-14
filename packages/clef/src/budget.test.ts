@@ -88,6 +88,38 @@ describe("per-account ledger", () => {
     expect(new FileBudget(path, 10_000, noon, "new-account").spentToday()).toBe(400);
   });
 
+  it("sees spending written by another process after it was constructed", () => {
+    const dir = mkdtempSync(join(tmpdir(), "ccr-budget-"));
+    dirs.push(dir);
+    const path = join(dir, "spend.ndjson");
+    const mine = new FileBudget(path, 10_000, noon, "acct");
+    const other = new FileBudget(path, 10_000, noon, "acct");
+    expect(mine.canSpend()).toBe(true);
+    other.record({ model: "clef-flash", inputTokens: 1, neurons: 10_000 });
+    expect(mine.spentToday()).toBe(10_000);
+    expect(mine.canSpend()).toBe(false);
+    // Its own record must not hide what the other process wrote.
+    const third = new FileBudget(path, 20_000, noon, "acct");
+    third.record({ model: "clef-flash", inputTokens: 1, neurons: 5 });
+    expect(mine.spentToday()).toBe(10_005);
+  });
+
+  it("a failing ledger write after a paid call does not trigger a second paid call", async () => {
+    const { transport, calls } = countingTransport(1000);
+    const budget = new MemoryBudget(10_000, noon);
+    budget.record = () => {
+      throw new Error("disk full");
+    };
+    const client = new ClefClient({
+      transport,
+      budget,
+      cache: new MemoryCache(),
+      sleep: async () => {},
+    });
+    await expect(client.run(request())).rejects.toThrow("disk full");
+    expect(calls()).toBe(1);
+  });
+
   it("an untagged (legacy) entry counts toward every account, so it can only make the guard stricter", () => {
     const dir = mkdtempSync(join(tmpdir(), "ccr-budget-"));
     dirs.push(dir);

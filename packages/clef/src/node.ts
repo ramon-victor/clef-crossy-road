@@ -1,4 +1,4 @@
-import { appendFileSync, existsSync, mkdirSync, readFileSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, readFileSync, statSync } from "node:fs";
 import { dirname } from "node:path";
 import { accountTag, MemoryBudget, type SpendEntry } from "./budget.ts";
 import type { CachedEntry, DecisionCache } from "./cache.ts";
@@ -70,6 +70,8 @@ function terminatePartialLine(path: string, text: string): void {
  */
 export class FileBudget extends MemoryBudget {
   private readonly path: string;
+  /** Size of the ledger file when it was last read; a different size means another process wrote. */
+  private knownSize = -1;
 
   /**
    * `accountId` (the raw Cloudflare account id, or undefined) selects whose spending this view counts.
@@ -79,23 +81,42 @@ export class FileBudget extends MemoryBudget {
     super(dailyLimit, clock, accountId ? accountTag(accountId) : undefined);
     this.path = path;
     mkdirSync(dirname(path), { recursive: true });
-    if (existsSync(path)) {
-      const text = readFileSync(path, "utf8");
-      terminatePartialLine(path, text);
-      for (const line of text.split("\n")) {
-        if (!line.trim()) continue;
-        try {
-          this.entries.push(JSON.parse(line) as SpendEntry);
-        } catch {
-          // Ignore a partially written last line.
-        }
+    if (existsSync(path)) terminatePartialLine(path, readFileSync(path, "utf8"));
+    this.reload();
+  }
+
+  /**
+   * Another process (the desktop app, a second bench run) may have spent since this one started.
+   * The ledger is re-read whenever its size changed, so the ceiling holds across processes and not
+   * only inside this one.
+   */
+  override spentToday(): number {
+    this.reload();
+    return super.spentToday();
+  }
+
+  private reload(): void {
+    if (!existsSync(this.path)) return;
+    const size = statSync(this.path).size;
+    if (size === this.knownSize) return;
+    this.entries.length = 0;
+    for (const line of readFileSync(this.path, "utf8").split("\n")) {
+      if (!line.trim()) continue;
+      try {
+        const entry: unknown = JSON.parse(line);
+        if (typeof entry === "object" && entry !== null) this.entries.push(entry as SpendEntry);
+      } catch {
+        // Ignore a partially written last line.
       }
     }
+    this.knownSize = size;
   }
 
   protected override add(entry: SpendEntry): void {
+    this.reload(); // pick up what others wrote before this record, so none of it is lost from view
     super.add(entry);
     appendFileSync(this.path, `${JSON.stringify(entry)}\n`);
+    this.knownSize = statSync(this.path).size;
   }
 }
 

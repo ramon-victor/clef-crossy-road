@@ -6,7 +6,7 @@ import { AdaptiveLimiter } from "./limiter.ts";
 import { neuronsForTokens, usdForTokens } from "./models.ts";
 import { errorMessages, parseResult } from "./schema.ts";
 import type { Transport, TransportResponse } from "./transport.ts";
-import type { ClefRequest, ClefResult, ClefStats } from "./types.ts";
+import type { Answer, ClefRequest, ClefResult, ClefStats, ClefUsage } from "./types.ts";
 
 export interface ClefClientOptions {
   transport: Transport;
@@ -108,36 +108,26 @@ export class ClefClient {
       const release = await this.limiter.acquire();
       // Checked after waiting for a slot, right before sending: nothing leaves this process once
       // the day's budget is gone.
-      if (this.budget && !(await this.budget.canSpend())) {
-        release();
-        const spent = Math.round(await this.budget.spentToday());
-        throw new ClefError(
-          "quota",
-          `Local daily budget reached: ${spent} of ${this.budget.dailyLimit} neurons used today (UTC). Nothing was sent.`,
-        );
+      if (this.budget) {
+        // The slot must be given back whatever happens here (the native ledger read can reject).
+        try {
+          if (!(await this.budget.canSpend())) {
+            const spent = Math.round(await this.budget.spentToday());
+            throw new ClefError(
+              "quota",
+              `Local daily budget reached: ${spent} of ${this.budget.dailyLimit} neurons used today (UTC). Nothing was sent.`,
+            );
+          }
+        } catch (error) {
+          release();
+          throw error;
+        }
       }
       const startedAt = this.now();
+      let success: { answers: Record<string, Answer>; usage: ClefUsage; latencyMs: number };
       try {
         const { answers, usage } = await this.attempt(request);
-        const latencyMs = this.now() - startedAt;
-        release();
-        this.limiter.onSuccess();
-
-        const neurons = neuronsForTokens(request.model, usage.inputTokens);
-        await this.budget?.record({
-          model: request.model,
-          inputTokens: usage.inputTokens,
-          neurons,
-        });
-        this.counters.calls++;
-        this.counters.inputTokens += usage.inputTokens;
-        this.counters.neurons += neurons;
-        this.counters.usd += usdForTokens(request.model, usage.inputTokens);
-        this.latencies.push(latencyMs);
-
-        const entry: CachedEntry = { model: request.model, answers, usage, latencyMs };
-        await this.cache?.set(key, entry);
-        return { ...entry, attempts: attempt, cached: false, neurons };
+        success = { answers, usage, latencyMs: this.now() - startedAt };
       } catch (error) {
         release();
         const err = error instanceof ClefError ? error : toNetworkError(error);
@@ -146,7 +136,25 @@ export class ClefClient {
         if (!err.retryable || attempt === this.maxAttempts) break;
         this.counters.retries++;
         await this.sleep(this.delayFor(attempt, err));
+        continue;
       }
+
+      // Bookkeeping stays OUTSIDE the retry try/catch: the call already succeeded (and was billed),
+      // so a failing ledger or cache write must surface as itself, never trigger a second paid call.
+      release();
+      this.limiter.onSuccess();
+      const { answers, usage, latencyMs } = success;
+      const neurons = neuronsForTokens(request.model, usage.inputTokens);
+      this.counters.calls++;
+      this.counters.inputTokens += usage.inputTokens;
+      this.counters.neurons += neurons;
+      this.counters.usd += usdForTokens(request.model, usage.inputTokens);
+      this.latencies.push(latencyMs);
+      await this.budget?.record({ model: request.model, inputTokens: usage.inputTokens, neurons });
+
+      const entry: CachedEntry = { model: request.model, answers, usage, latencyMs };
+      await this.cache?.set(key, entry);
+      return { ...entry, attempts: attempt, cached: false, neurons };
     }
     this.counters.failures++;
     throw lastError ?? new ClefError("network", "request failed");
