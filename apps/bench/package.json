@@ -1,0 +1,21 @@
+{
+  "name": "@ccr/bench",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Headless benchmark CLI: N seeds x policies, resumable NDJSON runs, paired bootstrap report.",
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.test.json",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@ccr/agent": "workspace:*",
+    "@ccr/clef": "workspace:*",
+    "@ccr/core": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.4"
+  }
+}
