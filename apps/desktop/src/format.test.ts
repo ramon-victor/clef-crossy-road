@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { meterLevel, ms, percent } from "./format.ts";
+import { endTitle, meterLevel, ms, percent } from "./format.ts";
 
 describe("format", () => {
   it("shows a dash for what is not known yet", () => {
@@ -14,5 +14,13 @@ describe("format", () => {
     expect(meterLevel(9_999, 10_000)).toBe("high");
     expect(meterLevel(10_000, 10_000)).toBe("full");
     expect(meterLevel(26_347, 10_000)).toBe("full");
+  });
+
+  it("titles the end card with how the game ended: a death, or a policy that got nowhere", () => {
+    expect(endTitle({ alive: false, stalled: false, deathCause: "water" })).toBe("Drowned");
+    expect(endTitle({ alive: false, stalled: false, deathCause: null })).toBe("Game over");
+    expect(endTitle({ alive: true, stalled: true, deathCause: null })).toBe(
+      "Stuck: no new row in 40 decisions",
+    );
   });
 });

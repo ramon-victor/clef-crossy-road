@@ -1,6 +1,13 @@
-import { alwaysForward, type Decision, type PolicyFactory } from "@ccr/agent";
+import {
+  alwaysForward,
+  DEFAULT_STALL_LIMIT,
+  type Decision,
+  type Memory,
+  type PolicyFactory,
+  playEpisode,
+} from "@ccr/agent";
 import { constantPolicy } from "@ccr/agent/testing";
-import { Game } from "@ccr/core";
+import { type Action, Game } from "@ccr/core";
 import { describe, expect, it } from "vitest";
 import { Session } from "./session.ts";
 
@@ -81,6 +88,85 @@ describe("Session: human control", () => {
     s.setPolicy(alwaysForward);
     s.humanInput("hop_left");
     expect(s.game.heroX).toBe(0);
+  });
+});
+
+/** A policy that records what it was shown and plays a fixed move. */
+function spyOn(action: Action) {
+  const seen: Array<{ obs: unknown; memory: Memory | undefined }> = [];
+  const factory: PolicyFactory = {
+    id: "spy",
+    create: () => ({
+      kind: "observation",
+      id: "spy",
+      decide: async (obs, memory) => {
+        seen.push({ obs, memory });
+        return { action };
+      },
+    }),
+  };
+  return { factory, seen };
+}
+
+describe("Session: what the policy remembers", () => {
+  it("shows a policy the same observations and memory as the benchmark runner does", async () => {
+    // Same moves on the same seed: this is what lets the app replay the benchmark's cached answers.
+    const viaRunner = spyOn("hop_right");
+    await playEpisode(viaRunner.factory, 1, { maxDecisions: 6, stallLimit: 0 });
+
+    const viaSession = spyOn("hop_right");
+    const s = new Session();
+    s.setPolicy(viaSession.factory);
+    s.start(1);
+    await runUntil(s, () => viaSession.seen.length >= 6, 4000);
+
+    expect(viaSession.seen.slice(0, 6)).toEqual(viaRunner.seen);
+    expect(viaSession.seen[5]?.memory?.recent.every((m) => m.outcome === "blocked")).toBe(true);
+  });
+
+  it("starts every game with an empty memory", async () => {
+    const spy = spyOn("hop_forward");
+    const s = new Session();
+    s.setPolicy(spy.factory);
+    s.start(3);
+    await runUntil(s, () => spy.seen.length >= 3, 2000);
+    s.start(3);
+    spy.seen.length = 0;
+    await runUntil(s, () => spy.seen.length >= 1, 1000);
+    expect(spy.seen[0]?.memory).toEqual({ recent: [], score: 0, sinceProgress: 0 });
+  });
+});
+
+describe("Session: a policy that gets nowhere", () => {
+  it("ends the game after the benchmark's stall limit and then stops asking", async () => {
+    const spy = spyOn("stay");
+    const s = new Session();
+    s.setSpeed(8);
+    s.setPolicy(spy.factory);
+    s.start(3);
+    await runUntil(s, () => s.state().stalled, 8000);
+    expect(s.state()).toMatchObject({ stalled: true, alive: true, decisions: DEFAULT_STALL_LIMIT });
+
+    const asked = spy.seen.length;
+    const tick = s.game.tick;
+    await runUntil(s, () => false, 120);
+    expect(spy.seen.length).toBe(asked); // nothing more to ask, nothing more to spend
+    expect(s.game.tick).toBe(tick); // and the world stands still
+
+    s.start(3);
+    expect(s.state().stalled).toBe(false);
+  });
+
+  it("does not end a game in which the policy keeps reaching new rows, and never ends a human's", async () => {
+    const s = new Session();
+    s.setPolicy(alwaysForward);
+    s.start(11);
+    await runUntil(s, () => !s.game.alive, 4000);
+    expect(s.state().stalled).toBe(false);
+
+    s.setPolicy(null);
+    run(s, 5);
+    expect(s.state()).toMatchObject({ stalled: false, human: true });
   });
 });
 

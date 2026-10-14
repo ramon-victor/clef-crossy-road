@@ -1,4 +1,13 @@
-import type { Decision, Policy, PolicyFactory } from "@ccr/agent";
+import {
+  DEFAULT_STALL_LIMIT,
+  type Decision,
+  emptyMemory,
+  type Memory,
+  type Policy,
+  type PolicyFactory,
+  type RememberedMove,
+  remember,
+} from "@ccr/agent";
 import {
   type Action,
   DECISION_TICKS,
@@ -35,6 +44,8 @@ export interface SessionState {
   best: number;
   alive: boolean;
   deathCause: DeathCause | null;
+  /** A policy went `DEFAULT_STALL_LIMIT` decisions without reaching a new row, so the game stopped. */
+  stalled: boolean;
   invalidMoves: number;
   decisions: number;
   phase: Phase;
@@ -69,6 +80,10 @@ export class Session {
   private phase: Phase = "idle";
   private inFlight = false;
   private hopTicksLeft = 0;
+  private memory: Memory = emptyMemory();
+  /** The last move, until the world has played it out and the memory can say what it led to. */
+  private pendingMove: RememberedMove | null = null;
+  private stalled = false;
   private paused = false;
   private singleStep = false;
   private speed = 1;
@@ -106,6 +121,9 @@ export class Session {
     this.acc = 0;
     this.inFlight = false;
     this.hopTicksLeft = 0;
+    this.memory = emptyMemory();
+    this.pendingMove = null;
+    this.stalled = false;
     this.phase = "idle";
     this.error = null;
     this.singleStep = false;
@@ -161,7 +179,7 @@ export class Session {
    * elapsed (for render interpolation).
    */
   frame(dt: number): number {
-    if (!this.game.alive || (this.paused && !this.singleStep)) return 0;
+    if (!this.game.alive || this.stalled || (this.paused && !this.singleStep)) return 0;
 
     this.driveAi();
     if (!this.worldRuns()) {
@@ -190,6 +208,7 @@ export class Session {
       best: Math.max(this.best, this.game.score),
       alive: this.game.alive,
       deathCause: this.game.deathCause,
+      stalled: this.stalled,
       invalidMoves: this.game.invalidMoves,
       decisions: this.decisions,
       phase: this.phase,
@@ -241,7 +260,25 @@ export class Session {
     if (!policy || this.inFlight || this.phase === "error") return;
     if (this.stepMode && this.phase !== "idle") return;
     if (this.paused && !this.singleStep) return;
+    this.settleLastMove();
+    if (this.stalled) {
+      this.emit();
+      return;
+    }
     this.requestDecision(policy);
+  }
+
+  /**
+   * Once the last move has played out, the player remembers what it did. The same rule the benchmark
+   * ends a game on applies here: too many decisions without a new row and the game is over, so a policy
+   * that keeps bumping into the same tree cannot ask (and spend) for ever.
+   */
+  private settleLastMove(): void {
+    if (this.pendingMove) {
+      this.memory = remember(this.memory, this.pendingMove, this.game.score);
+      this.pendingMove = null;
+    }
+    this.stalled = this.memory.sinceProgress >= DEFAULT_STALL_LIMIT;
   }
 
   private requestDecision(policy: Policy): void {
@@ -250,7 +287,9 @@ export class Session {
     if (this.stepMode) this.phase = "thinking";
     const started = this.now();
     const asked =
-      policy.kind === "oracle" ? policy.decide(this.game) : policy.decide(observe(this.game));
+      policy.kind === "oracle"
+        ? policy.decide(this.game)
+        : policy.decide(observe(this.game), this.memory);
 
     asked.then(
       (decision) => {
@@ -272,7 +311,8 @@ export class Session {
   private apply(decision: Decision, wallMs: number): void {
     const tick = this.game.tick;
     const row = this.game.heroRow;
-    this.game.act(decision.action);
+    const outcome = this.game.act(decision.action);
+    this.pendingMove = { action: decision.action, outcome };
 
     const log: DecisionLog = {
       index: this.decisions,

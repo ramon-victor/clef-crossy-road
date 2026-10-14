@@ -1,7 +1,7 @@
 import { GameView } from "@ccr/render";
 import { useEffect, useRef, useState } from "preact/hooks";
 import type { Sounds } from "./audio.ts";
-import { ACTION_GLYPH, DEATH_TEXT, percent } from "./format.ts";
+import { ACTION_GLYPH, endTitle, percent } from "./format.ts";
 import type { Session, SessionState } from "./session.ts";
 
 export interface GameCanvasProps {
@@ -138,11 +138,9 @@ export function GameCanvas(props: GameCanvasProps) {
         </div>
       )}
 
-      {status === "ready" && !state.alive && (
+      {status === "ready" && (!state.alive || state.stalled) && (
         <div class="overlay-card over">
-          <div class="over-title">
-            {state.deathCause ? DEATH_TEXT[state.deathCause] : "Game over"}
-          </div>
+          <div class="over-title">{endTitle(state)}</div>
           <div class="over-score">{state.score}</div>
           <div class="over-sub">rows crossed · best {state.best}</div>
           <div class="over-actions">

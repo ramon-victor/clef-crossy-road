@@ -1,4 +1,6 @@
+import { DEFAULT_STALL_LIMIT } from "@ccr/agent";
 import type { Action, DeathCause } from "@ccr/core";
+import type { SessionState } from "./session.ts";
 
 export const ACTION_GLYPH: Readonly<Record<Action, string>> = {
   hop_forward: "↑",
@@ -31,6 +33,12 @@ export const DEATH_TEXT: Readonly<Record<DeathCause, string>> = {
   train: "Hit by a train",
   out_of_bounds: "Wandered off the road",
 };
+
+/** The title of the end-of-game card: how it died, or that the policy stopped getting anywhere. */
+export function endTitle(state: Pick<SessionState, "alive" | "stalled" | "deathCause">): string {
+  if (state.alive && state.stalled) return `Stuck: no new row in ${DEFAULT_STALL_LIMIT} decisions`;
+  return state.deathCause ? DEATH_TEXT[state.deathCause] : "Game over";
+}
 
 export const percent = (p: number | undefined): string =>
   p === undefined ? "–" : `${Math.round(p * 100)}%`;

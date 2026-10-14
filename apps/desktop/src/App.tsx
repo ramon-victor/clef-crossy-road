@@ -112,11 +112,12 @@ export function App() {
   // unattended window cannot use up the day's neurons.
   const selected = byId.get(selectedId);
   const mayAutoRestart = autoRestart && selected !== undefined && !selected.usesApi && !state.human;
+  const over = !state.alive || state.stalled;
   useEffect(() => {
-    if (state.alive || !mayAutoRestart) return;
+    if (!over || !mayAutoRestart) return;
     const timer = setTimeout(newMap, RESTART_DELAY_MS);
     return () => clearTimeout(timer);
-  }, [state.alive, state.seed, mayAutoRestart, newMap]);
+  }, [over, state.seed, mayAutoRestart, newMap]);
 
   useEffect(() => {
     const unlockSound = () => sounds.unlock();
