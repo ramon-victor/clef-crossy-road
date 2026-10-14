@@ -72,8 +72,9 @@ O Rust só aceita `clef`, `clef-flash` e `clef-omni`, sem URL arbitrária.
 | Token fora do webview | O bundle de produção (`dist/`) foi varrido: sem token, sem ID de conta, sem `CF_API_TOKEN=` |
 | Executável de release | `tauri build --no-bundle`: **8,4 MB**, compilado em 2m55s |
 | Teclado no executável de release | Autoteste do `.exe` de produção: 4 de 4 teclas tratadas pelo modo humano (eventos sintéticos que chegam ao mesmo `keydown`), a galinha se moveu e o placar subiu; o Clef rodou pelo cache com 0 neurons; 180 fps; 1.056 cores no quadro |
+| Tecla segurada (autoteste, 2026-10-14, WebView2) | `keydown` de `ArrowUp` com `repeat` a cada 16 ms na janela real, na seed 1: **2 ruas e afogado, igual ao jogo de saltos um a um** (antes da fila de entrada o mesmo teste atravessava o rio). Mesma rodada: 180 fps (p5 175), 1.073 cores no quadro, Clef 2 de 2 decisões do cache com 0 neurons, teclas 4 de 4 |
 | Modo Clef por atalho | Verificado com uma captura só da janela (`PrintWindow`): Clef-flash JSON, seed 1, etiqueta "cached", probabilidades reais e `confidence` 0,06, e o cartão "Drowned · 2 rows" |
-| Testes | 45 testes do app (`Session`, teclas, seeds, estatísticas, políticas) e 20 testes Rust (datas UTC, taxas de neurons, ledger por conta, linha parcial, cache, erro, seeds) |
+| Testes | 47 testes do app (`Session`, teclas, seeds, estatísticas, políticas) e 20 testes Rust (datas UTC, taxas de neurons, ledger por conta, linha parcial, cache, erro, seeds) |
 
 Não verifiquei: teclas físicas do teclado (só eventos sintéticos no mesmo `keydown`), o instalador (`tauri build` com bundle NSIS) e o app com uma
 chamada de rede ao vivo em tempo real (as decisões do Clef na janela vieram do cache; o pipeline de rede é o mesmo do benchmark, já exercitado com a API).

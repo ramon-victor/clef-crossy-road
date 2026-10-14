@@ -1,4 +1,5 @@
 import { isBudgetRefusal } from "@ccr/clef";
+import { Game } from "@ccr/core";
 import type { GameView } from "@ccr/render";
 import { invoke } from "@tauri-apps/api/core";
 import { isTauri } from "./bridge/tauri.ts";
@@ -177,6 +178,37 @@ async function checkHumanKeys(ctx: Context): Promise<Report> {
 }
 
 /**
+ * Holding the forward key in the real window (a key repeat every frame, far faster than a hop) must be
+ * the same game as hopping forward one hop at a time: the same score and the same cause of death.
+ * Before the input queue, the chained hops skipped the water and car checks and ran for dozens of rows.
+ */
+async function checkHeldKey(ctx: Context): Promise<Report> {
+  const seed = 1;
+  ctx.select("human");
+  ctx.session.setSpeed(1);
+  ctx.session.start(seed);
+  const started = performance.now();
+  while (performance.now() - started < 4000 && ctx.session.state().alive) {
+    window.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "ArrowUp", repeat: true, bubbles: true }),
+    );
+    await sleep(16);
+  }
+  const held = ctx.session.state();
+  const stepped = new Game({ seed });
+  for (let i = 0; i < 100 && stepped.alive; i++) stepped.step("hop_forward");
+  return {
+    heldKey: {
+      score: held.score,
+      deathCause: held.deathCause,
+      steppedScore: stepped.score,
+      steppedDeathCause: stepped.deathCause,
+      matchesSteppedGame: held.score === stepped.score && held.deathCause === stepped.deathCause,
+    },
+  };
+}
+
+/**
  * Only runs in the desktop app when launched with CCR_SELFTEST=1: checks rendering, the budget,
  * the cached Clef pipeline and the keyboard, writes runs/selftest.json and exits.
  */
@@ -192,7 +224,13 @@ export async function runSelfTest(ctx: Context): Promise<void> {
 
   const report: Report = { startedAt: new Date().toISOString() };
   try {
-    for (const check of [checkRendering, checkBudget, checkClefFromCache, checkHumanKeys]) {
+    for (const check of [
+      checkRendering,
+      checkBudget,
+      checkClefFromCache,
+      checkHumanKeys,
+      checkHeldKey,
+    ]) {
       Object.assign(report, await check(ctx));
     }
   } catch (error) {
