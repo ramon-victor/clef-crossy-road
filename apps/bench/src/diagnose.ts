@@ -1,6 +1,8 @@
 import type { EpisodeResult } from "@ccr/agent";
 import { DECISION_TICKS, Game, type RowKind } from "@ccr/core";
-import { isPipelined, replayDecision } from "./export.ts";
+import { code, fixed, markdownTable } from "./format.ts";
+import { replayer } from "./replay.ts";
+import { mean } from "./stats.ts";
 
 /**
  * Does the model's P(hop_forward) carry any information about whether hopping forward is safe?
@@ -26,12 +28,12 @@ export function collectSamples(
   const samples: Sample[] = [];
   for (const episode of episodes) {
     const game = new Game({ seed: episode.seed });
-    const replay = { decisionTicks, pipelined: isPipelined(episode.policy) };
+    const replay = replayer(episode, decisionTicks);
     episode.records.forEach((record, index) => {
       const pForward = record.probabilities?.hop_forward;
       if (pForward !== undefined && game.alive) {
         const probe = game.clone();
-        replayDecision(probe, "hop_forward", record, replay);
+        replay(probe, "hop_forward", index);
         samples.push({
           policy: episode.policy,
           seed: episode.seed,
@@ -42,7 +44,7 @@ export function collectSamples(
         });
       }
       const action = episode.actions[index];
-      if (action) replayDecision(game, action, record, replay);
+      if (action) replay(game, action, index);
     });
   }
   return samples;
@@ -77,9 +79,6 @@ export function diagnose(policy: string, samples: readonly Sample[]): Diagnosis 
     safe: list.filter((s) => s.forwardSafe).map((s) => s.pForward),
     unsafe: list.filter((s) => !s.forwardSafe).map((s) => s.pForward),
   });
-  const mean = (xs: readonly number[]) =>
-    xs.length === 0 ? Number.NaN : xs.reduce((a, b) => a + b, 0) / xs.length;
-
   const all = split(mine);
   const kinds = [...new Set(mine.map((s) => s.ahead))].sort();
   return {
@@ -102,35 +101,31 @@ export function diagnose(policy: string, samples: readonly Sample[]): Diagnosis 
 }
 
 export function renderDiagnosis(list: readonly Diagnosis[]): string {
-  const f = (n: number, d = 2) => (Number.isFinite(n) ? n.toFixed(d) : "n/a");
-  const lines = [
+  const overall = list.map((d) => [
+    code(d.policy),
+    d.decisions,
+    fixed(d.baseRateSafe),
+    fixed(d.meanPSafe, 3),
+    fixed(d.meanPUnsafe, 3),
+    `**${fixed(d.auc, 3)}**`,
+  ]);
+  const byTerrain = list.flatMap((d) =>
+    d.byTerrain.map((t) => [code(d.policy), t.kind, t.decisions, t.unsafe, fixed(t.auc, 3)]),
+  );
+  return [
     "# Does P(hop_forward) predict that hopping forward is safe?",
     "",
     "AUC 0.5 = no information, 1.0 = perfect. 'Safe' = still alive after the hop, replayed on the simulator.",
     "",
-    "| Policy | Decisions | Safe rate | mean P(fwd) when safe | when unsafe | AUC all |",
-    "|---|---|---|---|---|---|",
-  ];
-  for (const d of list) {
-    lines.push(
-      `| \`${d.policy}\` | ${d.decisions} | ${f(d.baseRateSafe)} | ${f(d.meanPSafe, 3)} | ${f(d.meanPUnsafe, 3)} | **${f(d.auc, 3)}** |`,
-    );
-  }
-  lines.push(
+    ...markdownTable(
+      ["Policy", "Decisions", "Safe rate", "mean P(fwd) when safe", "when unsafe", "AUC all"],
+      overall,
+    ),
     "",
     "## By the terrain the hop would enter",
     "",
-    "| Policy | Terrain | Decisions | Unsafe | AUC |",
-    "|---|---|---|---|---|",
-  );
-  for (const d of list) {
-    for (const t of d.byTerrain) {
-      lines.push(`| \`${d.policy}\` | ${t.kind} | ${t.decisions} | ${t.unsafe} | ${f(t.auc, 3)} |`);
-    }
-  }
-  lines.push(
+    ...markdownTable(["Policy", "Terrain", "Decisions", "Unsafe", "AUC"], byTerrain),
     "",
     "_A within-terrain AUC needs both safe and unsafe examples; `n/a` means one class was empty. Samples come from each policy's own trajectories._",
-  );
-  return lines.join("\n");
+  ].join("\n");
 }

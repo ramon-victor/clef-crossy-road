@@ -1,7 +1,14 @@
-import { alwaysForward, lookaheadPolicy, playEpisode, randomPolicy } from "@ccr/agent";
+import {
+  alwaysForward,
+  type LatencyModel,
+  lookaheadPolicy,
+  playEpisode,
+  randomPolicy,
+} from "@ccr/agent";
 import { DECISION_TICKS, Game } from "@ccr/core";
 import { describe, expect, it } from "vitest";
 import { toNdjson, trajectorySteps } from "./export.ts";
+import { withLatencySuffix } from "./latency.ts";
 
 describe("trajectory export", () => {
   it("one step per recorded decision, with rewards that add up to the episode score", async () => {
@@ -36,6 +43,26 @@ describe("trajectory export", () => {
     }
     expect(JSON.stringify(steps)).not.toMatch(/safe|danger|collision|legal/i);
   });
+
+  it.each<[string, LatencyModel]>([
+    ["serial", { kind: "fixed", ms: 300 }],
+    ["pipelined", { kind: "fixed", ms: 300, pipelined: true }],
+  ])(
+    "replays a run made with %s latency on the same game it was played on",
+    async (_name, latency) => {
+      const factory = withLatencySuffix(randomPolicy, latency);
+      const episodes = [];
+      for (let seed = 1; seed <= 15; seed++) {
+        episodes.push(await playEpisode(factory, seed, { latency }));
+      }
+      const steps = [...trajectorySteps(episodes)];
+      for (const episode of episodes) {
+        const mine = steps.filter((s) => s.seed === episode.seed);
+        expect(mine.reduce((sum, s) => sum + s.reward, 0)).toBe(episode.score);
+        expect(mine.at(-1)?.done).toBe(!episode.alive);
+      }
+    },
+  );
 
   it("filters by minimum score and by policy", async () => {
     const episodes = [];

@@ -1,4 +1,5 @@
 import type { EpisodeResult } from "@ccr/agent";
+import { code, fixed, markdownTable, percent } from "./format.ts";
 import { bootstrapMean, bootstrapPairedDiff, mean, median, percentile } from "./stats.ts";
 
 export interface PolicySummary {
@@ -69,9 +70,6 @@ export function summarize(policy: string, episodes: readonly EpisodeResult[]): P
   return summary;
 }
 
-const f = (n: number, digits = 2) => (Number.isFinite(n) ? n.toFixed(digits) : "n/a");
-const pct = (n: number, total: number) => `${((100 * n) / Math.max(1, total)).toFixed(0)}%`;
-
 export interface Comparison {
   policy: string;
   reference: string;
@@ -104,88 +102,121 @@ export function verdict(c: Comparison): string {
   return "indistinguishable";
 }
 
-export function renderReport(
-  title: string,
-  episodes: readonly EpisodeResult[],
-  reference: string | undefined,
-): string {
+function groupByPolicy(episodes: readonly EpisodeResult[]): Map<string, EpisodeResult[]> {
   const byPolicy = new Map<string, EpisodeResult[]>();
   for (const e of episodes) {
     const list = byPolicy.get(e.policy) ?? [];
     list.push(e);
     byPolicy.set(e.policy, list);
   }
-  const summaries = [...byPolicy.entries()].map(([policy, list]) => summarize(policy, list));
+  return byPolicy;
+}
 
-  const out: string[] = [`# ${title}`, ""];
-  out.push(
-    "| Policy | Seeds | Rows: mean [95% CI] | Median | p90 | Max | Decisions/ep | Invalid/decision |",
-    "|---|---|---|---|---|---|---|---|",
-  );
-  for (const s of summaries) {
-    out.push(
-      `| \`${s.policy}\` | ${s.episodes} | ${f(s.score.mean)} [${f(s.score.lo)}, ${f(s.score.hi)}] | ${f(s.score.median, 1)} | ${f(s.score.p90, 1)} | ${s.score.max} | ${f(s.decisionsPerEpisode, 1)} | ${f(s.invalidPerDecision, 3)} |`,
-    );
-  }
-
-  out.push(
-    "",
-    "## How episodes ended",
-    "",
-    "| Policy | Water | Car | Train | Out of bounds | Stalled | Capped |",
-    "|---|---|---|---|---|---|---|",
-  );
-  for (const s of summaries) {
-    const d = s.deaths;
-    out.push(
-      `| \`${s.policy}\` | ${pct(d.water ?? 0, s.episodes)} | ${pct(d.car ?? 0, s.episodes)} | ${pct(d.train ?? 0, s.episodes)} | ${pct(d.out_of_bounds ?? 0, s.episodes)} | ${pct(d.stalled ?? 0, s.episodes)} | ${pct(d.capped ?? 0, s.episodes)} |`,
-    );
-  }
-  out.push(
-    "",
-    "_Stalled: no new furthest row for `stallLimit` decisions. Capped: reached `maxDecisions` while still making progress._",
+const scoreSection = (summaries: readonly PolicySummary[]): string[] =>
+  markdownTable(
+    [
+      "Policy",
+      "Seeds",
+      "Rows: mean [95% CI]",
+      "Median",
+      "p90",
+      "Max",
+      "Decisions/ep",
+      "Invalid/decision",
+    ],
+    summaries.map((s) => [
+      code(s.policy),
+      s.episodes,
+      `${fixed(s.score.mean)} [${fixed(s.score.lo)}, ${fixed(s.score.hi)}]`,
+      fixed(s.score.median, 1),
+      fixed(s.score.p90, 1),
+      s.score.max,
+      fixed(s.decisionsPerEpisode, 1),
+      fixed(s.invalidPerDecision, 3),
+    ]),
   );
 
-  const modelRows = summaries.filter((s) => s.inputTokensPerDecision !== undefined);
-  if (modelRows.length > 0) {
-    out.push(
-      "",
-      "## Model calls",
-      "",
-      "| Policy | Round trip p50 / p95 (ms) | Input tokens/decision | Neurons | Cache hits |",
-      "|---|---|---|---|---|",
-    );
-    for (const s of modelRows) {
-      const lat = s.latencyMs
-        ? `${f(s.latencyMs.p50, 0)} / ${f(s.latencyMs.p95, 0)} (n=${s.latencyMs.n})`
-        : "all cached";
-      out.push(
-        `| \`${s.policy}\` | ${lat} | ${f(s.inputTokensPerDecision ?? Number.NaN, 0)} | ${f(s.neurons ?? 0, 0)} | ${pct(Math.round((s.cacheHitRate ?? 0) * 100), 100)} |`,
-      );
-    }
-  }
+const endingsSection = (summaries: readonly PolicySummary[]): string[] => [
+  "## How episodes ended",
+  "",
+  ...markdownTable(
+    ["Policy", "Water", "Car", "Train", "Out of bounds", "Stalled", "Capped"],
+    summaries.map((s) => [
+      code(s.policy),
+      ...["water", "car", "train", "out_of_bounds", "stalled", "capped"].map((ending) =>
+        percent(s.deaths[ending] ?? 0, s.episodes),
+      ),
+    ]),
+  ),
+  "",
+  "_Stalled: no new furthest row for `stallLimit` decisions. Capped: reached `maxDecisions` while still making progress._",
+];
 
-  if (reference && byPolicy.has(reference)) {
-    out.push(
-      "",
-      `## Paired difference vs \`${reference}\` (same seeds, 95% bootstrap CI of the mean)`,
-      "",
-      "| Policy | Paired seeds | Δ rows [95% CI] | Verdict |",
-      "|---|---|---|---|",
-    );
-    for (const s of summaries) {
-      if (s.policy === reference) continue;
-      const c = compare(s.policy, reference, byPolicy);
-      if (!c) continue;
-      out.push(
-        `| \`${s.policy}\` | ${c.pairedSeeds} | ${f(c.diff.estimate)} [${f(c.diff.lo)}, ${f(c.diff.hi)}] | ${verdict(c)} |`,
-      );
-    }
-    out.push(
-      "",
-      '_Verdict: "better" only if the whole interval is above zero; "indistinguishable" if it contains zero._',
-    );
-  }
-  out.push("");
-  return out.join("\n");
+function modelCallsSection(summaries: readonly PolicySummary[]): string[] {
+  const models = summaries.filter((s) => s.inputTokensPerDecision !== undefined);
+  if (models.length === 0) return [];
+  return [
+    "",
+    "## Model calls",
+    "",
+    ...markdownTable(
+      ["Policy", "Round trip p50 / p95 (ms)", "Input tokens/decision", "Neurons", "Cache hits"],
+      models.map((s) => [
+        code(s.policy),
+        s.latencyMs
+          ? `${fixed(s.latencyMs.p50, 0)} / ${fixed(s.latencyMs.p95, 0)} (n=${s.latencyMs.n})`
+          : "all cached",
+        fixed(s.inputTokensPerDecision ?? Number.NaN, 0),
+        fixed(s.neurons ?? 0, 0),
+        `${Math.round((s.cacheHitRate ?? 0) * 100)}%`,
+      ]),
+    ),
+  ];
+}
+
+function pairedSection(
+  summaries: readonly PolicySummary[],
+  byPolicy: ReadonlyMap<string, readonly EpisodeResult[]>,
+  reference: string | undefined,
+): string[] {
+  if (!reference || !byPolicy.has(reference)) return [];
+  const comparisons = summaries
+    .filter((s) => s.policy !== reference)
+    .map((s) => compare(s.policy, reference, byPolicy))
+    .filter((c): c is Comparison => c !== undefined);
+  return [
+    "",
+    `## Paired difference vs \`${reference}\` (same seeds, 95% bootstrap CI of the mean)`,
+    "",
+    ...markdownTable(
+      ["Policy", "Paired seeds", "Δ rows [95% CI]", "Verdict"],
+      comparisons.map((c) => [
+        code(c.policy),
+        c.pairedSeeds,
+        `${fixed(c.diff.estimate)} [${fixed(c.diff.lo)}, ${fixed(c.diff.hi)}]`,
+        verdict(c),
+      ]),
+    ),
+    "",
+    '_Verdict: "better" only if the whole interval is above zero; "indistinguishable" if it contains zero._',
+  ];
+}
+
+export function renderReport(
+  title: string,
+  episodes: readonly EpisodeResult[],
+  reference: string | undefined,
+): string {
+  const byPolicy = groupByPolicy(episodes);
+  const summaries = [...byPolicy].map(([policy, list]) => summarize(policy, list));
+  return [
+    `# ${title}`,
+    "",
+    ...scoreSection(summaries),
+    "",
+    ...endingsSection(summaries),
+    ...modelCallsSection(summaries),
+    ...pairedSection(summaries, byPolicy, reference),
+    "",
+  ].join("\n");
 }

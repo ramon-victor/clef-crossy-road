@@ -20,9 +20,25 @@ describe("estimatePolicy", () => {
     expect(critic.tokensPerDecision).toBe(3070);
   });
 
-  it("flags the image encoder as an unmeasured estimate", () => {
-    const image = estimatePolicy("clef:clef-flash:image:choice:full");
-    expect(image.measured).toBe(false);
+  it("flags what has not been measured, such as the critic with a picture", () => {
+    expect(estimatePolicy("clef:clef-flash:image:choice:full")).toMatchObject({
+      tokensPerDecision: 972,
+      measured: true,
+    });
+    expect(estimatePolicy("clef:clef-flash:image:critic-go:full")).toMatchObject({
+      tokensPerDecision: 3070,
+      measured: false,
+    });
+  });
+
+  it("takes the decisions per episode from the gate run unless told otherwise", () => {
+    expect(estimatePolicy("clef:clef-flash:json:choice").decisionsPerEpisode).toBe(4.2);
+    expect(estimatePolicy("clef:clef-flash:json:critic-go").decisionsPerEpisode).toBe(3.4);
+    expect(estimatePolicy("clef:clef-flash:json:choice", 10).decisionsPerEpisode).toBe(10);
+  });
+
+  it("rejects an id that names no real policy, instead of guessing a price for it", () => {
+    expect(() => estimatePolicy("clef:clef-flash:json:vote")).toThrow(/strategy/);
   });
 });
 

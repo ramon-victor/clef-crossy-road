@@ -1,27 +1,35 @@
-import { type ClefModel, FREE_NEURONS_PER_DAY, neuronsForTokens } from "@ccr/clef";
+import { type ClefPolicyConfig, decisionCost, parseClefPolicyId } from "@ccr/agent";
+import { FREE_NEURONS_PER_DAY } from "@ccr/clef";
+import { code, markdownTable } from "./format.ts";
+import { isClefPolicy } from "./registry.ts";
 
 /**
  * Budget planning. The owner's rule is to stay inside the free tier (10,000 neurons per UTC day),
  * so before spending anything we estimate what a run costs and how many days it needs.
- *
- * Tokens per decision were measured on 2026-10-14 (docs/05). The image encoder has not been
- * measured yet and is a rough estimate, flagged as such.
  */
 export interface Estimate {
   policy: string;
   usesApi: boolean;
   /** Input tokens per decision, or null for policies that never call the API. */
   tokensPerDecision: number | null;
+  /** False when the token count is an estimate rather than a figure read back from the API. */
   measured: boolean;
   neuronsPerDecision: number;
   decisionsPerEpisode: number;
 }
 
-/** Mean decisions per episode observed in the gate run (always-forward style play dies early). */
-const DECISIONS_PER_EPISODE = { choice: 4.2, grid: 5, critic: 3.4, image: 5 } as const;
+/**
+ * Mean decisions per episode observed in the gate run (a policy that mostly hops forward dies early).
+ * Critic episodes are shorter because the critic is more cautious near danger.
+ */
+function observedDecisionsPerEpisode({ encoder, strategy }: ClefPolicyConfig): number {
+  if (encoder === "image") return 5;
+  if (strategy !== "choice") return 3.4;
+  return encoder === "grid" ? 5 : 4.2;
+}
 
 export function estimatePolicy(id: string, decisionsOverride?: number): Estimate {
-  if (!id.startsWith("clef:")) {
+  if (!isClefPolicy(id)) {
     return {
       policy: id,
       usesApi: false,
@@ -31,32 +39,15 @@ export function estimatePolicy(id: string, decisionsOverride?: number): Estimate
       decisionsPerEpisode: decisionsOverride ?? 1,
     };
   }
-  const [, model, encoder, strategy] = id.split(":");
-  let tokens = 1120;
-  let measured = true;
-  let decisions: number = DECISIONS_PER_EPISODE.choice;
-  if (encoder === "grid") {
-    tokens = 1320;
-    decisions = DECISIONS_PER_EPISODE.grid;
-  }
-  if (strategy === "critic" || strategy === "critic-go") {
-    tokens = 3070;
-    decisions = DECISIONS_PER_EPISODE.critic;
-  }
-  if (encoder === "image") {
-    // ~159 image tokens + the instruction text; not measured yet. The five critic questions repeat
-    // the instructions, so that strategy keeps the measured critic size as its (conservative) estimate.
-    tokens = strategy === "critic" || strategy === "critic-go" ? tokens : 900;
-    measured = false;
-    decisions = DECISIONS_PER_EPISODE.image;
-  }
+  const config = parseClefPolicyId(id);
+  const cost = decisionCost(config);
   return {
     policy: id,
     usesApi: true,
-    tokensPerDecision: tokens,
-    measured,
-    neuronsPerDecision: neuronsForTokens(model as ClefModel, tokens),
-    decisionsPerEpisode: decisionsOverride ?? decisions,
+    tokensPerDecision: cost.tokens,
+    measured: cost.measured,
+    neuronsPerDecision: cost.neurons,
+    decisionsPerEpisode: decisionsOverride ?? observedDecisionsPerEpisode(config),
   };
 }
 
@@ -89,6 +80,31 @@ export interface Plan {
   impossible: boolean;
 }
 
+const MAX_PLANNED_DAYS = 365;
+
+const dayLabel = (day: number): string =>
+  day === 0 ? "today" : `+${day} day${day > 1 ? "s" : ""}`;
+
+/** Packs seeds into days: what is left of today first, then whole usable days. */
+function scheduleDays(
+  seeds: readonly number[],
+  neuronsPerSeed: number,
+  remainingToday: number,
+  usablePerDay: number,
+): DayPlan[] {
+  if (neuronsPerSeed === 0) return [{ day: 0, label: "today", seeds: [...seeds], neurons: 0 }];
+  const days: DayPlan[] = [];
+  let next = 0;
+  for (let day = 0; next < seeds.length && day <= MAX_PLANNED_DAYS; day++) {
+    const count = Math.floor((day === 0 ? remainingToday : usablePerDay) / neuronsPerSeed);
+    if (count === 0) continue;
+    const chunk = seeds.slice(next, next + count);
+    days.push({ day, label: dayLabel(day), seeds: chunk, neurons: chunk.length * neuronsPerSeed });
+    next += chunk.length;
+  }
+  return days;
+}
+
 export function planRun(input: PlanInput): Plan {
   const limit = input.dailyLimit ?? FREE_NEURONS_PER_DAY;
   const usablePerDay = limit * (1 - (input.margin ?? 0.1));
@@ -99,38 +115,14 @@ export function planRun(input: PlanInput): Plan {
   );
   const totalNeurons = neuronsPerSeed * input.seeds.length;
   const remainingToday = Math.max(0, usablePerDay - input.spentToday);
-
-  const days: DayPlan[] = [];
   const impossible = neuronsPerSeed > usablePerDay && neuronsPerSeed > 0;
-  if (neuronsPerSeed === 0) {
-    days.push({ day: 0, label: "today", seeds: [...input.seeds], neurons: 0 });
-  } else if (!impossible) {
-    let index = 0;
-    let day = 0;
-    while (index < input.seeds.length) {
-      const allowance = day === 0 ? remainingToday : usablePerDay;
-      const count = Math.floor(allowance / neuronsPerSeed);
-      if (count > 0) {
-        const chunk = input.seeds.slice(index, index + count);
-        days.push({
-          day,
-          label: day === 0 ? "today" : `+${day} day${day > 1 ? "s" : ""}`,
-          seeds: chunk,
-          neurons: chunk.length * neuronsPerSeed,
-        });
-        index += chunk.length;
-      }
-      day++;
-      if (day > 365) break;
-    }
-  }
   return {
     estimates,
     neuronsPerSeed,
     totalNeurons,
     remainingToday,
     fitsToday: !impossible && totalNeurons <= remainingToday,
-    days,
+    days: impossible ? [] : scheduleDays(input.seeds, neuronsPerSeed, remainingToday, usablePerDay),
     impossible,
   };
 }
@@ -159,19 +151,21 @@ export function renderPlan(
   dailyLimit = FREE_NEURONS_PER_DAY,
 ): string {
   const f = (n: number) => Math.round(n).toLocaleString("en-US");
+  const rows = plan.estimates.map((e) => [
+    code(e.policy),
+    e.tokensPerDecision === null ? "–" : `${e.tokensPerDecision}${e.measured ? "" : " (est.)"}`,
+    e.usesApi ? e.neuronsPerDecision.toFixed(2) : "0 (no API)",
+    e.decisionsPerEpisode,
+    (e.neuronsPerDecision * e.decisionsPerEpisode).toFixed(1),
+  ]);
   const lines = [
     `Budget today: ${f(spentToday)} / ${f(dailyLimit)} neurons spent (UTC). Usable remaining (10% margin): ${f(plan.remainingToday)}.`,
     "",
-    "| Policy | Tokens/decision | Neurons/decision | Decisions/seed | Neurons/seed |",
-    "|---|---|---|---|---|",
+    ...markdownTable(
+      ["Policy", "Tokens/decision", "Neurons/decision", "Decisions/seed", "Neurons/seed"],
+      rows,
+    ),
   ];
-  for (const e of plan.estimates) {
-    const tokens =
-      e.tokensPerDecision === null ? "–" : `${e.tokensPerDecision}${e.measured ? "" : " (est.)"}`;
-    lines.push(
-      `| \`${e.policy}\` | ${tokens} | ${e.usesApi ? e.neuronsPerDecision.toFixed(2) : "0 (no API)"} | ${e.decisionsPerEpisode} | ${(e.neuronsPerDecision * e.decisionsPerEpisode).toFixed(1)} |`,
-    );
-  }
   lines.push(
     "",
     `Worst case (no cache hits): ${f(plan.neuronsPerSeed)} neurons per seed, ${f(plan.totalNeurons)} in total.`,

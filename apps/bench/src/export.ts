@@ -1,4 +1,4 @@
-import type { DecisionRecord, EpisodeResult } from "@ccr/agent";
+import type { EpisodeResult } from "@ccr/agent";
 import {
   type Action,
   DECISION_TICKS,
@@ -7,6 +7,7 @@ import {
   type Observation,
   observe,
 } from "@ccr/core";
+import { replayer } from "./replay.ts";
 
 /**
  * Reinforcement-learning trajectories (ADR-0006, Phase 5): every recorded decision becomes a
@@ -31,27 +32,6 @@ export interface TrajectoryStep {
   probabilities?: Partial<Record<Action, number>>;
 }
 
-/** Policy ids get "@lat[p]..." appended by the bench; the "p" marks the pipelined latency model. */
-export const isPipelined = (policyId: string): boolean => /@latp(\d+|rec)$/.test(policyId);
-
-/**
- * Re-plays one stored decision exactly as `playEpisode` did: the world first runs for the ticks the
- * model took to answer (`waitedTicks`, latency injection), then the action is applied (pipelined: the
- * hop plays out during the next wait; serial: it plays out now). Without this, runs made with
- * `--latency` would be replayed on a different game than the one the policy actually saw.
- */
-export function replayDecision(
-  game: Game,
-  action: Action,
-  record: Pick<DecisionRecord, "waitedTicks"> | undefined,
-  options: { decisionTicks: number; pipelined: boolean },
-): void {
-  const waited = record?.waitedTicks ?? 0;
-  if (waited > 0) game.advance(waited);
-  if (options.pipelined) game.act(action);
-  else game.step(action, options.decisionTicks);
-}
-
 export interface ExportOptions {
   /** Keep only episodes whose score is at least this (e.g. to imitate the good ones). */
   minScore?: number;
@@ -64,18 +44,17 @@ export function* trajectorySteps(
   episodes: readonly EpisodeResult[],
   options: ExportOptions = {},
 ): Generator<TrajectoryStep> {
-  const ticks = options.decisionTicks ?? DECISION_TICKS;
+  const decisionTicks = options.decisionTicks ?? DECISION_TICKS;
   for (const episode of episodes) {
     if (options.policy && episode.policy !== options.policy) continue;
     if (options.minScore !== undefined && episode.score < options.minScore) continue;
 
     const game = new Game({ seed: episode.seed });
-    const pipelined = isPipelined(episode.policy);
+    const replay = replayer(episode, decisionTicks);
     let best = 0;
-    for (let i = 0; i < episode.actions.length; i++) {
-      const action = episode.actions[i] as Action;
+    for (const [i, action] of episode.actions.entries()) {
       const observation = observe(game);
-      replayDecision(game, action, episode.records[i], { decisionTicks: ticks, pipelined });
+      replay(game, action, i);
       const reward = Math.max(0, game.score - best);
       best = Math.max(best, game.score);
       const done = !game.alive;

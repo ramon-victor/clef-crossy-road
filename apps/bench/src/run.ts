@@ -1,4 +1,4 @@
-import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import {
   type EpisodeOptions,
@@ -7,8 +7,8 @@ import {
   type PolicyFactory,
   playEpisode,
 } from "@ccr/agent";
-import type { ClefClient } from "@ccr/clef";
-import { ClefError } from "@ccr/clef";
+import { type ClefClient, ClefError } from "@ccr/clef";
+import { appendNdjson, endPartialLine, readNdjson } from "@ccr/clef/node";
 
 /** Everything about how an episode is played that a run fixes up front (stored in meta.json). */
 export type EpisodeSettings = Required<
@@ -48,20 +48,13 @@ export const FAILURES_FILE = "failures.ndjson";
 
 const keyOf = (policy: string, seed: number) => `${policy}|${seed}`;
 
+/** A truncated last line from an interrupted run is skipped; that episode is simply played again. */
 export function readEpisodes(runDir: string): EpisodeResult[] {
-  const path = join(runDir, EPISODES_FILE);
-  if (!existsSync(path)) return [];
-  const episodes: EpisodeResult[] = [];
-  for (const line of readFileSync(path, "utf8").split("\n")) {
-    if (!line.trim()) continue;
-    try {
-      episodes.push(JSON.parse(line) as EpisodeResult);
-    } catch {
-      // A truncated last line from an interrupted run is ignored; that episode is simply replayed.
-    }
-  }
-  return episodes;
+  return readNdjson(join(runDir, EPISODES_FILE)) as EpisodeResult[];
 }
+
+const errorMessage = (error: unknown): string =>
+  error instanceof Error ? error.message : String(error);
 
 /**
  * Resuming a run under different episode rules would mix incomparable episodes under one meta.json.
@@ -96,11 +89,8 @@ export async function runEpisodes(meta: RunMeta, options: RunOptions): Promise<R
   if (existsSync(metaPath)) assertSameSettings(metaPath, meta);
   else writeFileSync(metaPath, `${JSON.stringify(meta, null, 2)}\n`);
 
-  // A run killed mid-write leaves a partial last line; end it so the next record is not glued to it.
   const episodesPath = join(runDir, EPISODES_FILE);
-  if (existsSync(episodesPath) && !readFileSync(episodesPath, "utf8").endsWith("\n")) {
-    appendFileSync(episodesPath, "\n");
-  }
+  endPartialLine(episodesPath);
   const done = new Set(readEpisodes(runDir).map((e) => keyOf(e.policy, e.seed)));
   const queue: Array<{ factory: PolicyFactory; seed: number }> = [];
   for (const factory of policies) {
@@ -127,7 +117,7 @@ export async function runEpisodes(meta: RunMeta, options: RunOptions): Promise<R
       if (!task) return;
       try {
         const result = await playEpisode(task.factory, task.seed, options.episode);
-        appendFileSync(join(runDir, EPISODES_FILE), `${JSON.stringify(result)}\n`);
+        appendNdjson(episodesPath, result);
         completed++;
         if (completed % 10 === 0 || completed === total) {
           const calls = client ? ` | api calls ${client.stats().calls}` : "";
@@ -140,17 +130,13 @@ export async function runEpisodes(meta: RunMeta, options: RunOptions): Promise<R
           return;
         }
         failed++;
-        appendFileSync(
-          join(runDir, FAILURES_FILE),
-          `${JSON.stringify({
-            policy: task.factory.id,
-            seed: task.seed,
-            error: error instanceof Error ? error.message : String(error),
-          })}\n`,
-        );
-        log(
-          `  ! ${task.factory.id} seed ${task.seed} failed: ${error instanceof Error ? error.message : error}`,
-        );
+        const message = errorMessage(error);
+        appendNdjson(join(runDir, FAILURES_FILE), {
+          policy: task.factory.id,
+          seed: task.seed,
+          error: message,
+        });
+        log(`  ! ${task.factory.id} seed ${task.seed} failed: ${message}`);
       }
     }
   };
