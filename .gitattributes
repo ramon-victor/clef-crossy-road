@@ -1,0 +1,11 @@
+# Checkouts use LF on every platform, whatever core.autocrlf says. Biome formats with LF, and a CRLF
+# checkout (the Git for Windows default) would make pnpm lint fail on a fresh clone.
+* text=auto eol=lf
+
+# Binary files must never be touched by line-ending conversion.
+*.png binary
+*.ico binary
+*.icns binary
+*.ttf binary
+*.wav binary
+*.mp3 binary
