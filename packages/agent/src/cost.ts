@@ -11,14 +11,22 @@ export interface DecisionCost {
 }
 
 /**
- * Input tokens per decision on Clef-flash, read from `usage.input_tokens` on 2026-10-14 (docs/05). The
- * critic asks five questions, so it repeats the instructions five times; it was only measured with the
- * JSON encoder, and the other encoders reuse that size as an estimate.
+ * Input tokens per `choice` decision on Clef-flash, read from `usage.input_tokens` on 2026-10-14
+ * (docs/05). The `view` and `json-fx` figures are estimates from the size of their text, scaled by the
+ * ratio the measured encoders showed, until a run reads the real count.
  */
-const TOKENS = {
-  choice: { json: 1120, grid: 1320, image: 972, "json-rel": 1163 },
-  critic: 3070,
-} as const;
+const CHOICE_TOKENS: Readonly<Record<EncoderId, { tokens: number; measured: boolean }>> = {
+  json: { tokens: 1120, measured: true },
+  grid: { tokens: 1320, measured: true },
+  image: { tokens: 972, measured: true },
+  "json-rel": { tokens: 1163, measured: true },
+  view: { tokens: 1450, measured: false },
+  "view-fx": { tokens: 1550, measured: false },
+  "json-fx": { tokens: 1550, measured: false },
+};
+
+/** The critic asks five questions, so it repeats the instructions five times. Only measured with `json`. */
+const CRITIC_TOKENS = 3070;
 
 export function decisionCost(config: {
   model: ClefModel;
@@ -26,7 +34,8 @@ export function decisionCost(config: {
   strategy: StrategyId;
 }): DecisionCost {
   const critic = config.strategy !== "choice";
-  const tokens = critic ? TOKENS.critic : TOKENS.choice[config.encoder];
-  const measured = !critic || config.encoder === "json";
+  const { tokens, measured } = critic
+    ? { tokens: CRITIC_TOKENS, measured: config.encoder === "json" }
+    : CHOICE_TOKENS[config.encoder];
   return { tokens, measured, neurons: neuronsForTokens(config.model, tokens) };
 }

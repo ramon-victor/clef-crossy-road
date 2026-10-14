@@ -1,4 +1,4 @@
-import type { EpisodeResult } from "@ccr/agent";
+import { ENCODER_LEVEL, type EpisodeResult, parseClefPolicyId } from "@ccr/agent";
 import { code, fixed, markdownTable, percent } from "./format.ts";
 import { bootstrapMean, bootstrapPairedDiff, mean, median, percentile } from "./stats.ts";
 
@@ -112,10 +112,24 @@ function groupByPolicy(episodes: readonly EpisodeResult[]): Map<string, EpisodeR
   return byPolicy;
 }
 
+/**
+ * What a policy gets to know (ADR-0009), so no number is read without it: the model conditions say
+ * `now`, `memory` or `forecast`; the scripted readers say what they read; look-ahead reads the simulator.
+ */
+export function perceptionOf(policyLabel: string): string {
+  const id = policyLabel.replace(/@.*$/, ""); // a latency condition adds a suffix such as @lat300
+  if (id === "clef" || id.startsWith("clef:")) return ENCODER_LEVEL[parseClefPolicyId(id).encoder];
+  if (id === "rule-view") return "now (scripted)";
+  if (id === "rule-view-fx") return "forecast (scripted)";
+  if (id.startsWith("lookahead")) return "simulator";
+  return "none";
+}
+
 const scoreSection = (summaries: readonly PolicySummary[]): string[] =>
   markdownTable(
     [
       "Policy",
+      "Sees",
       "Seeds",
       "Rows: mean [95% CI]",
       "Median",
@@ -126,6 +140,7 @@ const scoreSection = (summaries: readonly PolicySummary[]): string[] =>
     ],
     summaries.map((s) => [
       code(s.policy),
+      perceptionOf(s.policy),
       s.episodes,
       `${fixed(s.score.mean)} [${fixed(s.score.lo)}, ${fixed(s.score.hi)}]`,
       fixed(s.score.median, 1),

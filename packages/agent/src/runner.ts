@@ -8,6 +8,7 @@ import {
   observe,
   TICKS_PER_SECOND,
 } from "@ccr/core";
+import { emptyMemory, type Memory, remember } from "./memory.ts";
 import type { Decision, Policy, PolicyFactory } from "./policy.ts";
 
 export const DEFAULT_MAX_DECISIONS = 300;
@@ -121,12 +122,11 @@ export async function playEpisode(
   const pipelined = isPipelined(options.latency);
   const records: DecisionRecord[] = [];
   const actions: Action[] = [];
-  let bestScore = 0;
-  let sinceProgress = 0;
+  let memory = emptyMemory();
   let stalled = false;
 
   while (game.alive && records.length < maxDecisions && !stalled) {
-    const decision = await decide(policy, game, options.observeWindow);
+    const decision = await decide(policy, game, options.observeWindow, memory);
     const tick = game.tick;
     const row = game.heroRow;
     // Pipelined: at least one tick must pass per decision, or time would never advance.
@@ -138,13 +138,8 @@ export async function playEpisode(
     });
     actions.push(decision.action);
     records.push(toRecord(records.length, tick, row, decision, outcome, waited));
-    if (game.score > bestScore) {
-      bestScore = game.score;
-      sinceProgress = 0;
-    } else {
-      sinceProgress++;
-      stalled = stallLimit > 0 && sinceProgress >= stallLimit;
-    }
+    memory = remember(memory, { action: decision.action, outcome }, game.score);
+    stalled = stallLimit > 0 && memory.sinceProgress >= stallLimit;
   }
 
   return {
@@ -163,8 +158,15 @@ export async function playEpisode(
   };
 }
 
-function decide(policy: Policy, game: Game, view?: ObserveWindow): Promise<Decision> {
-  return policy.kind === "oracle" ? policy.decide(game) : policy.decide(observe(game, view));
+function decide(
+  policy: Policy,
+  game: Game,
+  view: ObserveWindow | undefined,
+  memory: Memory,
+): Promise<Decision> {
+  return policy.kind === "oracle"
+    ? policy.decide(game)
+    : policy.decide(observe(game, view), memory);
 }
 
 function latencyTicks(latency: LatencyModel | undefined, decision: Decision): number {

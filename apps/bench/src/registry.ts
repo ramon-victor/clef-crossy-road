@@ -6,6 +6,8 @@ import {
   type PolicyFactory,
   parseClefPolicyId,
   randomPolicy,
+  ruleView,
+  ruleViewFx,
 } from "@ccr/agent";
 import type { ClefClient } from "@ccr/clef";
 
@@ -14,12 +16,14 @@ export const isClefPolicy = (id: string): boolean =>
 
 /**
  * Policy ids accepted on the command line:
- *   always-forward | random | lookahead | lookahead-<depth> | lookahead-comp:<ms>
+ *   always-forward | random | rule-view | rule-view-fx | lookahead | lookahead-<depth> | lookahead-comp:<ms>
  *   clef | clef:<model>:<encoder>:<strategy>[:<manual>]   e.g. clef:clef-flash:json:choice:full
  */
 export function parsePolicy(id: string, getClient: () => ClefClient): PolicyFactory {
   if (id === "always-forward") return alwaysForward;
   if (id === "random") return randomPolicy;
+  if (id === ruleView.id) return ruleView;
+  if (id === ruleViewFx.id) return ruleViewFx;
   if (id === "lookahead") return lookaheadPolicy();
   const depth = /^lookahead-(\d+)$/.exec(id);
   if (depth) return lookaheadPolicy(Number(depth[1]));

@@ -1,6 +1,6 @@
 import { alwaysForward, type EpisodeResult, playEpisode, randomPolicy } from "@ccr/agent";
 import { describe, expect, it } from "vitest";
-import { compare, renderReport, summarize, verdict } from "./report.ts";
+import { compare, perceptionOf, renderReport, summarize, verdict } from "./report.ts";
 
 function fixture(overrides: Partial<EpisodeResult> = {}): EpisodeResult {
   return {
@@ -65,6 +65,18 @@ describe("summarize", () => {
   });
 });
 
+describe("perceptionOf", () => {
+  it("says what each kind of policy gets to know, also under a latency suffix", () => {
+    expect(perceptionOf("clef:clef-flash:json:choice:full")).toBe("now");
+    expect(perceptionOf("clef:clef-flash:view:choice:full@latp350")).toBe("memory");
+    expect(perceptionOf("clef:clef-flash:view-fx:choice:full")).toBe("forecast");
+    expect(perceptionOf("clef:clef-flash:json-fx:choice:full")).toBe("forecast");
+    expect(perceptionOf("rule-view-fx")).toBe("forecast (scripted)");
+    expect(perceptionOf("lookahead-comp:300@lat300")).toBe("simulator");
+    expect(perceptionOf("always-forward")).toBe("none");
+  });
+});
+
 describe("compare and report", () => {
   it("pairs policies on the seeds both completed", () => {
     const byPolicy = new Map([
@@ -93,7 +105,7 @@ describe("compare and report", () => {
       episodes.push(await playEpisode(alwaysForward, seed), await playEpisode(randomPolicy, seed));
     }
     const text = renderReport("T", episodes, "always-forward");
-    expect(text).toContain("| `always-forward` | 80 |");
+    expect(text).toContain("| `always-forward` | none | 80 |");
     expect(text).toContain("## How episodes ended");
     expect(text).not.toContain("## Model calls"); // neither policy calls a model
     expect(text).toContain("Paired difference vs `always-forward`");

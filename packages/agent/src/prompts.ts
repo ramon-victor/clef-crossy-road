@@ -46,9 +46,22 @@ export const ACTION_CRITERIA: Readonly<Record<Action, string>> = {
 const RELATIVE_NOTE =
   "In this view every entity position is given as dcol (blocked_dcols for trees): the entity's column minus the chicken's own column, so dcol 0 is straight ahead of the chicken, and the chicken's centre is inside an entity when |dcol| < half_extent. player.col is still the chicken's absolute column.";
 
+const MEMORY_NOTE =
+  "It also lists the chicken's last moves, oldest first, with what each one did, the number of rows crossed so far, and how many moves have passed since the chicken last reached a new row.";
+
+const FORECAST_NOTE =
+  "It also shows where each moving object's centre will be 0.2 seconds from now, which is when a hop that starts now lands; objects keep moving at their own speed and the chicken is not drawn there.";
+
+/** How the `view` map is read. A legend of the drawing, nothing more. */
+const VIEW_NOTE =
+  "In this view the world is drawn as a text map around the chicken, which is @ in the row marked dz=0 (rows with larger dz are further ahead, so the top of the map is the furthest). Each cell is one column; the columns run from -5 to +5 relative to the chicken's own column, so the middle cell is straight ahead of it, and # is outside the world. Cells: . open ground or empty road, T tree, ~ water, L log, o lily pad, > vehicle moving to larger col, < vehicle moving to smaller col, X train or stopped vehicle, = rail. Next to each row with moving objects are their exact numbers: dcol is the object's centre minus the chicken's column and half is its half_extent, so the chicken's centre is inside an object when |dcol| < half.";
+
 const ENCODER_NOTES: Readonly<Partial<Record<EncoderId, string>>> = {
   image: IMAGE_LEGEND,
   "json-rel": RELATIVE_NOTE,
+  view: `${VIEW_NOTE} ${MEMORY_NOTE}`,
+  "view-fx": `${VIEW_NOTE} A second map shows the moving objects 0.2 seconds from now, which is when a hop that starts now lands; they keep moving at their own speed and the chicken is not drawn on it. ${MEMORY_NOTE}`,
+  "json-fx": `${RELATIVE_NOTE} ${FORECAST_NOTE} ${MEMORY_NOTE}`,
 };
 
 /** The manual, plus what the reader needs to know about how this encoder writes the world. */

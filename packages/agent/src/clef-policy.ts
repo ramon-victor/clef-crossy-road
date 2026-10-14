@@ -9,6 +9,7 @@ import {
 import { ACTIONS, type Action, type Observation } from "@ccr/core";
 import { ACTION_PREFERENCE } from "./baselines.ts";
 import { ENCODER_IDS, type EncoderId, encodeRequest } from "./encode.ts";
+import type { Memory } from "./memory.ts";
 import type { Decision, ObservationPolicy, PolicyFactory } from "./policy.ts";
 import {
   ACTION_CRITERIA,
@@ -123,8 +124,8 @@ export function clefPolicy(client: ClefClient, config: ClefPolicyConfig): Policy
   const policy: ObservationPolicy = {
     kind: "observation",
     id,
-    async decide(obs: Observation): Promise<Decision> {
-      const { state, images } = encodeRequest(config.encoder, obs);
+    async decide(obs: Observation, memory?: Memory): Promise<Decision> {
+      const { state, images } = encodeRequest(config.encoder, obs, memory);
       if (config.strategy === "choice") {
         const result = await client.run({
           model: config.model,

@@ -1,10 +1,33 @@
 import { DECISION_TICKS, Game } from "@ccr/core";
 import { describe, expect, it } from "vitest";
 import { alwaysForward, randomPolicy } from "./baselines.ts";
+import type { Memory } from "./memory.ts";
 import { constantPolicy } from "./policy.testing.ts";
+import type { PolicyFactory } from "./policy.ts";
 import { applyDecision, isPipelined, type LatencyModel, playEpisode } from "./runner.ts";
 
 const stay = constantPolicy("stay");
+
+/** The memory the runner gave the policy at each of its first `decisions` decisions. */
+async function remembered(factory: PolicyFactory, seed: number, decisions: number) {
+  const seen: Memory[] = [];
+  const spy: PolicyFactory = {
+    id: "spy",
+    create: (s) => {
+      const inner = factory.create(s);
+      return {
+        kind: "observation",
+        id: "spy",
+        decide: async (obs, memory) => {
+          if (memory) seen.push(memory);
+          return inner.kind === "observation" ? inner.decide(obs, memory) : { action: "stay" };
+        },
+      };
+    },
+  };
+  await playEpisode(spy, seed, { maxDecisions: decisions, stallLimit: 0 });
+  return seen;
+}
 
 describe("playEpisode", () => {
   it("replays exactly: same policy and seed give the same episode", async () => {
@@ -30,6 +53,24 @@ describe("playEpisode", () => {
     const result = await playEpisode(alwaysForward, 9, { stallLimit: 1 });
     expect(result.stalled).toBe(false);
     expect(result.score).toBeGreaterThan(0);
+  });
+
+  it("tells the policy what it remembers: its moves, what they did, the score", async () => {
+    const seen = await remembered(constantPolicy("hop_forward"), 3, 2);
+    expect(seen[0]).toEqual({ recent: [], score: 0, sinceProgress: 0 });
+    expect(seen[1]).toEqual({
+      recent: [{ action: "hop_forward", outcome: "hop" }],
+      score: 1,
+      sinceProgress: 0,
+    });
+  });
+
+  it("shows a policy that keeps bumping into a tree that its moves were blocked and that it is stuck", async () => {
+    // Seed 1 has a tree to the right of the start, so every hop_right is blocked.
+    const seen = await remembered(constantPolicy("hop_right"), 1, 4);
+    const last = seen[3];
+    expect(last?.recent.map((m) => m.outcome)).toEqual(["blocked", "blocked", "blocked"]);
+    expect(last).toMatchObject({ score: 0, sinceProgress: 3 });
   });
 });
 

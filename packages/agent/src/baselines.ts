@@ -78,16 +78,31 @@ export function lookaheadPolicy(
   };
 }
 
+/**
+ * What the search thinks each action is worth. A hop that a tree blocks is left out: it leaves the hero
+ * where `stay` does, so keeping it would only let ties waste decisions bumping into trees.
+ */
+export function actionValues(
+  game: Game,
+  depth = 4,
+  ticks = DECISION_TICKS,
+): Partial<Record<Action, number>> {
+  const values: Partial<Record<Action, number>> = {};
+  for (const action of ACTION_PREFERENCE) {
+    const next = game.clone();
+    if (next.step(action, ticks).outcome === "blocked") continue;
+    values[action] = searchValue(next, depth - 1, ticks);
+  }
+  return values;
+}
+
 function bestAction(game: Game, depth: number, ticks: number): Action {
+  const values = actionValues(game, depth, ticks);
   let best: Action = "stay"; // never blocked, so at least one candidate always survives the filter
   let bestValue = Number.NEGATIVE_INFINITY;
   for (const action of ACTION_PREFERENCE) {
-    const next = game.clone();
-    // A blocked hop leaves the hero in place, exactly like `stay`; skip it so ties do not waste
-    // decisions bumping into trees.
-    if (next.step(action, ticks).outcome === "blocked") continue;
-    const value = searchValue(next, depth - 1, ticks);
-    if (value > bestValue) {
+    const value = values[action];
+    if (value !== undefined && value > bestValue) {
       bestValue = value;
       best = action;
     }

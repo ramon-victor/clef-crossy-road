@@ -1,4 +1,10 @@
-export { ACTION_PREFERENCE, alwaysForward, lookaheadPolicy, randomPolicy } from "./baselines.ts";
+export {
+  ACTION_PREFERENCE,
+  actionValues,
+  alwaysForward,
+  lookaheadPolicy,
+  randomPolicy,
+} from "./baselines.ts";
 export {
   type ClefPolicyConfig,
   clefPolicy,
@@ -14,7 +20,15 @@ export {
   selectGoUnlessRisky,
 } from "./clef-policy.ts";
 export { type DecisionCost, decisionCost } from "./cost.ts";
-export { ENCODER_IDS, type EncoderId, encodeRequest, encodeState } from "./encode.ts";
+export {
+  ENCODER_IDS,
+  ENCODER_LEVEL,
+  type EncoderId,
+  encodeRequest,
+  encodeState,
+  type PerceptionLevel,
+} from "./encode.ts";
+export { columnAfter, HOP_SECONDS, worldAfter } from "./forecast.ts";
 export {
   IMAGE_COLS,
   IMAGE_LEGEND,
@@ -22,6 +36,13 @@ export {
   renderSceneImage,
   type SceneImage,
 } from "./image.ts";
+export {
+  emptyMemory,
+  MEMORY_MOVES,
+  type Memory,
+  type RememberedMove,
+  remember,
+} from "./memory.ts";
 export type {
   Decision,
   ObservationPolicy,
@@ -39,6 +60,7 @@ export {
   riskInstructions,
   riskQuestionId,
 } from "./prompts.ts";
+export { ruleView, ruleViewFx } from "./rule.ts";
 export {
   type ApplyOptions,
   applyDecision,

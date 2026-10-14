@@ -1,32 +1,75 @@
 import type { Observation, ObsMover, ObsRow } from "@ccr/core";
+import { columnAfter, HOP_SECONDS } from "./forecast.ts";
 import { renderSceneImage } from "./image.ts";
+import { emptyMemory, type Memory } from "./memory.ts";
+import { outcomeText, renderView } from "./view.ts";
 
-export const ENCODER_IDS = ["json", "grid", "image", "json-rel"] as const;
+export const ENCODER_IDS = [
+  "json",
+  "grid",
+  "image",
+  "json-rel",
+  "view",
+  "view-fx",
+  "json-fx",
+] as const;
 export type EncoderId = (typeof ENCODER_IDS)[number];
 
 /**
+ * What a condition lets the model know, from least to most (ADR-0009). Every report shows it next to
+ * the policy, so a result is never read without it.
+ * - now:      the facts at the instant of the decision, in whatever format.
+ * - memory:   plus what the player remembers of its last moves.
+ * - forecast: plus where the moving objects will be when the next hop lands.
+ */
+export type PerceptionLevel = "now" | "memory" | "forecast";
+
+export const ENCODER_LEVEL: Readonly<Record<EncoderId, PerceptionLevel>> = {
+  json: "now",
+  grid: "now",
+  image: "now",
+  "json-rel": "now",
+  view: "memory",
+  "view-fx": "forecast",
+  "json-fx": "forecast",
+};
+
+/**
  * Encoders turn an `Observation` into the `state` sent to the model. They are pure functions of
- * the observation and add no information; changing the encoder is an ablation, not a new rule.
+ * the observation (and, for the memory levels, of what the player remembers); changing the encoder
+ * is an ablation, not a new rule. The first four ignore the memory, so their requests never change.
  *
  * - `json` (E0): the observation as is (rows are an array, because the service sorts object keys).
  * - `grid` (E1): a spatial text picture of the same facts, plus the exact numbers per row.
  * - `image` (E2): a top-down PNG of the same facts (see image.ts).
  * - `json-rel` (E3): the same JSON with every column measured from the chicken's own column.
+ * - `view` (E4): the whole screen as a text map around the chicken, plus the memory (view.ts).
+ * - `view-fx` (E5): `view` plus a second map of the moving objects as they will be in 0.2 s.
+ * - `json-fx` (E6): `json-rel` plus each object's column in 0.2 s and the memory as fields.
  */
-export function encodeState(encoder: EncoderId, obs: Observation): unknown {
-  return encodeRequest(encoder, obs).state;
+export function encodeState(encoder: EncoderId, obs: Observation, memory?: Memory): unknown {
+  return encodeRequest(encoder, obs, memory).state;
 }
 
 /** What goes into the request for this encoder: the `state`, plus images for `image`. */
 export function encodeRequest(
   encoder: EncoderId,
   obs: Observation,
+  memory?: Memory,
 ): { state: unknown; images?: string[] } {
   switch (encoder) {
     case "json":
       return { state: obs };
     case "json-rel":
       return { state: relativeState(obs) };
+    case "json-fx":
+      return {
+        state: relativeState(obs, { horizon: HOP_SECONDS, memory: memory ?? emptyMemory() }),
+      };
+    case "view":
+      return { state: renderView(obs, memory, { forecast: false }) };
+    case "view-fx":
+      return { state: renderView(obs, memory, { forecast: true }) };
     case "grid":
       return { state: renderGrid(obs) };
     case "image":
@@ -48,16 +91,35 @@ const offset = (column: number, origin: number): number => {
  * chicken's column. A change of origin only; it adds nothing derived from the actions (ADR-0005).
  * `player.col` stays absolute because the world edge is defined on it.
  */
-function relativeState(obs: Observation): unknown {
+function relativeState(
+  obs: Observation,
+  { horizon, memory }: { horizon?: number; memory?: Memory } = {},
+): unknown {
   const origin = obs.player.col;
-  return { player: obs.player, rows: obs.rows.map((row) => relativeRow(row, origin)) };
+  const rows = obs.rows.map((row) => relativeRow(row, origin, horizon));
+  return memory
+    ? { player: obs.player, memory: memoryState(memory), rows }
+    : { player: obs.player, rows };
 }
 
-function relativeRow(row: ObsRow, origin: number): unknown {
-  const shift = <T extends ObsMover>({ col, ...rest }: T) => ({
-    dcol: offset(col, origin),
-    ...rest,
-  });
+/** The memory as JSON fields, in the same words as the text view. */
+function memoryState(memory: Memory) {
+  return {
+    last_moves: memory.recent.map((m) => ({ action: m.action, result: outcomeText(m.outcome) })),
+    rows_crossed: memory.score,
+    moves_since_new_row: memory.sinceProgress,
+  };
+}
+
+function relativeRow(row: ObsRow, origin: number, horizon?: number): unknown {
+  const shift = <T extends ObsMover>(mover: T) => {
+    const { col, ...rest } = mover;
+    return {
+      dcol: offset(col, origin),
+      ...(horizon === undefined ? {} : { dcol_after: offset(columnAfter(mover, horizon), origin) }),
+      ...rest,
+    };
+  };
   switch (row.kind) {
     case "grass": {
       const { blocked_cols, ...rest } = row;

@@ -29,6 +29,8 @@ describe("parsePolicy", () => {
       "lookahead",
       "lookahead-2",
       "lookahead-comp:300",
+      "rule-view",
+      "rule-view-fx",
     ]) {
       expect(parsePolicy(id, noClient).id).toBe(id);
     }

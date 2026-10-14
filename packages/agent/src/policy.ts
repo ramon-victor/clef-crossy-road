@@ -1,4 +1,5 @@
 import type { Action, Game, Observation } from "@ccr/core";
+import type { Memory } from "./memory.ts";
 
 export interface Decision {
   action: Action;
@@ -15,13 +16,14 @@ export interface Decision {
 }
 
 /**
- * Sees only the `Observation` (ADR-0005). The type is the guard: a policy of this kind cannot get
- * hold of the simulator, so it cannot peek at information the fairness rule excludes.
+ * Sees only the `Observation` and what the player remembers (ADR-0005, ADR-0009). The type is the
+ * guard: a policy of this kind cannot get hold of the simulator, so it cannot peek at information the
+ * fairness rule excludes.
  */
 export interface ObservationPolicy {
   readonly kind: "observation";
   readonly id: string;
-  decide(obs: Observation): Promise<Decision>;
+  decide(obs: Observation, memory?: Memory): Promise<Decision>;
 }
 
 /** Gets the simulator itself. Reference baselines only; never a model. */

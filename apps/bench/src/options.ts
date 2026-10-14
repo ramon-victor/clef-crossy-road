@@ -8,10 +8,11 @@ export const USAGE = `Usage:
   pnpm bench diagnose --run <name>[,<name>...]            (does P(hop_forward) predict safety? reads files, no API call)
   pnpm bench export   --run <name>[,<name>...] [--policy <id>] [--min-score n]   (RL trajectories as NDJSON, no API call)
 
-Policies: always-forward, random, lookahead, lookahead-<depth>,
+Policies: always-forward, random, lookahead, lookahead-<depth>, rule-view, rule-view-fx (scripted players
+          that read the same view as the view / view-fx encoders: references, not models),
           clef   (the app's Clef: clef-flash, json, choice, full manual),
           clef:<model>:<encoder>:<strategy>[:<manual>]   (model: clef-flash|clef|clef-omni,
-          encoder: json|json-rel|grid|image, strategy: choice|critic|critic-go, manual: full|minimal)
+          encoder: json|json-rel|grid|image|view|view-fx|json-fx, strategy: choice|critic|critic-go, manual: full|minimal)
 
 run options:
   --concurrency <n>      parallel episodes (default 1 for baselines, 4 when a Clef policy is used)
