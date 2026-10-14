@@ -60,10 +60,125 @@ function webglRenderer(): string {
   return ext ? String(gl.getParameter(ext.UNMASKED_RENDERER_WEBGL)) : "unknown";
 }
 
+type Report = Record<string, unknown>;
+
+/** Plays the free look-ahead, measures the frame rate and checks that the scene really rendered. */
+async function checkRendering(ctx: Context): Promise<Report> {
+  ctx.select("lookahead");
+  ctx.session.setSpeed(1);
+  ctx.session.start(1);
+  await sleep(1500); // let the first rows and models settle
+
+  const fps = await measureFps(5);
+  const canvas = document.querySelector("canvas.game") as HTMLCanvasElement | null;
+  const colours = await distinctColours(ctx.view.captureDataUrl(256, 256));
+  const state = ctx.session.state();
+  return {
+    window: {
+      inner: [window.innerWidth, window.innerHeight],
+      canvas: canvas ? [canvas.width, canvas.height] : null,
+      devicePixelRatio: window.devicePixelRatio,
+    },
+    webgl: { renderer: webglRenderer(), stats: ctx.view.stats() },
+    fps,
+    render: { distinctColours: colours, rendered: colours > 12 },
+    game: {
+      seed: state.seed,
+      score: state.score,
+      decisions: state.decisions,
+      alive: state.alive,
+      policy: state.policyId,
+    },
+  };
+}
+
+/** The budget view, and, only when the day's budget is spent, that the Rust side refuses a call. */
+async function checkBudget(ctx: Context): Promise<Report> {
+  const budget = await ctx.bridge.budget();
+  let refusal: Report = { ok: true, skipped: "budget not exhausted, so no call was attempted" };
+  if (budget.spent >= budget.limit) {
+    try {
+      await ctx.bridge.run("clef-flash", { model: "clef-flash", state: {}, questions: {} });
+      refusal = { ok: false, note: "the call was NOT refused" };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      refusal = { ok: isBudgetRefusal(message), message };
+    }
+  }
+  return {
+    budget,
+    refusal,
+    cacheMiss: await ctx.bridge.cacheGet("selftest-key-that-does-not-exist"),
+  };
+}
+
 /**
- * Only runs in the desktop app when launched with CCR_SELFTEST=1: plays the free look-ahead for a
- * few seconds, measures the frame rate, checks that the scene really rendered and that the Rust
- * side refuses an over-budget call, writes runs/selftest.json and exits.
+ * The whole Clef pipeline through the native side WITHOUT spending: seed 1 was already played with
+ * this exact policy by the benchmark, so every decision should come from the cache.
+ */
+async function checkClefFromCache(ctx: Context): Promise<Report> {
+  ctx.select("clef-flash-json");
+  ctx.session.setSpeed(4);
+  ctx.session.start(1);
+  const started = performance.now();
+  while (performance.now() - started < 12_000) {
+    const s = ctx.session.state();
+    if (s.decisions >= 3 || s.phase === "error" || !s.alive) break;
+    await sleep(100);
+  }
+  const clef = ctx.session.state();
+  return {
+    clef: {
+      policy: clef.policyId,
+      decisions: clef.decisions,
+      cacheHits: clef.cacheHits,
+      neurons: clef.neurons,
+      phase: clef.phase,
+      error: clef.error,
+      lastAction: clef.last?.action ?? null,
+      probabilities: clef.last?.decision.probabilities ?? null,
+      confidence: clef.last?.decision.confidence ?? null,
+      allFromCache: clef.decisions > 0 && clef.cacheHits === clef.decisions && clef.neurons === 0,
+    },
+    budgetAfter: await ctx.bridge.budget(),
+  };
+}
+
+/**
+ * Human mode through the real keyboard handler of the window. The key events are synthetic, but they
+ * reach the same `keydown` listener a physical key would.
+ */
+async function checkHumanKeys(ctx: Context): Promise<Report> {
+  ctx.select("human");
+  ctx.session.setSpeed(1);
+  ctx.session.start(1);
+  await sleep(200);
+  const before = { row: ctx.session.game.heroRow, x: ctx.session.game.heroX };
+  const keys = ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowLeft"];
+  for (const key of keys) {
+    window.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true }));
+    await sleep(320);
+  }
+  const human = ctx.session.state();
+  return {
+    human: {
+      keysSent: keys.length,
+      decisions: human.decisions,
+      moved:
+        ctx.session.game.heroRow !== before.row ||
+        ctx.session.game.heroX !== before.x ||
+        human.invalidMoves > 0,
+      invalidMoves: human.invalidMoves,
+      score: human.score,
+      alive: human.alive,
+      handledAllKeys: human.decisions === keys.length,
+    },
+  };
+}
+
+/**
+ * Only runs in the desktop app when launched with CCR_SELFTEST=1: checks rendering, the budget,
+ * the cached Clef pipeline and the keyboard, writes runs/selftest.json and exits.
  */
 export async function runSelfTest(ctx: Context): Promise<void> {
   if (!isTauri()) return;
@@ -75,105 +190,14 @@ export async function runSelfTest(ctx: Context): Promise<void> {
   }
   if (!enabled) return;
 
-  const report: Record<string, unknown> = { startedAt: new Date().toISOString() };
+  const report: Report = { startedAt: new Date().toISOString() };
   try {
-    ctx.select("lookahead");
-    ctx.session.setSpeed(1);
-    ctx.session.start(1);
-    await sleep(1500); // let the first rows and models settle
-
-    const fps = await measureFps(5);
-    const canvas = document.querySelector("canvas.game") as HTMLCanvasElement | null;
-    const colours = await distinctColours(ctx.view.captureDataUrl(256, 256));
-    const state = ctx.session.state();
-
-    report.window = {
-      inner: [window.innerWidth, window.innerHeight],
-      canvas: canvas ? [canvas.width, canvas.height] : null,
-      devicePixelRatio: window.devicePixelRatio,
-    };
-    report.webgl = { renderer: webglRenderer(), stats: ctx.view.stats() };
-    report.fps = fps;
-    report.render = { distinctColours: colours, rendered: colours > 12 };
-    report.game = {
-      seed: state.seed,
-      score: state.score,
-      decisions: state.decisions,
-      alive: state.alive,
-      policy: state.policyId,
-    };
-
-    // Budget IPC and the Rust-side refusal.
-    const budget = await ctx.bridge.budget();
-    report.budget = budget;
-    if (budget.spent >= budget.limit) {
-      try {
-        await ctx.bridge.run("clef-flash", { model: "clef-flash", state: {}, questions: {} });
-        report.refusal = { ok: false, note: "the call was NOT refused" };
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        report.refusal = { ok: isBudgetRefusal(message), message };
-      }
-    } else {
-      report.refusal = { ok: true, skipped: "budget not exhausted, so no call was attempted" };
+    for (const check of [checkRendering, checkBudget, checkClefFromCache, checkHumanKeys]) {
+      Object.assign(report, await check(ctx));
     }
-    report.cacheMiss = await ctx.bridge.cacheGet("selftest-key-that-does-not-exist");
-
-    // The whole Clef pipeline through the native side WITHOUT spending: seed 1 was already played
-    // with this exact policy by the benchmark, so every decision should come from the cache.
-    ctx.select("clef-flash-json");
-    ctx.session.setSpeed(4);
-    ctx.session.start(1);
-    const clefStart = performance.now();
-    while (performance.now() - clefStart < 12_000) {
-      const s = ctx.session.state();
-      if (s.decisions >= 3 || s.phase === "error" || !s.alive) break;
-      await sleep(100);
-    }
-    const clef = ctx.session.state();
-    report.clef = {
-      policy: clef.policyId,
-      decisions: clef.decisions,
-      cacheHits: clef.cacheHits,
-      neurons: clef.neurons,
-      phase: clef.phase,
-      error: clef.error,
-      lastAction: clef.last?.action ?? null,
-      probabilities: clef.last?.decision.probabilities ?? null,
-      confidence: clef.last?.decision.confidence ?? null,
-      allFromCache: clef.decisions > 0 && clef.cacheHits === clef.decisions && clef.neurons === 0,
-    };
-    report.budgetAfter = await ctx.bridge.budget();
-
-    // Human mode through the real keyboard handler of the window (synthetic key events: they reach
-    // the same `keydown` listener a physical key would).
-    ctx.select("human");
-    ctx.session.setSpeed(1);
-    ctx.session.start(1);
-    await sleep(200);
-    const before = { row: ctx.session.game.heroRow, x: ctx.session.game.heroX };
-    const keys = ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowLeft"];
-    for (const key of keys) {
-      window.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true }));
-      await sleep(320);
-    }
-    const human = ctx.session.state();
-    report.human = {
-      keysSent: keys.length,
-      decisions: human.decisions,
-      moved:
-        ctx.session.game.heroRow !== before.row ||
-        ctx.session.game.heroX !== before.x ||
-        human.invalidMoves > 0,
-      invalidMoves: human.invalidMoves,
-      score: human.score,
-      alive: human.alive,
-      handledAllKeys: human.decisions === keys.length,
-    };
   } catch (error) {
     report.error = error instanceof Error ? error.message : String(error);
   }
-
   report.finishedAt = new Date().toISOString();
   await invoke("report_selftest", { report });
 }

@@ -14,7 +14,7 @@ flowchart LR
   AGENT --> CLEF["@ccr/clef: cliente + orçamento + cache"]
   CLEF -- "Transport Node (.env)" --> REST[("Workers AI REST")]
   CLEF -- "ponte: invoke" --> RUST["Rust: clef_run + ledger"] --> REST
-  AGENT --> BENCH["apps/bench (CLI: run, report, plan)"]
+  AGENT --> BENCH["apps/bench (CLI: run, report, plan, diagnose, export)"]
   AGENT --> DESK["apps/desktop (Tauri + Preact)"]
   RENDER --> DESK
 ```
@@ -24,11 +24,11 @@ flowchart LR
 | Pacote | Responsabilidade | Importa |
 |---|---|---|
 | `@ccr/core` | Regras, geração de mapa, passo de simulação, snapshot, observação (zero dependências) | nada |
-| `@ccr/clef` | Cliente do Workers AI: schema, retry, cache, **orçamento**, métricas, `Transport` | nada nosso |
-| `@ccr/agent` | `Policy`, baselines, encoders (`json`, `grid`, `image`), prompts, `ClefPolicy`, runner com latência injetada | `core`, `clef` |
+| `@ccr/clef` | Cliente do Workers AI: schema, retry, cache, **orçamento**, métricas, `Transport`; em `@ccr/clef/node`, o ledger e o cache em arquivo (NDJSON) | nada nosso |
+| `@ccr/agent` | `Policy`, baselines, encoders (`json`, `grid`, `image`), prompts, `ClefPolicy`, runner com latência injetada (`applyDecision`, usado também para reproduzir partidas gravadas), custo por decisão (`decisionCost`) | `core`, `clef` |
 | `@ccr/render` | Cena Three.js a partir de um `Snapshot` somente leitura | `core` |
-| `apps/bench` | CLI: `run`, `report`, `plan` (N seeds × políticas, NDJSON retomável, IC por bootstrap pareado) | `core`, `agent`, `clef` |
-| `apps/desktop` | Tauri v2: janela, painel Preact, `Session`, comandos Rust | `core`, `agent`, `clef`, `render` |
+| `apps/bench` | CLI: `run`, `report`, `plan`, `diagnose`, `export` (N seeds × políticas, NDJSON retomável, IC por bootstrap pareado). `cli.ts` só despacha; opções, comandos, latência e arquivos têm módulo próprio | `core`, `agent`, `clef` |
+| `apps/desktop` | Tauri v2: janela, painel Preact (um componente por cartão), `Session`, comandos Rust (um módulo por assunto) | `core`, `agent`, `clef`, `render` |
 
 As regras de dependência são impostas pelo layout estrito do `node_modules` do pnpm ([ADR-0003](adr/0003-typescript-pnpm-monorepo.md)). O core
 tem uma camada a mais: o `tsconfig` dele não carrega tipos de DOM nem de Node e um teste de pureza varre o código.

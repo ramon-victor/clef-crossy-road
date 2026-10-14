@@ -3,7 +3,7 @@ import type { ClefModel } from "./models.ts";
 /**
  * Short, stable tag for a Cloudflare account (FNV-1a 64-bit of the account id, in hex). The free
  * allocation is per account, so the ledger is kept per account without writing ids into files.
- * Rust computes the same tag (src-tauri/src/lib.rs); both are tested against the same vectors.
+ * Rust computes the same tag (src-tauri/src/ledger.rs); both are tested against the same vectors.
  */
 export function accountTag(accountId: string): string {
   let hash = 0xcbf29ce484222325n;

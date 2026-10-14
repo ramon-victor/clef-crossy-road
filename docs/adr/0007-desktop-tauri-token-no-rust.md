@@ -20,7 +20,7 @@ Retry, schema, cache e métricas ficam em TS, uma vez.
 
 ## Atualização (2026-10-14, implementação da Fase 3)
 
-- O Rust (`src-tauri/src/lib.rs`) tem cinco comandos: `clef_run`, `cache_get`, `cache_put`, `budget_status` e, só para o autoteste, `selftest_enabled`/`report_selftest`.
+- O Rust (`src-tauri/src`) tem sete comandos: `clef_run`, `cache_get`, `cache_put` e `budget_status` (em `commands.rs`) e, em `launch.rs`, `launch_options` e, só para o autoteste, `selftest_enabled`/`report_selftest`. Todos são registrados em `lib.rs`.
   `clef_run` também **aplica o teto diário** (constante) e **grava o ledger**, para que a interface não consiga gastar além do free tier ([ADR-0008](0008-orcamento-diario-no-free-tier.md)).
 - Para desenvolver e testar a interface num navegador comum, existe uma **ponte só de desenvolvimento** (`dev-bridge.ts`, plugin do Vite com
   `apply: "serve"`). Ela é o mesmo contrato do Rust, escuta apenas em `localhost`, recusa outras origens e aplica o mesmo teto. Não entra no build.

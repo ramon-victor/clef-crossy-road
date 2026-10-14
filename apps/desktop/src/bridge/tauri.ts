@@ -1,7 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import type { Bridge, BudgetStatus } from "./types.ts";
 
-/** Rust commands in src-tauri/src/lib.rs. */
+/** Rust commands in src-tauri/src/commands.rs. */
 export const tauriBridge: Bridge = {
   kind: "tauri",
   run: (model, body) => invoke("clef_run", { model, body }),

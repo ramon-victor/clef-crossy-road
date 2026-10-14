@@ -15,7 +15,7 @@
 | Rust | 1.99; `reqwest` 0.12 (TLS nativo), `dotenvy` | Chamada HTTP e orçamento fora do webview. `reqwest` 0.12 evita dependências extras de TLS no Windows | `reqwest` 0.13 (TLS por padrão exige mais ferramentas) |
 | Cliente Clef | `fetch` + zod 4, interfaces `Transport`, `DecisionCache`, `SpendBudget` | Mesmo código no Node e na interface | SDK de terceiros |
 | Persistência | NDJSON + cache por hash + ledger de neurons | Reprodutível, auditável, sem banco | SQLite, D1 |
-| Testes | Vitest 5 (TS) e `cargo test` (Rust) | Rápido; 186 testes TS e 9 Rust | Jest |
+| Testes | Vitest 5 (TS) e `cargo test` (Rust) | Rápido; 307 testes TS e 20 Rust, sem timers reais nos testes do app | Jest |
 | Lint/format | Biome 2.5 (`preset: "recommended"`) | Uma ferramenta. Atenção: o `biome migrate` troca `recommended: true` por `preset: "none"`, o que desliga o lint | ESLint + Prettier |
 | Assets | `scripts/fetch-assets.mjs` | Baixa os modelos do Evan numa revisão fixa; não redistribuímos | Commitar os assets |
 

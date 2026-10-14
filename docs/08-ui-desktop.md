@@ -44,10 +44,16 @@ são os do Expo-Crossy-Road, baixados localmente por `node scripts/fetch-assets.
 apps/desktop/
 ├─ src/                      # Preact + @ccr/render; Session (lógica sem UI, testada)
 │  ├─ session.ts             # humano/IA, step/real-time, pausa, velocidade, cancelamento de respostas em voo
+│  ├─ episode-stats.ts       # latência, tokens, neurons e acertos de cache de uma partida
+│  ├─ keymap.ts, seed.ts, launch.ts  # teclas, validação de seeds e opções de abertura: funções puras, testadas
+│  ├─ policies.ts            # a lista de jogadores e as seeds que já estão no cache
+│  ├─ Panel.tsx, panel/      # o painel: um componente por cartão (jogador, controles, decisão, estatísticas, orçamento)
 │  ├─ bridge/                # tauri.ts (IPC), http.ts (só dev no navegador), clef.ts (Transport/Cache/Budget)
 │  └─ selftest.ts            # com CCR_SELFTEST=1: mede FPS, confere pixels e a recusa de orçamento, e sai
 ├─ dev-bridge.ts             # plugin do Vite, só em `vite serve`: mesmos 4 comandos, mesmas regras
-└─ src-tauri/src/lib.rs      # comandos Rust: clef_run, cache_get, cache_put, budget_status, selftest_*
+└─ src-tauri/src/            # lib.rs (estado e registro), commands.rs (clef_run, cache_*, budget_status),
+                             # ledger.rs (orçamento por conta), files.rs, cache.rs, clock.rs, credentials.rs,
+                             # error.rs (um só tipo de erro), launch.rs (opções de abertura e autoteste)
 ```
 
 O webview **nunca** tem o token: ele chama `clef_run`, e o Rust injeta as credenciais, aplica o teto do dia (constante) e grava o ledger.
@@ -66,7 +72,7 @@ O Rust só aceita `clef`, `clef-flash` e `clef-omni`, sem URL arbitrária.
 | Executável de release | `tauri build --no-bundle`: **8,4 MB**, compilado em 2m55s |
 | Teclado no executável de release | Autoteste do `.exe` de produção: 4 de 4 teclas tratadas pelo modo humano (eventos sintéticos que chegam ao mesmo `keydown`), a galinha se moveu e o placar subiu; o Clef rodou pelo cache com 0 neurons; 180 fps; 1.056 cores no quadro |
 | Modo Clef por atalho | Verificado com uma captura só da janela (`PrintWindow`): Clef-flash JSON, seed 1, etiqueta "cached", probabilidades reais e `confidence` 0,06, e o cartão "Drowned · 2 rows" |
-| Testes | 16 testes do app (`Session`, sementes gratuitas) e 9 testes Rust (datas UTC, taxas de neurons, ledger por conta, linha parcial, seeds) |
+| Testes | 45 testes do app (`Session`, teclas, seeds, estatísticas, políticas) e 20 testes Rust (datas UTC, taxas de neurons, ledger por conta, linha parcial, cache, erro, seeds) |
 
 Não verifiquei: teclas físicas do teclado (só eventos sintéticos no mesmo `keydown`), o instalador (`tauri build` com bundle NSIS) e o app com uma
 chamada de rede ao vivo em tempo real (as decisões do Clef na janela vieram do cache; o pipeline de rede é o mesmo do benchmark, já exercitado com a API).

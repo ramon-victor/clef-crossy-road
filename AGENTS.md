@@ -17,7 +17,7 @@ Language: code, identifiers, commits and this file in English. `docs/` is in Bra
 
 ## Status
 
-Phases 0-4 are built (186 TS tests + 9 Rust tests). **The gate was NOT passed, in 8 conditions**: Clef-flash (JSON, grid,
+Phases 0-4 are built (307 TS tests + 20 Rust tests). **The gate was NOT passed, in 8 conditions**: Clef-flash (JSON, grid,
 critic-go, minimal manual) plays like "always forward" (~3.7 rows), image input is significantly worse, and Clef 27B chose
 "forward" every time (`docs/07-experimentos.md`). Diagnosis: 72-85% of hops into water are fatal and the model's probability
 carries no information about which ones survive (AUC 0.5-0.6 inside water). Only `clef-omni` is untested.

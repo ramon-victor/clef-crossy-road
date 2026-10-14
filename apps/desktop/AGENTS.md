@@ -4,8 +4,10 @@ Applies to everything under `apps/desktop`. The root `AGENTS.md` still applies. 
 
 ## What this app is
 
-A Tauri v2 window (WebView2) running a Vite + Preact UI and a Three.js scene (`@ccr/render`). Rust (`src-tauri/src/lib.rs`) holds
-the Cloudflare credentials and exposes a handful of commands. The UI watches Clef (or the free references) play, or lets a person play.
+A Tauri v2 window (WebView2) running a Vite + Preact UI and a Three.js scene (`@ccr/render`). Rust (`src-tauri/src`) holds
+the Cloudflare credentials and exposes a handful of commands: `commands.rs` (the API call, the cache, the budget), `ledger.rs`
+(what is spent, per account) and `launch.rs` (launch options, self-test). The UI watches Clef (or the free references) play, or
+lets a person play.
 
 ## Hard rules
 
@@ -22,7 +24,7 @@ the Cloudflare credentials and exposes a handful of commands. The UI watches Cle
 
 ## Commands
 
-- `pnpm --filter @ccr/desktop test` (Session logic, no DOM) and `typecheck`.
+- `pnpm --filter @ccr/desktop test` (Session, key map, seeds, policies; no DOM and no real timers) and `typecheck`.
 - `pnpm --filter @ccr/desktop tauri dev`; add `CCR_SELFTEST=1` for the scripted check that writes `runs/selftest.json`.
 - `cargo test --lib` in `src-tauri` (PATH needs `%USERPROFILE%\.cargo\bin`).
 - To look at the window without grabbing the whole screen, capture it with `PrintWindow` on the app's window handle (a plain
