@@ -1,6 +1,6 @@
 # 07 · Experimentos e benchmark
 
-> **Status:** gate da Fase 2 avaliado (reprovado com os prompts testados) · **Verificado em:** 2026-10-14 · **Código:** `apps/bench`, `packages/agent`
+> **Status:** gate da Fase 2 avaliado (reprovado com os prompts testados) · **Verificado em:** 2026-10-15 · **Código:** `apps/bench`, `packages/agent`
 
 ## Princípios
 
@@ -19,9 +19,9 @@ pnpm bench report --run <nome>[,<nome>...] --ref always-forward
 ```
 
 Políticas: `always-forward`, `random`, `lookahead`, `lookahead-comp:<ms>` e `clef:<modelo>:<encoder>:<estratégia>[:<manual>]`
-(modelo `clef-flash|clef|clef-omni`; encoder `json|json-rel|grid|image|view|view-fx|json-fx`; estratégia `choice|critic|critic-go`). O id curto `clef` é o Clef padrão do app
+(modelo `clef-flash|clef|clef-omni`; encoder `json|json-rel|grid|image|view|view-fx|json-fx`; estratégia `choice|critic|critic-go|maneuver`; estilo `full|minimal|routing|rules`; as duas últimas opções só com o encoder `lanes`). O id curto `clef` é o Clef padrão do app
 (`clef:clef-flash:json-fx:choice:full`); os relatórios gravam sempre o id por extenso e mostram o **nível de percepção** (`now`, `memory`, `forecast`) de cada condição.
-`rule-view` e `rule-view-fx` são jogadores roteirizados de referência. `pnpm bench probe-sample`, `probe-run` e `probe-report` medem escolhas em estados rotulados.
+`rule-view`, `rule-view-fx`, `rule-lanes`, `exec-cross` e `exec-rules` são jogadores roteirizados de referência (nunca modelos). `pnpm bench probe-sample`, `probe-run` e `probe-report` medem escolhas em estados rotulados.
 Resultados em `runs/<nome>/episodes.ndjson` (retomável) e `reports/`. As ações de cada partida ficam gravadas: qualquer partida se reproduz exatamente.
 
 ## Regras do benchmark
@@ -185,6 +185,27 @@ Nas 220 decisões escolheu `stay` 143 vezes, `hop_left` 67 e `hop_forward` 10; n
 **Leitura.** O texto das opções **muda tudo o que o modelo escolhe** (de "82 de 90 para frente" para "16 de 90") e quase nada do **quanto ele olha para o estado**: a AUC fica em 0,56 a 0,63 em qualquer redação. Com as opções antigas o modelo ia reto;
 com as novas ele se **protege** (a escolha fatal na água mortal cai de 96% para 13–33%), mas também deixa de avançar quando dá (água aberta: 33–42% de boa jogada), espera, anda de lado e bate em árvore. A decisão é puxada pelo **significado das palavras das opções**, não pela coluna da plataforma. Isso explica por que nenhuma vista ajudou.
 A regra de parada da sonda (melhoria na água de ≥ 25 pontos com IC sem zero) também não foi atendida (Δ +11 e +19, ICs com zero), e a partida completa confirmou. Custo: 944 neurons na sonda e 1.062 nas partidas, **2.006 na conta `f173…`** (a `df5a…` não gastou nada no dia 2026-10-15 UTC).
+
+### O que os 13 jogos do Jev sugerem: palavras, regras e executor (2026-10-15)
+
+Depois de ler os 13 repositórios ([11](11-licoes-dos-jogos-do-jev.md), [ADR-0010](adr/0010-palavras-regras-e-executor-de-manobras.md)) a vista e as opções foram reescritas
+em três níveis novos: `lanes` (o código compara, o modelo recebe a palavra do que ocupa cada casa), `rules` (as opções citam os campos e as palavras) e `maneuver` (o modelo escolhe a manobra, o código escolhe o instante).
+**Primeiro, de graça: a informação basta?** Cem seeds, sem rede, os mesmos mapas de `always-forward`:
+
+| Política | O que lê | Ruas [IC 95%] | Δ vs `always-forward` [IC 95%] | Mortes (água / carro / borda) | Estagnou |
+|---|---|---|---|---|---|
+| `always-forward` | nada | 3,78 [3,39, 4,24] | — | 97% / 3% / 0% | 0% |
+| `rule-view-fx` | o mapa agora + 0,2 s (roteirizado) | 18,63 [15,43, 22,04] | +14,85 [11,65, 18,20] | 0% / 51% / 17% | 32% |
+| `rule-lanes` | só as **palavras** de `lanes` (roteirizado, um salto por decisão) | **19,44** [16,02, 23,12] | +15,66 [12,23, 19,29] | 8% / 20% / 17% | 55% |
+| `exec-cross` | palavras, sempre "atravessar" com o executor | 6,08 [4,95, 7,31] | +2,30 [1,17, 3,53] | 0% / 40% / 8% | 46% |
+| `exec-rules` | palavras + escolha roteirizada das manobras + executor | 15,92 [13,15, 18,92] | +12,14 [9,37, 15,14] | 0% / 47% / 12% | 38% |
+
+- As **palavras bastam**: um leitor que só vê o vocabulário de `lanes` joga tão bem quanto o que lia o mapa e as velocidades (19,4 contra 18,6 ruas). A concordância da palavra de cada casa com o simulador (a casa onde um salto pousa é pisável ou não) foi de mais de 97% em água, grama e estrada, nas 150 seeds jogadas; no trilho a palavra é conservadora de propósito (`train_coming` com a luz acesa; o simulador deixa atravessar se o trem ainda não chegou).
+- O **executor sozinho** (`exec-cross`) vale +2,3 ruas: sem escolher o caminho, ele atravessa estrada, trilho e água quando abre, mas fica parado diante de árvore e de água sem plataforma. É o piso contra o qual o Clef com executor será comparado.
+- O teto com o executor é `exec-rules` (15,9). Ele não passa do leitor por salto: o executor serve para tirar chamadas e suportar atraso, não para jogar melhor. `stallLimit` e `maxDecisions` contam também os passos de espera.
+- Os tokens por decisão de `lanes`+`rules` ficam em ~1.260 (estimativa pelo tamanho do pedido, 4.051 caracteres contra os 4.579 do `json-fx` que deram 1.425 tokens): o manual e as opções pesam mais que o estado.
+
+Nada disto toca a API. As sondas e as partidas do Clef com estas vistas vêm depois, cada uma só depois de `bench plan`.
 
 ## Atraso: a pergunta do modo tempo real
 

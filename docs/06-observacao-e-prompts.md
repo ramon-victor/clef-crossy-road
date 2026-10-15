@@ -1,6 +1,6 @@
 # 06 · Observação e prompts
 
-> **Status:** rascunho; guiado pela sonda de 2026-10-14 · **Verificado em:** 2026-10-14 · **ADR:** [0005](adr/0005-regra-de-justica-da-observacao.md)
+> **Status:** rascunho; guiado pela sonda de 2026-10-14 · **Verificado em:** 2026-10-15 · **ADRs:** [0005](adr/0005-regra-de-justica-da-observacao.md), [0009](adr/0009-percepcao-memoria-e-julgamento.md), [0010](adr/0010-palavras-regras-e-executor-de-manobras.md)
 
 ## Regra de justiça
 
@@ -20,6 +20,8 @@ no core e entra na métrica de movimentos inválidos. Um teste congela as chaves
 Mudar a **representação** (JSON → grade → imagem → JSON com colunas relativas) é permitido, mas aparece no relatório como condição própria.
 
 **Além da `Observation`** (a [ADR-0009](adr/0009-percepcao-memoria-e-julgamento.md)): o modelo também pode receber o que um jogador percebe e lembra, em três níveis que o relatório mostra: `now` (os fatos do instante), `memory` (mais as últimas jogadas e o que cada uma fez, as linhas cruzadas e há quantas jogadas não ganha linha) e `forecast` (mais onde cada objeto estará daqui a 0,2 s). Julgamento ("seguro", "morre se", tempo-até-colisão, "alcançável", jogadas válidas) continua proibido.
+
+**Níveis de ajuda** (a [ADR-0010](adr/0010-palavras-regras-e-executor-de-manobras.md)): além de `now`, `memory` e `forecast`, o nível `words` (o encoder `lanes`) entrega o mesmo conhecimento já comparado pelo código, dito como a palavra do que ocupa cada casa. O manual `rules` (as opções citam os campos e as palavras) e a estratégia `maneuver` (um executor dá o salto) são condições próprias, e o relatório mostra tudo em "Sees": `words`, `words + rules`, `words + rules + executor`.
 
 ## Observação (E0, JSON)
 
@@ -52,6 +54,7 @@ Mudar a **representação** (JSON → grade → imagem → JSON com colunas rela
 | E4 (`view`) | A tela inteira como mapa de texto centrado na galinha (colunas −5 a +5, linhas dz −3 a +8), com os números exatos dos objetos e a memória em frases | Implementado e **avaliado em 90 estados (sonda)**: sem ganho na água; a memória em texto quase não tirou o modelo da árvore (90% repetem) |
 | E5 (`view-fx`) | `view` mais um segundo mapa dos objetos que se movem, daqui a 0,2 s | Idem: sem ganho na água (AUC 0,41) |
 | E6 (`json-fx`) | `json-rel` mais a coluna de cada objeto daqui a 0,2 s (`dcol_after`) e a memória em campos (`last_moves`, `rows_crossed`, `moves_since_new_row`) | **O Clef do app.** 100 partidas: 3,73 ruas, igual a `always-forward`. Na sonda, tirou o modelo do laço da árvore em metade dos casos |
+| E7 (`lanes`) | O código compara e diz **em palavras** o que ocupa as casas onde a galinha poderia pousar: `forward.lands_on`, `…_after_stepping_left/right` (um salto depois), `sideways.left/right_lands_on`, `backward.lands_on`, `chicken.stays_on`; mais o tipo das linhas 2 a 4, para onde as coisas se movem, a posição no mundo e a memória em frases. Vocabulário fechado, **nenhum dígito**, nenhuma palavra de julgamento | `packages/agent/src/lanes.ts`. Um leitor roteirizado só destas palavras (`rule-lanes`) faz **19,4 ruas** (100 seeds, grátis), então a informação basta. ~1.260 tokens por decisão no estilo `rules` (estimativa, até a primeira sonda) |
 
 **E3 em detalhe.** A hipótese era que o modelo erra a água por ter de subtrair `col_da_plataforma − col_da_galinha`; com `dcol`, o teste "a plataforma
 da linha da frente me cobre?" vira `|dcol| < half_extent`. É só uma troca de origem: desfazê-la devolve exatamente a observação (teste), então nada é
@@ -74,15 +77,18 @@ A API aceita o envio como data URL ([05](05-integracao-clef.md)).
 | `critic` | Cinco perguntas `noul` ("morre se fizer X?") e a regra "menor risco" (**lógica nossa**) | Estagna: nunca avança |
 | `critic-go` | As mesmas perguntas, com a regra "avançar a menos que o risco passe de 50%" (**lógica nossa**) | Igual a `always-forward` (sempre avança) |
 
+| `maneuver` | Uma pergunta `choice` entre cinco manobras (`cross_ahead`, `sidestep_left`, `sidestep_right`, `back_off`, `wait_here`); um **executor** (`executor.ts`) espera a casa ficar pisável e dá o salto, lendo o mundo ao vivo a cada 0,2 s, e só pergunta de novo quando a manobra termina ou não pode ser feita. Só com `lanes` e `rules` | Em andamento ([07](07-experimentos.md)) |
+
 As duas estratégias `critic*` põem uma regra nossa sobre as respostas do modelo, então são condições distintas e devem ser
-descritas como tal em qualquer relatório.
+descritas como tal em qualquer relatório. O executor da `maneuver` decide o instante do salto: ele **nunca troca a manobra** que o modelo escolheu, devolve a decisão com o motivo (o modelo o ouve em `memory.last_maneuver`), e traz as referências grátis `exec-cross` (sempre atravessar, sem modelo), `exec-rules` (o escolhedor roteirizado) e `rule-lanes`.
 
 ## Instruções e versionamento
 
 - O texto das instruções e dos critérios fica em `packages/agent/src/prompts.ts`, com `PROMPT_VERSION` (hoje `p1`). A versão, o encoder
   e a estratégia entram na chave do cache de decisões e em cada resultado: mudar o prompt invalida o cache.
 - O manual descreve as regras físicas do mundo e **nunca** diz qual jogada é boa; um teste proíbe palavras como "should", "safest" e "avoid".
-- IDs das ações: `hop_forward`, `hop_back`, `hop_left`, `hop_right`, `stay`.
+- IDs das ações: `hop_forward`, `hop_back`, `hop_left`, `hop_right`, `stay`; das manobras: `cross_ahead`, `sidestep_left`, `sidestep_right`, `back_off`, `wait_here`.
+- Estilos (`manual`): `full` e `minimal` (congelados por hash, o cache depende deles), `routing` (opções que dizem quando cada jogada serve, sem campos) e `rules` (só com `lanes`: as opções citam os campos e as palavras, como o `rule` do Doom em [11](11-licoes-dos-jogos-do-jev.md)). Combinações sem sentido (`rules` sem `lanes`, `maneuver` sem `rules`, `critic` com `lanes`) são recusadas ao ler o id.
 
 ## O que a sonda de 2026-10-14 mostrou
 

@@ -20,6 +20,7 @@
 | 08 | [UI desktop](08-ui-desktop.md) | App Tauri e painel da IA |
 | 09 | [Roadmap](09-roadmap.md) | Fases e critérios de saída |
 | 10 | [Segurança e licenças](10-seguranca-e-licencas.md) | Token, Tauri, MIT, IP dos assets |
+| 11 | [Lições dos 13 jogos do Jev](11-licoes-dos-jogos-do-jev.md) | O que os outros jogos controlados pelo Jev fazem e o que levamos |
 | — | [Referências](references.md) | Fontes com URL e data |
 | — | [ADRs](adr/) | Decisões de arquitetura registradas |
 
@@ -36,6 +37,7 @@
 | [0007](adr/0007-desktop-tauri-token-no-rust.md) | Desktop em Tauri, token no Rust |
 | [0008](adr/0008-orcamento-diario-no-free-tier.md) | Orçamento diário no free tier, imposto antes da chamada |
 | [0009](adr/0009-percepcao-memoria-e-julgamento.md) | Percepção e memória entram na vista do modelo; julgamento não |
+| [0010](adr/0010-palavras-regras-e-executor-de-manobras.md) | Palavras, regras nas opções e executor de manobras: níveis de ajuda rotulados |
 
 ## Como manter
 

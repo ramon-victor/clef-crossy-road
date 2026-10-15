@@ -21,6 +21,24 @@
 | [Hands-on com o Clef (DEV)](https://dev.to/akari_iku/hands-on-with-cloudflares-decision-model-clef-on-workers-ai-del) | Forma real da resposta, `instructions` obrigatório, ordenação de chaves e IDs, 166 ms medidos do Japão, limitações. ~15 requests, ~5 casos por experimento |
 | [Tutorial do Jev sobre o Clef](https://thejevai.com/blog/how-to-use-cloudflare-clef) | Envelope `result` no REST, `noul` como objeto. Não descreve como acessar o Jev |
 
+## Outros jogos controlados pelo Jev (lidos em 2026-10-15; padrões em [11](11-licoes-dos-jogos-do-jev.md))
+
+| Repositório | Jogo |
+|---|---|
+| [lukaske/jev-doom-agent](https://github.com/lukaske/jev-doom-agent), [olivier-motium/jev-doom](https://github.com/olivier-motium/jev-doom), [tirukovelamanoj/jev-plays-doom](https://github.com/tirukovelamanoj/jev-plays-doom) | Doom |
+| [fhshaik/typesafe-mario](https://github.com/fhshaik/typesafe-mario) | Super Mario Bros. |
+| [pedroarruda07/jev-plays-tetris](https://github.com/pedroarruda07/jev-plays-tetris) | Tetris |
+| [phyous/tsai-sc](https://github.com/phyous/tsai-sc) | StarCraft |
+| [anxkhn/JevPlaysPokemon](https://github.com/anxkhn/JevPlaysPokemon) | Pokémon FireRed |
+| [phyous/tsai-civ2](https://github.com/phyous/tsai-civ2) | Civilization II |
+| [Hardel-DW/jev.mods](https://github.com/Hardel-DW/jev.mods) | Minecraft |
+| [safzanpirani/pong-jev](https://github.com/safzanpirani/pong-jev) | Pong |
+| [tanayvasishtha/Slither-Me-Jev](https://github.com/tanayvasishtha/Slither-Me-Jev) | Snake |
+| [skpanigrahy/jev-t-rex-runner](https://github.com/skpanigrahy/jev-t-rex-runner) | Chrome Dino |
+| [shantanugoel/jev-games](https://github.com/shantanugoel/jev-games) | Mario, Kung Fu e Doom |
+
+São estudos de terceiros, de qualidade desigual; usados só como padrão, sem copiar código.
+
 ## Jogo
 
 | Fonte | Usada para |
