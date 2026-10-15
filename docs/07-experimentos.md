@@ -244,6 +244,59 @@ Sobre as mesmas 40 seeds, o Clef novo faz **+6,75 ruas [3,92, 9,93] sobre `alway
 
 Nada disto muda o que vale para o Clef do app antes: o `json-fx` segue igual a `always-forward`. O jogador novo é uma **condição rotulada** ("palavras, regras no texto e controlador"), não uma prova de que o modelo joga: as regras e o instante do salto são nossos.
 
+### Menos estagnação e mais acerto: vista de cena, três consultas e controlador com rota (2026-10-15)
+
+Pedido do dono depois de testar a condição acima: "melhorou, mas ainda estagna muito". O diagnóstico veio dos 40 jogos gravados e do simulador, sem rede ([ADR-0011](adr/0011-controlador-com-rota-e-tres-consultas.md)).
+
+**1. Por que estagnava** (23 das 40 partidas, 58%):
+- o final de quase toda partida estagnada é **uma só manobra repetida 30 a 40 vezes** (`wait_here` ×37 a ×40 em 13 jogos; `sidestep_*` recusado e escolhido de novo);
+- em **26%** das 1.828 decisões do modelo o escolhedor ideal mandava `cross_ahead` e ele escolhia `wait_here`: P(avançar) **42%** com `lily_pad`, **45%** com `log`, **28%** com `train_coming`, contra 76–84% com `empty` (a pergunta tinha uma regra de dois campos);
+- no ponto onde o progresso parou, o simulador achava saída com 0 ou 1 passo de lado em 10 jogos (o modelo errou), com 2 ou mais passos de lado em 6 e **só voltando uma linha, deslizando e avançando duas vezes** em 7 (cercadas por árvores).
+
+**2. Tetos grátis** (100 seeds, sem rede, leitores roteirizados; os três primeiros são protótipos de análise, não código do repositório):
+
+| Leitor das palavras | Ruas | Estagnou |
+|---|---|---|
+| `exec-rules` (a condição anterior, escolhedor ideal) | 18,8 | 47% |
+| + a linha da frente inteira (alcance de 5 colunas) | 19,7 | 39% |
+| + rota até "a linha à frente de onde estou" (oscilava) | 19,8 | 38% |
+| + rota até a **linha de fronteira**, profundidade 6 / 8 / 10 | 24,3 / 26,1 / 28,7 | 26% / 16% / 11% |
+| **`exec-route`** (o código final: rota com deriva, janela do salto e retenção segura) | **48,3** (mediana 38) | 59% (em ruas altas: becos sem saída) |
+| `lookahead` (o simulador) | 44,75 | |
+
+O alcance lateral sozinho quase não ajuda; o que destrava é a rota que **volta uma linha** e mirar a **linha de fronteira** (a mais longe já alcançada). As mortes do `exec-route`: afogamento 0%, carro 17%, borda 7%, trem 2%; 15% chegam ao teto de 300 decisões. Três correções, vistas nos próprios registros: o veículo conta **desde 0,05 s dentro do salto** que traz a galinha à linha (a janela antiga olhava a partir de 0,1 s: 23,8 → 31,9 ruas); a galinha parada numa tora é **carregada** (a busca modela a deriva e o controlador sai da tora antes da borda: 31,9 → 41,7); e uma manobra recusada deixa a galinha em **retenção segura** em vez de parada onde um veículo vai chegar (41,7 → 48,3).
+
+**3. Sondas** (Clef-flash, 90 estados rotulados, 507 a 542 neurons cada): a concordância com o escolhedor ideal das regras, em estados com a palavra à frente em cada classe.
+
+| Condição | Concorda com o ideal | Erro que sobrou |
+|---|---|---|
+| condições de palavras anteriores (`lanes`, `moves`, `graph`) | 40% a 66% | `go` ≈ 40% com `lily_pad`/`log` |
+| `scene`+`route`, duas perguntas (`ahead`: aberta, passando, fechada) | 86% | água parada lida como "passando" (4 de 12 certas) |
+| idem, `no` trocado por `still` e exemplos novos | 85% | água parada: **0 de 12** (a regra de dois campos) |
+| **três consultas de um campo** (`cell`, `moving`, `around`) | **94%** | 5 de 90 (o lado quando as aberturas são tão próximas quanto) |
+
+Por classe do que há à frente (3 consultas): árvore 20/20, água parada 12/12, água com coisas passando 10/12, casa vazia 17/17, veículo 13/13, tora 10/10, lírio 2/2, trem a caminho 4/4. As duas mudanças que fizeram a diferença: tirar do modelo a regra composta (cada pergunta lê **um** campo) e dar **exemplos resolvidos**.
+
+**4. Partidas** (Clef-flash, `clef:clef-flash:scene:route:lookup`; uma partida tem de 5 a 67 chamadas ao modelo; ~6,1 neurons por pedido de três perguntas, 1.774 tokens):
+
+| Seed | Ruas | Fim | Chamadas ao modelo | Controlador |
+|---|---|---|---|---|
+| 2 | 51 | estagnou | 67 | anterior (sem `canSettle`) |
+| 3 | 4 | trem | 5 | anterior |
+| 4 | 35 | carro | 49 | anterior |
+| 5 | 11 | carro | 22 | anterior |
+| 6 | 9 | borda | 20 | final |
+| 7 | 8 | carro | 19 | final |
+| 8 | 39 | estagnou | 56 | final |
+
+Média **22,43 ruas [10,85, 35,71]**, contra **4,43** da condição anterior nas mesmas sete seeds e **2,72** de `always-forward`: Δ pareado **+19,71 [8,14, 33,01]** sobre `always-forward`. Estagnaram 2 de 7 (29%; antes 58%); mortes: carro 3, trem 1, borda 1. As partidas são muito desiguais (4 a 51), e **são sete**: o portão de 100 seeds segue pendente. **Aviso:** as seeds 2 a 5 foram jogadas com uma versão do controlador sem a checagem `canSettle` (esperar na margem até a casa da frente comportar também o descanso ou a linha seguinte), as seeds 6 a 8 com a versão final; a checagem não mudou o teto grátis (48,3 contra 47,5 ruas). Por isso só as seeds 6 a 8 reproduzem do cache.
+
+**5. Custo e orçamento.** Pedido de três perguntas: ~1.750 tokens, ~6,1 neurons no Clef-flash (o 27B custa 6,3×, ~39). As 4 primeiras partidas gastaram 846 neurons (138 chamadas) na conta `df5a…`, mas a rodada planejada para ~900 gastou **1.380** e só parou no teto diário local: `--max-calls` só **para de iniciar** partidas. As 3 últimas custaram 558 neurons na `f173…`. Três sondas (507 + 515 + 542 neurons), as partidas (a rodada de 5 da `df5a…` gastou 1.380: 846 nas 4 que terminaram e o resto na quinta, cortada pelo teto) e o erro do app (49) somam ~3.550 neurons hoje (UTC 2026-10-15), **nenhuma conta acima de 10.000** (`df5a…` 9.057, `f173…` 8.729).
+
+**6. O app, e o que errei.** O app passou a abrir no Clef-flash num mapa em cache. Abrindo-o na seed 2, ele **gastou 49 neurons**: as decisões das seeds 2 a 5 só se repetem se o controlador fizer os mesmos movimentos de quando foram gravadas, e o controlador tinha mudado entre as rodadas. Conferir cada seed com `pnpm bench run ... --daily-neurons 0` (qualquer pedido novo é recusado e nada é gasto) mostrou que só as seeds 6, 7 e 8 reproduzem inteiras (20, 19 e 56 acertos de cache). O app lista **6 a 8**.
+
+Nada disto toca o que valia antes: o `json-fx` segue igual a `always-forward`. O Clef do app é uma condição **rotulada** ("palavras, regras no texto, roteamento e controlador de desvio nossos"), não uma prova de que o modelo joga: o controlador planeja a rota, e o modelo só escolhe entre atravessar, contornar por um lado ou esperar.
+
 ## Atraso: a pergunta do modo tempo real
 
 O modelo responde em ~330 ms (mediana medida do Brasil, [05](05-integracao-clef.md)), e o jogo não espera. Com a **latência injetada** (determinística, sem rede) medi o efeito nas referências gratuitas, 100 seeds:

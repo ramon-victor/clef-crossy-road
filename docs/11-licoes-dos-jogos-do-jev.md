@@ -46,6 +46,21 @@ resolvem o mesmo problema que nós: fazer um modelo de decisão jogar. Eles são
 | **Só jogadas legais, cada uma com a consequência** (Snake, Tetris, Pokémon) | **Não levamos**: é julgamento por jogada, que a [ADR-0009](adr/0009-percepcao-memoria-e-julgamento.md) proíbe. Seria um nível "assistido" próprio, só se o dono quiser |
 | Estrategista LLM raro (Minecraft) | Fora de escopo: o jogo é decisão a decisão e o experimento é sobre o Clef |
 
+## Estagnação, caminho e contexto: o que os 13 fazem e o que fizemos (2026-10-15)
+
+A condição de [ADR-0010](adr/0010-palavras-regras-e-executor-de-manobras.md) estagnava em 58% das partidas. A comparação que orientou a correção ([ADR-0011](adr/0011-controlador-com-rota-e-tres-consultas.md)):
+
+| Problema | O que os outros jogos fazem | O que tínhamos | O que fizemos |
+|---|---|---|---|
+| **Preso, em laço** | Doom: `motion.stuck` no estado, instrução "se preso, mude o movimento ou a vista" e o motor local dá ré e vira sozinho; Mario: `stalled_frames` e `recent_control.outcome` com "a ação que não bloqueou falhou"; StarCraft: células visitadas e "revisitar continua disponível"; jev-games: eventos `possibly_blocked` na memória | `blocked_last_two` e `no_new_row_for_a_while`, que nenhuma opção lia | `recently_failed` por lado (o desvio que o controlador devolveu desde a última linha nova) **dentro da regra** da pergunta `around`; `last_maneuver` diz como a anterior terminou |
+| **Caminho** | Doom `nextWaypoint`, Tetris (busca de caminhos até a posição final), Minecraft (pathfinding), StarCraft (o jogo acha o caminho): o modelo escolhe o destino, o código acha a rota | manobras de um passo: para "voltar, direita, direita, frente, frente" o modelo tinha de encadear cinco decisões | `detour_left`/`detour_right`: busca em largura sobre as palavras (profundidade 8), refeita a cada 0,2 s |
+| **Contexto** | Doom até 32 entidades e 64 linhas; Tetris o tabuleiro e até 255 candidatos; Civ2 um guia revisado em cada pedido; Pong deliberadamente mínimo | ~1.350 tokens de 24.000 possíveis | ~1.750 tokens: **a largura toda** da linha da frente e da própria em palavras, **exemplos resolvidos** e a memória de fronteira; nada de volume solto (o Pong avisa que detalhe sem relação custa precisão) |
+| **Regra composta** | Doom `rule`: um limite por opção; Mario: uma pergunta `Noul` para cada decisão de salto, não uma regra de duas condições | uma pergunta com "A, ou B e C" | **uma consulta de um campo por pergunta**; o código junta as respostas (o modelo errou 100% das águas paradas com a regra de dois campos) |
+| **Exemplos resolvidos** | jev-games Mario: "dx79 → false; dx35 → true" na instrução | nenhum | oito a dez linhas "trecho do estado → resposta" em cada pergunta |
+| **Instrução refeita depois de ver a falha** | Civ2: revisões v4 e v5 do guia a partir dos registros | — | o texto das perguntas foi refeito três vezes olhando as respostas gravadas (86% → 85% → 94% de concordância) |
+
+O que **não** levamos: a lista de candidatos com a consequência de cada um (Tetris, Snake, Pokémon), que é julgamento por jogada.
+
 ## Perguntas abertas
 
 - Quase nenhum dos 13 mede o jogador contra um roteirizado que lê a mesma vista (o Doom empata com a mira roteirizada). Não sabemos quanto do resultado dos outros é do modelo e quanto é do código ao redor; é o que `exec-cross`, `exec-rules` e `rule-lanes` medem para nós.

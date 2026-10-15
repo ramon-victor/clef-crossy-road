@@ -15,7 +15,7 @@ A ordem é guiada pelo risco: primeiro descobrir se o modelo consegue jogar, dep
 
 ## Próximos passos
 
-0. **Completar o portão de 100 seeds** da condição `clef:clef-flash:moves:graph-maneuver:ordered` ([07](07-experimentos.md)): faltam as seeds 41 a 100 (~7.000 neurons, então dois dias com duas contas, `bench plan` antes de cada passo). Se o limite inferior do IC pareado ficar acima de zero, o app pode trocar o Clef padrão. Também: a variante com o 27B só se couber, e as ideias abertas (laço da manobra recusada, `back_off` com água atrás) em [07](07-experimentos.md).
+0. **Rodar a condição do app em 100 seeds** (`clef:clef-flash:scene:route:lookup`, [ADR-0011](adr/0011-controlador-com-rota-e-tres-consultas.md)): são ~6 neurons por pedido e de 20 a 70 pedidos por partida, então ~25.000 a 30.000 neurons: **três dias com duas contas**, `bench plan` antes de cada passo e, por segurança, um **teto de chamadas por partida** (`--max-calls` só impede *iniciar* partidas). Isso também enche o cache do app (hoje só as seeds 6 a 8 reproduzem; conferir cada seed com `--daily-neurons 0`). Depois: o 27B nas mesmas seeds só se couber, e comparar sempre com `exec-route`.
 
 O experimento zero-shot está respondido: **nenhum modelo testado supera "sempre em frente"** ([07](07-experimentos.md)). O que sobra é escolher o que fazer com esse resultado:
 

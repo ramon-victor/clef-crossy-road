@@ -38,6 +38,7 @@
 | [0008](adr/0008-orcamento-diario-no-free-tier.md) | Orçamento diário no free tier, imposto antes da chamada |
 | [0009](adr/0009-percepcao-memoria-e-julgamento.md) | Percepção e memória entram na vista do modelo; julgamento não |
 | [0010](adr/0010-palavras-regras-e-executor-de-manobras.md) | Palavras, regras nas opções e executor de manobras: níveis de ajuda rotulados |
+| [0011](adr/0011-controlador-com-rota-e-tres-consultas.md) | Controlador com rota, vista de cena e três consultas: o nível "assistido na navegação" |
 
 ## Como manter
 
