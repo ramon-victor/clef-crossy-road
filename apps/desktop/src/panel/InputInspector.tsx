@@ -117,8 +117,14 @@ export function InputInspector({ history, policyId, onClose }: InputInspectorPro
   const [tab, setTab] = useState<Tab>("state");
   const [copied, setCopied] = useState(false);
   const facts = policyFacts(policyId);
-  const log = history.find((h) => h.index === picked) ?? history[history.length - 1];
+  // Only the decisions that asked the model have something to show; a controller step is a move the code made
+  // inside a manoeuvre, and the chips list it after the request it belongs to.
+  const asked = history.filter((h) => h.decision.sent);
+  const log = asked.find((h) => h.index === picked) ?? asked[asked.length - 1];
   const sent = log?.decision.sent;
+  const controllerSince = log
+    ? history.filter((h) => h.index > log.index && h.decision.source === "executor").length
+    : 0;
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -166,7 +172,7 @@ export function InputInspector({ history, policyId, onClose }: InputInspectorPro
       ) : (
         <>
           <div class="inspector-chips" title="Recent decisions">
-            {history.map((h) => (
+            {asked.map((h) => (
               <button
                 type="button"
                 key={h.index}
@@ -186,6 +192,8 @@ export function InputInspector({ history, policyId, onClose }: InputInspectorPro
             </button>
             <span class="hint">
               decision {log.index + 1} · row {log.row} · took {ACTION_LABEL[log.action]}
+              {controllerSince > 0 &&
+                ` · then ${controllerSince} step${controllerSince === 1 ? "" : "s"} by the controller`}
             </span>
           </div>
 

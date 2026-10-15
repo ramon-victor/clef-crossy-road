@@ -143,7 +143,8 @@ async function checkClefFromCache(ctx: Context): Promise<Report> {
       lastAction: clef.last?.action ?? null,
       probabilities: clef.last?.decision.probabilities ?? null,
       confidence: clef.last?.decision.confidence ?? null,
-      allFromCache: clef.decisions > 0 && clef.cacheHits === clef.decisions && clef.neurons === 0,
+      // A manoeuvre's own steps are not model calls, so the test is that every answer came from the cache and cost nothing.
+      allFromCache: clef.cacheHits > 0 && clef.neurons === 0,
     },
     budgetAfter: await ctx.bridge.budget(),
   };
@@ -246,12 +247,19 @@ async function checkInspector(ctx: Context): Promise<Report> {
   return {
     inspector: {
       opened,
-      stateHasRows: state.includes('"rows"'),
+      // The route gameplay keys its state by the names of the manoeuvres (the rows are summed up in words).
+      stateHasRows: state.includes('"cross_ahead"') && state.includes('"detour_left"'),
       stateChars: state.length,
       questionHasRules: question.includes("chicken"),
-      optionsListMoves: ["hop_forward", "hop_back", "hop_left", "hop_right", "stay"].every((m) =>
-        options.includes(m),
-      ),
+      optionsListMoves: [
+        "stand",
+        "no_stand",
+        "moving",
+        "still",
+        "detour_left",
+        "detour_right",
+        "wait_here",
+      ].every((m) => options.includes(m)),
       closedAgain: document.querySelector(".inspector") === null,
     },
   };

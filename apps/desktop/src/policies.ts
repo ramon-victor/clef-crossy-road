@@ -70,10 +70,12 @@ export const CLEF_27B_CONFIG: ClefPolicyConfig = { ...DEFAULT_CLEF, model: "clef
 
 /**
  * Seeds whose decisions the benchmark left in the cache for Clef-flash's exact requests, so replaying them
- * costs nothing. A prompt change empties this: it is whatever the last benchmark run of the default Clef
- * covered (docs/07). The 27B has none, because a game of it costs about 6 times as much.
+ * costs nothing. A game only replays if the controller makes the same moves it made when it was cached, so
+ * changing the prompts OR the controller (route.ts) empties this: re-run the seeds, then check each one with
+ * `pnpm bench run ... --daily-neurons 0` (any cache miss is refused, nothing is spent) before writing it here.
+ * The 27B has none, because a game of it costs about 6 times as much.
  */
-export const CLEF_CACHED_SEEDS = "2-8";
+export const CLEF_CACHED_SEEDS = "6-8";
 
 /** Ids that shortcuts used before: `clef` was Clef-flash, and `clef-words` was its words-and-controller variant. */
 const ALIASES: Readonly<Record<string, string>> = { clef: CLEF_ID, "clef-words": CLEF_ID };
