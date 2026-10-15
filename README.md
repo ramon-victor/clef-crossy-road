@@ -24,6 +24,7 @@ Depois de construir uma vez (comandos abaixo), basta dar **duplo clique**:
 |---|---|
 | `play.cmd` | O app no modo normal: o look-ahead (referência gratuita) jogando e reiniciando sozinho. Troque o jogador no seletor (Clef-flash, Clef 27B, você, referências). **Roda no terminal e mostra os logs do que é mandado ao modelo** a cada decisão (`CCR_LOG=full`, padrão; `brief` ou `off` para mudar); o mesmo texto vai para `runslogsplay.log` |
 | `play-clef.cmd` | O **Clef-flash jogando a seed 1**, com as probabilidades reais no painel e os logs no terminal. Vem do cache, então **não gasta neurons**; a tecla `M` abre o próximo mapa em cache |
+| `play-words.cmd` | O **Clef-flash + palavras e controlador** na seed 10 (45 ruas nos nossos testes): a condição que mais longe foi (10,05 ruas em 40 partidas). As seeds 1 a 40 vêm do cache, então **não gastam neurons**; mostra no terminal o que é enviado e as notas do controlador |
 
 Para abrir direto em outro jogador: `set CCR_PLAYER=clef-27b` (seeds 1 a 8 vêm do cache) ou um id do benchmark como `clef:clef-flash:view-fx:choice:routing`, e `set CCR_SEED=1`, antes de `.play.cmd`.
 

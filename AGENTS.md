@@ -46,7 +46,7 @@ Installed: Node 24, pnpm 10, git, MSVC, WebView2, Rust 1.99 (rustup, user-level)
 - `pnpm bench probe-sample` (90 labelled decision points from the free players' games, no API call), `probe-run --run <name> --policies <ids> --max-calls n`
   (one question per policy and state, same client, cache and ledger as `run`) and `probe-report --run <name>` (no API call): about a tenth of the cost of whole games.
 - `play.cmd` opens the release app **and shows in its terminal what the model is sent** (`CCR_LOG=full` by default; `brief` or `off`; the same text goes to
-  `runs/logs/play.log`); `play-clef.cmd` opens it on Clef-flash, seed 1 (cached, free). `CCR_PLAYER` (`clef-flash`, `clef-27b`, a benchmark policy id...) and
+  `runs/logs/play.log`); `play-clef.cmd` opens it on Clef-flash, seed 1 (cached, free), `play-words.cmd` on the Clef with words and a controller, seed 10 (cached, free). `CCR_PLAYER` (`clef-flash`, `clef-27b`, a benchmark policy id...) and
   `CCR_SEED` pick the starting player and map.
 - `pnpm --filter @ccr/desktop tauri dev` (app window) / `tauri build --no-bundle` (release exe). `CCR_SELFTEST=1` makes the app
   measure FPS, check rendering and the Rust budget refusal, write `runs/selftest.json` and exit.
@@ -103,10 +103,10 @@ The owner's rule is **stay inside the free tier: 10,000 neurons per UTC day** (r
 - Never write throwaway scripts or `curl` calls that hit the API directly; they bypass the ledger.
 - `pnpm bench plan` first, `pnpm bench run` second. The ledger is **per Cloudflare account** (a short hash of the account id
   tags each entry; an untagged entry counts for every account). On 2026-10-14 the old account (`0ba9...`) is over, `df5a...` (`.env`) used
-  8,739 of 10,000 (the app included) and `f173...` (`.env.second`) 6,763. Runs use `--daily-neurons 9000` to keep a margin and no single step
-  uses more than about a sixth of a day. See `docs/adr/0008`.
+  8,739 of 10,000 (the app included) and `f173...` (`.env.second`) 6,763; on 2026-10-15 (UTC) `df5a...` used 5,964 and `f173...` 8,171. Runs use `--daily-neurons 9000` to keep a margin and no single step
+  uses more than about a sixth of a day. The desktop app plays on `df5a...`, so leave it a margin when running benchmarks there (a seed that is not cached spends). See `docs/adr/0008`.
 - Before a run, estimate: `calls x tokens/decision x neurons per million tokens / 1e6`. Measured: ~1,120 tokens per
-  `choice` decision (JSON; ~1,425 for the player's view) and ~3,070 per `critic` decision on clef-flash (3,455 neurons per million tokens); the 27B
+  `choice` decision (JSON; ~1,425 for the player's view; ~730 for the `moves` view with `ordered`, ~1,350 per request of the two-question `graph-maneuver`, about 120 neurons per game) and ~3,070 per `critic` decision on clef-flash (3,455 neurons per million tokens); the 27B
   model costs 6.3x more. If the estimate does not fit in what is left of today, shrink the run or wait.
 - History: on 2026-10-14 this project overspent (~26,300 neurons, about US$ 0.18 billed). Do not repeat it.
 
