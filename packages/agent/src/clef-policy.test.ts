@@ -11,6 +11,7 @@ import {
   selectByRisk,
   selectGoUnlessRisky,
 } from "./clef-policy.ts";
+import { emptyMemory, remember } from "./memory.ts";
 import { riskQuestionId } from "./prompts.ts";
 import { playEpisode } from "./runner.ts";
 
@@ -106,6 +107,45 @@ describe("ClefPolicy", () => {
     expect(Object.keys(body.questions)).toEqual(["move"]);
     expect(Object.keys(body.questions.move?.criteria ?? {}).sort()).toEqual([...ACTIONS].sort());
     expect(body.questions.move?.instructions.length).toBeGreaterThan(100);
+  });
+
+  it("hands back exactly what it sent, and describe() shows the same without asking", async () => {
+    const { client, seen } = clientReturning(() => choiceBody("hop_forward", { hop_forward: 1 }));
+    const factory = clefPolicy(client, { ...config, encoder: "json-fx" });
+    const policy = factory.create(1);
+    if (policy.kind !== "observation" || !policy.describe) throw new Error("expected describe()");
+    const game = new Game({ seed: 1 });
+    const obs = observe(game);
+    const memory = remember(emptyMemory(), { action: "hop_forward", outcome: "hop" }, 1);
+
+    const preview = policy.describe(obs, memory);
+    expect(seen).toHaveLength(0); // looking is free: nothing was sent
+
+    const decision = await policy.decide(obs, memory);
+    const body = seen[0] as { model: string; state: unknown; questions: unknown };
+    expect(decision.sent).toEqual(preview);
+    expect(decision.sent).toEqual({
+      model: body.model,
+      state: body.state,
+      questions: body.questions,
+    });
+    expect(JSON.stringify(decision.sent?.state)).toContain("last_moves");
+  });
+
+  it("counts the pictures it sends instead of keeping them", async () => {
+    const { client, seen } = clientReturning(() => choiceBody("hop_forward", { hop_forward: 1 }));
+    const decision = await decideOnFirstObservation(client, { ...config, encoder: "image" });
+    expect(decision.sent?.images).toBe(1);
+    expect((seen[0] as { images: string[] }).images).toHaveLength(1);
+    expect(JSON.stringify(decision.sent)).not.toContain("data:image");
+  });
+
+  it("is not kept in the episode records, so runs do not grow", async () => {
+    const { client } = clientReturning(() => choiceBody("hop_forward", { hop_forward: 1 }));
+    const episode = await playEpisode(clefPolicy(client, config), 5, { maxDecisions: 3 });
+    expect(episode.records.length).toBeGreaterThan(0);
+    expect(JSON.stringify(episode)).not.toContain("instructions");
+    for (const record of episode.records) expect(record).not.toHaveProperty("sent");
   });
 
   it("rejects an option id it does not know", async () => {

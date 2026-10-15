@@ -1,5 +1,17 @@
+import type { ClefModel, Question } from "@ccr/clef";
 import type { Action, Game, Observation } from "@ccr/core";
 import type { Memory } from "./memory.ts";
+
+/**
+ * Everything a model was asked for one decision, as sent: the state it evaluates and the questions
+ * with their instructions and options. Pictures are only counted, so the record stays readable.
+ */
+export interface ModelInput {
+  model: ClefModel;
+  state: unknown;
+  questions: Record<string, Question>;
+  images?: number;
+}
 
 export interface Decision {
   action: Action;
@@ -13,6 +25,11 @@ export interface Decision {
   cached?: boolean;
   /** Strategy-specific numbers (for example per-action death risk in the critic strategy). */
   extra?: Record<string, unknown>;
+  /**
+   * What the model read to give this answer. For people to look at (the app shows it); the episode
+   * records do not keep it.
+   */
+  sent?: ModelInput;
 }
 
 /**
@@ -24,6 +41,8 @@ export interface ObservationPolicy {
   readonly kind: "observation";
   readonly id: string;
   decide(obs: Observation, memory?: Memory): Promise<Decision>;
+  /** What `decide` would send for these inputs, without asking anything. */
+  describe?(obs: Observation, memory?: Memory): ModelInput;
 }
 
 /** Gets the simulator itself. Reference baselines only; never a model. */

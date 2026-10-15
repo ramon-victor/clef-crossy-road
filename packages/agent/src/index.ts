@@ -36,6 +36,7 @@ export {
   renderSceneImage,
   type SceneImage,
 } from "./image.ts";
+export { inputAsJson, inputAsText, optionsOf, prettyState, sentences } from "./input-text.ts";
 export {
   emptyMemory,
   MEMORY_MOVES,
@@ -45,6 +46,7 @@ export {
 } from "./memory.ts";
 export type {
   Decision,
+  ModelInput,
   ObservationPolicy,
   OraclePolicy,
   Policy,
@@ -53,10 +55,12 @@ export type {
 export {
   ACTION_CRITERIA,
   choiceInstructions,
+  criteriaFor,
   MANUAL_IDS,
   MANUALS,
   type ManualId,
   PROMPT_VERSION,
+  ROUTING_CRITERIA,
   riskInstructions,
   riskQuestionId,
 } from "./prompts.ts";

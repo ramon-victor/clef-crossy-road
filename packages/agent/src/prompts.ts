@@ -9,7 +9,14 @@ import { IMAGE_LEGEND } from "./image.ts";
  */
 export const PROMPT_VERSION = "p1";
 
-export const MANUAL_IDS = ["full", "minimal"] as const;
+/**
+ * full / minimal: the rules in prose, and options that say what each move does (the first conditions
+ * of the benchmark, kept as they were so their cached answers stay valid).
+ * routing: the way the service's documentation uses a choice question: a short question, and options
+ * that say when each one applies. The rules and the options are the same for every state: general
+ * knowledge of how the game is played, nothing worked out from the state (ADR-0009).
+ */
+export const MANUAL_IDS = ["full", "minimal", "routing"] as const;
 export type ManualId = (typeof MANUAL_IDS)[number];
 
 const MINIMAL = [
@@ -31,7 +38,24 @@ const FULL = [
   "Vehicles, logs and trains wrap around: after passing |col| = 11 (|col| = 110 for trains) they reappear on the opposite side.",
 ].join(" ");
 
-export const MANUALS: Readonly<Record<ManualId, string>> = { minimal: MINIMAL, full: FULL };
+/** The rules without field names: each view's note says what its fields are called. */
+const ROUTING = [
+  "You control a chicken in a Crossy Road style game and pick one move per decision. It crosses rows of grass, road, rail and water.",
+  "Rows with larger dz are further ahead (dz 0 is the chicken's own row), larger col is towards the right of the screen, and speeds are in columns per second.",
+  "A decision is one hop of 0.2 seconds, and the world keeps moving while it hops.",
+  "The chicken cannot enter a tree: it stays where it is.",
+  "On a road it is hit if a vehicle covers its column while it is on that row. On rail a train kills it, and the warning light is on when one is coming.",
+  "On water it drowns unless its centre is inside a log or lily pad when the hop ends, and a platform carries it along.",
+  "It also dies if its own column goes beyond 5 to either side.",
+  "An object covers the chicken's column when the distance between their centres is less than the object's half_extent.",
+  "The moves: hop_forward goes one row ahead, hop_back one row behind, hop_left one column to the left (col -1), hop_right one to the right (col +1), and stay waits.",
+].join(" ");
+
+export const MANUALS: Readonly<Record<ManualId, string>> = {
+  minimal: MINIMAL,
+  full: FULL,
+  routing: ROUTING,
+};
 
 /** Option ids are sorted as strings and read by the model, so they are descriptive. */
 export const ACTION_CRITERIA: Readonly<Record<Action, string>> = {
@@ -41,6 +65,31 @@ export const ACTION_CRITERIA: Readonly<Record<Action, string>> = {
   hop_right: "Hop one column to the right (col +1), same row.",
   stay: "Do not move during this decision step.",
 };
+
+/**
+ * Options that say when each move applies, the way the service's own example does ("billing: payments,
+ * invoices and refunds"). The same for every state and free of numbers: how a player knows the game,
+ * not something worked out from the state in front of the model.
+ */
+export const ROUTING_CRITERIA: Readonly<Record<Action, string>> = {
+  hop_forward:
+    "The row straight ahead can be entered when the hop ends: no tree in the chicken's column, and on water a log or lily pad under that column, on a road no vehicle there, on rail no train and no warning light.",
+  hop_back:
+    "The chicken is stuck (it keeps bumping into trees, or no column leads forward) or it is about to be hit, and the row behind is better than staying.",
+  hop_left:
+    "The way straight ahead cannot be entered, and the column to the left has no tree and leads towards a row that can be entered.",
+  hop_right:
+    "The way straight ahead cannot be entered, and the column to the right has no tree and leads towards a row that can be entered.",
+  stay: "The way straight ahead cannot be entered yet but is about to open (a platform drifting under the column, a vehicle about to pass), and the chicken is not in danger where it stands.",
+};
+
+/** The options of a choice question for this prompt style. */
+export const criteriaFor = (manual: ManualId): Readonly<Record<Action, string>> =>
+  manual === "routing" ? ROUTING_CRITERIA : ACTION_CRITERIA;
+
+/** What the plain `json` fields are called, for the style whose rules carry no field names. */
+const ABSOLUTE_NOTE =
+  "In the state each row has dz and kind; grass rows list blocked_cols (the columns with a tree), road rows list vehicles, water rows list platforms (type log or lily_pad) and rail rows have a train and a warning_light. Every vehicle, platform and train has col (its centre), half_extent and speed_cols_per_s, and player.col is the chicken's own column.";
 
 /** How the chicken's column is used in the `json-rel` view. A description of the coordinates, nothing more. */
 const RELATIVE_NOTE =
@@ -66,12 +115,19 @@ const ENCODER_NOTES: Readonly<Partial<Record<EncoderId, string>>> = {
 
 /** The manual, plus what the reader needs to know about how this encoder writes the world. */
 const withEncoderNote = (manual: ManualId, encoder?: EncoderId): string => {
-  const note = encoder === undefined ? undefined : ENCODER_NOTES[encoder];
+  const own = encoder === undefined ? undefined : ENCODER_NOTES[encoder];
+  const note = own ?? (manual === "routing" && encoder === "json" ? ABSOLUTE_NOTE : undefined);
   return note === undefined ? MANUALS[manual] : `${MANUALS[manual]} ${note}`;
 };
 
+const CHOICE_QUESTION: Readonly<Record<ManualId, string>> = {
+  full: "Choose the single best action for this decision step.",
+  minimal: "Choose the single best action for this decision step.",
+  routing: "Which move does the chicken make now?",
+};
+
 export function choiceInstructions(manual: ManualId, encoder?: EncoderId): string {
-  return `${withEncoderNote(manual, encoder)} Choose the single best action for this decision step.`;
+  return `${withEncoderNote(manual, encoder)} ${CHOICE_QUESTION[manual]}`;
 }
 
 const ACTION_VERB: Readonly<Record<Action, string>> = {

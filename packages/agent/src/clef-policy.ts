@@ -3,6 +3,7 @@ import {
   CLEF_MODELS,
   type ClefClient,
   type ClefModel,
+  type ClefRequest,
   type ClefResult,
   type Question,
 } from "@ccr/clef";
@@ -10,10 +11,10 @@ import { ACTIONS, type Action, type Observation } from "@ccr/core";
 import { ACTION_PREFERENCE } from "./baselines.ts";
 import { ENCODER_IDS, type EncoderId, encodeRequest } from "./encode.ts";
 import type { Memory } from "./memory.ts";
-import type { Decision, ObservationPolicy, PolicyFactory } from "./policy.ts";
+import type { Decision, ModelInput, ObservationPolicy, PolicyFactory } from "./policy.ts";
 import {
-  ACTION_CRITERIA,
   choiceInstructions,
+  criteriaFor,
   MANUAL_IDS,
   type ManualId,
   PROMPT_VERSION,
@@ -114,7 +115,7 @@ export function clefPolicy(client: ClefClient, config: ClefPolicyConfig): Policy
   const choiceQuestion: Question = {
     type: "choice",
     instructions: choiceInstructions(config.manual, config.encoder),
-    criteria: { ...ACTION_CRITERIA },
+    criteria: { ...criteriaFor(config.manual) },
   };
   const riskQuestions: Record<string, Question> = Object.fromEntries(
     ACTIONS.map((a) => [
@@ -123,32 +124,33 @@ export function clefPolicy(client: ClefClient, config: ClefPolicyConfig): Policy
     ]),
   );
 
+  const questions = config.strategy === "choice" ? { move: choiceQuestion } : riskQuestions;
+
+  /** The one place a request is put together, so what is shown is what is sent. */
+  const requestFor = (obs: Observation, memory?: Memory): ClefRequest => {
+    const { state, images } = encodeRequest(config.encoder, obs, memory);
+    return { model: config.model, state, ...(images ? { images } : {}), questions, cacheTag };
+  };
+
   const policy: ObservationPolicy = {
     kind: "observation",
     id,
+    describe: (obs, memory) => inputOf(requestFor(obs, memory)),
     async decide(obs: Observation, memory?: Memory): Promise<Decision> {
-      const { state, images } = encodeRequest(config.encoder, obs, memory);
-      if (config.strategy === "choice") {
-        const result = await client.run({
-          model: config.model,
-          state,
-          ...(images ? { images } : {}),
-          questions: { move: choiceQuestion },
-          cacheTag,
-        });
-        return fromChoice(result);
-      }
-      const result = await client.run({
-        model: config.model,
-        state,
-        ...(images ? { images } : {}),
-        questions: riskQuestions,
-        cacheTag,
-      });
-      return fromRisk(result, config.strategy === "critic-go" ? selectGoUnlessRisky : selectByRisk);
+      const request = requestFor(obs, memory);
+      const result = await client.run(request);
+      const decision =
+        config.strategy === "choice"
+          ? fromChoice(result)
+          : fromRisk(result, config.strategy === "critic-go" ? selectGoUnlessRisky : selectByRisk);
+      return { ...decision, sent: inputOf(request) };
     },
   };
   return { id, create: () => policy };
+}
+
+function inputOf({ model, state, questions, images }: ClefRequest): ModelInput {
+  return { model, state, questions, ...(images ? { images: images.length } : {}) };
 }
 
 function isAction(value: string): value is Action {
