@@ -121,7 +121,7 @@ export function perceptionOf(policyLabel: string): string {
   if (id === "clef" || id.startsWith("clef:")) return helpLabel(parseClefPolicyId(id));
   if (id === "rule-view") return "now (scripted)";
   if (id === "rule-view-fx") return "forecast (scripted)";
-  if (id === "rule-lanes") return "words (scripted)";
+  if (id === "rule-lanes" || id === "rule-moves") return "words (scripted)";
   if (id === "exec-cross") return "words + executor (scripted, always cross)";
   if (id === "exec-rules") return "words + rules + executor (scripted)";
   if (id.startsWith("lookahead")) return "simulator";

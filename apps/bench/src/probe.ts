@@ -2,10 +2,14 @@ import {
   actionValues,
   alwaysForward,
   emptyMemory,
+  lanesState,
   lookaheadPolicy,
   type Memory,
   type PolicyFactory,
+  parseClefPolicyId,
   randomPolicy,
+  readLanes,
+  readOrdered,
   remember,
 } from "@ccr/agent";
 import { ACTIONS, type Action, createRng, Game, observe, type RowKind } from "@ccr/core";
@@ -360,6 +364,50 @@ export function forwardAuc(
   return auc(safe, unsafe);
 }
 
+/**
+ * What the ideal follower of a words condition would pick in this state: `readLanes` for the `lanes` view,
+ * `readOrdered` for the `moves` view. Undefined for every other policy, and for the manoeuvre strategy (the
+ * first step of a manoeuvre is not the move it was chosen as).
+ */
+export function idealMove(policy: string, state: ProbeState): Action | undefined {
+  if (!policy.startsWith("clef:")) return undefined;
+  const config = parseClefPolicyId(policy);
+  if (config.strategy === "maneuver") return undefined;
+  if (config.encoder !== "lanes" && config.encoder !== "moves") return undefined;
+  const { game, memory } = rebuild(state);
+  const words = lanesState(observe(game), memory);
+  return config.encoder === "lanes" ? readLanes(words) : readOrdered(words);
+}
+
+/**
+ * How often the model picks the move the ideal follower of the written rules would pick. It measures
+ * obedience to the rules, not skill: the rules are ours (ADR-0010).
+ */
+export function agreementWithWords(
+  states: readonly ProbeState[],
+  results: readonly ProbeResult[],
+  policy: string,
+): { n: number; agree: number; byStratum: Map<Stratum, [number, number]> } | undefined {
+  const byId = new Map(states.map((s) => [s.id, s]));
+  const byStratum = new Map<Stratum, [number, number]>();
+  let n = 0;
+  let agree = 0;
+  for (const r of results) {
+    const state = byId.get(r.state);
+    if (r.policy !== policy || !state) continue;
+    const ideal = idealMove(policy, state);
+    if (ideal === undefined) return undefined;
+    const same = ideal === r.action;
+    n++;
+    if (same) agree++;
+    const cell = byStratum.get(state.stratum) ?? [0, 0];
+    cell[0]++;
+    if (same) cell[1]++;
+    byStratum.set(state.stratum, cell);
+  }
+  return n === 0 ? undefined : { n, agree, byStratum };
+}
+
 export function renderProbeReport(
   title: string,
   states: readonly ProbeState[],
@@ -402,6 +450,32 @@ export function renderProbeReport(
       ]),
     ),
   );
+
+  const followers = policies.flatMap((policy) => {
+    const found = agreementWithWords(states, results, policy);
+    return found ? [{ policy, ...found }] : [];
+  });
+  if (followers.length > 0) {
+    sections.push(
+      "",
+      "## Does it pick the move the written rules give? (agreement with the ideal follower of the words)",
+      "",
+      "Obedience to our rules, not skill; only for the conditions that read the words.",
+      "",
+      ...markdownTable(
+        ["Policy", "States", "Agree", ...STRATA.map((s) => s.id)],
+        followers.map(({ policy, n, agree, byStratum }) => [
+          code(policy),
+          n,
+          pct(agree / n),
+          ...STRATA.map((s) => {
+            const cell = byStratum.get(s.id);
+            return cell ? `${cell[1]}/${cell[0]}` : "n/a";
+          }),
+        ]),
+      ),
+    );
+  }
 
   const others = policies.filter((p) => p !== control);
   if (policies.includes(control) && others.length > 0) {

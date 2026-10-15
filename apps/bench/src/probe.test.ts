@@ -5,7 +5,9 @@ import { alwaysForward, type PolicyFactory } from "@ccr/agent";
 import { ACTIONS, type Action, Game, type Observation } from "@ccr/core";
 import { afterEach, beforeAll, describe, expect, it } from "vitest";
 import {
+  agreementWithWords,
   classify,
+  idealMove,
   interleaveStrata,
   type ProbeResult,
   type ProbeState,
@@ -294,5 +296,49 @@ describe("runProbe", () => {
     same.step("hop_forward");
     expect(game.tick).toBe(same.tick);
     expect(game.score).toBe(same.score);
+  });
+});
+
+describe("agreement with the ideal follower of the words", () => {
+  let states: ProbeState[];
+  beforeAll(async () => {
+    states = await sampleStates({ seeds: SEEDS, quotas: SMALL });
+  });
+
+  const words = "clef:clef-flash:moves:choice:ordered";
+
+  it("only exists for the conditions that read the words, and not for the manoeuvre strategy", () => {
+    const state = states[0] as ProbeState;
+    expect(idealMove(words, state)).toBeDefined();
+    expect(idealMove("clef:clef-flash:lanes:choice:rules", state)).toBeDefined();
+    expect(idealMove("clef:clef-flash:json-fx:choice:full", state)).toBeUndefined();
+    expect(idealMove("clef:clef-flash:moves:maneuver:ordered", state)).toBeUndefined();
+    expect(idealMove("lookahead", state)).toBeUndefined();
+  });
+
+  it("counts the answers that match the ideal one, per stratum", () => {
+    const results: ProbeResult[] = states.map((state, i) => {
+      const ideal = idealMove(words, state) as Action;
+      // Every other answer is wrong on purpose.
+      const action = i % 2 === 0 ? ideal : ideal === "hop_forward" ? "hop_back" : "hop_forward";
+      return { policy: words, state: state.id, action };
+    });
+    const found = agreementWithWords(states, results, words);
+    expect(found?.n).toBe(states.length);
+    expect(found?.agree).toBe(Math.ceil(states.length / 2));
+    const perStratum = [...(found?.byStratum.values() ?? [])].reduce((sum, [n]) => sum + n, 0);
+    expect(perStratum).toBe(states.length);
+  });
+
+  it("is left out of the report for a policy that does not read the words, and shown for one that does", () => {
+    const other = "clef:clef-flash:json-fx:choice:full";
+    const results: ProbeResult[] = states.flatMap((state) => [
+      { policy: words, state: state.id, action: "hop_forward" as Action },
+      { policy: other, state: state.id, action: "hop_forward" as Action },
+    ]);
+    expect(agreementWithWords(states, results, other)).toBeUndefined();
+    const report = renderProbeReport("t", states, results, other);
+    expect(report).toContain("agreement with the ideal follower of the words");
+    expect(report).toContain(words);
   });
 });

@@ -9,6 +9,7 @@ import {
   parseClefPolicyId,
   randomPolicy,
   ruleLanes,
+  ruleMoves,
   ruleView,
   ruleViewFx,
 } from "@ccr/agent";
@@ -19,7 +20,7 @@ export const isClefPolicy = (id: string): boolean =>
 
 /**
  * Policy ids accepted on the command line:
- *   always-forward | random | rule-view | rule-view-fx | rule-lanes | exec-cross | exec-rules | lookahead | lookahead-<depth> | lookahead-comp:<ms>
+ *   always-forward | random | rule-view | rule-view-fx | rule-lanes | rule-moves | exec-cross | exec-rules | lookahead | lookahead-<depth> | lookahead-comp:<ms>
  *   clef | clef:<model>:<encoder>:<strategy>[:<manual>]   e.g. clef:clef-flash:json:choice:full
  */
 export function parsePolicy(id: string, getClient: () => ClefClient): PolicyFactory {
@@ -28,6 +29,7 @@ export function parsePolicy(id: string, getClient: () => ClefClient): PolicyFact
   if (id === ruleView.id) return ruleView;
   if (id === ruleViewFx.id) return ruleViewFx;
   if (id === ruleLanes.id) return ruleLanes;
+  if (id === ruleMoves.id) return ruleMoves;
   if (id === execCross.id) return execCross;
   if (id === execRules.id) return execRules;
   if (id === "lookahead") return lookaheadPolicy();
