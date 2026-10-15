@@ -2,7 +2,12 @@ import { ACTIONS } from "@ccr/core";
 import { ACTION_GLYPH, ACTION_LABEL, ACTION_ORDER, percent } from "../format.ts";
 import type { SessionState } from "../session.ts";
 
-export function DecisionCard({ state }: { state: SessionState }) {
+export interface DecisionCardProps {
+  state: SessionState;
+  onInspect(): void;
+}
+
+export function DecisionCard({ state, onInspect }: DecisionCardProps) {
   const last = state.last;
   const decision = last?.decision;
   const probabilities = decision?.probabilities;
@@ -37,6 +42,11 @@ export function DecisionCard({ state }: { state: SessionState }) {
             <p class="hint">
               confidence {decision.confidence.toFixed(2)} <em>(undocumented by Cloudflare)</em>
             </p>
+          )}
+          {decision?.sent && (
+            <button type="button" class="btn small inspect-button" onClick={onInspect}>
+              What it read (I)
+            </button>
           )}
           <div class="history" title="Recent decisions">
             {state.history.map((h) => (

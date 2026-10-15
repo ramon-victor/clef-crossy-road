@@ -209,6 +209,51 @@ async function checkHeldKey(ctx: Context): Promise<Report> {
 }
 
 /**
+ * The window that shows what the model read, opened with the I key in the real window: it must exist,
+ * show the state (with the rows of the world), the question and the options, and close again.
+ */
+async function checkInspector(ctx: Context): Promise<Report> {
+  ctx.select(CLEF_ID);
+  ctx.session.setSpeed(4);
+  ctx.session.start(1);
+  const started = performance.now();
+  while (performance.now() - started < 12_000 && ctx.session.state().decisions < 1)
+    await sleep(100);
+
+  const press = () =>
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: "i", bubbles: true }));
+  press();
+  await sleep(250);
+  const text = (selector: string) => document.querySelector(selector)?.textContent ?? "";
+  const opened = document.querySelector(".inspector") !== null;
+  const state = text(".inspector-pre");
+  const click = (label: string) =>
+    [...document.querySelectorAll<HTMLButtonElement>(".inspector-tabs button")]
+      .find((b) => b.textContent === label)
+      ?.click();
+  click("Question");
+  await sleep(100);
+  const question = text(".inspector-pre");
+  click("Options");
+  await sleep(100);
+  const options = text(".inspector-body");
+  press();
+  await sleep(150);
+  return {
+    inspector: {
+      opened,
+      stateHasRows: state.includes('"rows"'),
+      stateChars: state.length,
+      questionHasRules: question.includes("chicken"),
+      optionsListMoves: ["hop_forward", "hop_back", "hop_left", "hop_right", "stay"].every((m) =>
+        options.includes(m),
+      ),
+      closedAgain: document.querySelector(".inspector") === null,
+    },
+  };
+}
+
+/**
  * Only runs in the desktop app when launched with CCR_SELFTEST=1: checks rendering, the budget,
  * the cached Clef pipeline and the keyboard, writes runs/selftest.json and exits.
  */
@@ -228,6 +273,7 @@ export async function runSelfTest(ctx: Context): Promise<void> {
       checkRendering,
       checkBudget,
       checkClefFromCache,
+      checkInspector,
       checkHumanKeys,
       checkHeldKey,
     ]) {

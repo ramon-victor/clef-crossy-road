@@ -137,6 +137,28 @@ describe("Session: what the policy remembers", () => {
   });
 });
 
+describe("Session: what the model read", () => {
+  it("keeps what each decision was sent, for the inspector, for the recent decisions", async () => {
+    const sent = { model: "clef-flash", state: "map", questions: {} } as const;
+    const factory: PolicyFactory = {
+      id: "asks",
+      create: () => ({
+        kind: "observation",
+        id: "asks",
+        decide: async () => ({ action: "stay", sent }),
+      }),
+    };
+    const s = new Session();
+    s.setPolicy(factory);
+    s.start(3);
+    await runUntil(s, () => s.state().decisions >= 3, 2000);
+    const { history, last } = s.state();
+    expect(last?.decision.sent).toEqual(sent);
+    expect(history.length).toBeGreaterThanOrEqual(3);
+    expect(history.every((h) => h.decision.sent !== undefined)).toBe(true);
+  });
+});
+
 describe("Session: a policy that gets nowhere", () => {
   it("ends the game after the benchmark's stall limit and then stops asking", async () => {
     const spy = spyOn("stay");

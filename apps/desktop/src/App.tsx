@@ -7,6 +7,7 @@ import { GameCanvas } from "./GameCanvas.tsx";
 import { commandForKey } from "./keymap.ts";
 import { readLaunchOptions } from "./launch.ts";
 import { Panel } from "./Panel.tsx";
+import { InputInspector } from "./panel/InputInspector.tsx";
 import { buildPolicyChoices, freeSeedRange, nextMapSeed } from "./policies.ts";
 import { randomSeed } from "./seed.ts";
 import { runSelfTest } from "./selftest.ts";
@@ -34,6 +35,7 @@ export function App() {
   const [fps, setFps] = useState(60);
   const [soundOn, setSoundOn] = useState(true);
   const [autoRestart, setAutoRestart] = useState(true);
+  const [inspecting, setInspecting] = useState(false);
   const viewRef = useRef<GameView | null>(null);
 
   const refreshBudget = useCallback(() => {
@@ -144,6 +146,9 @@ export function App() {
         case "newMap":
           newMap();
           break;
+        case "inspect":
+          setInspecting((open) => !open);
+          break;
       }
     };
     window.addEventListener("keydown", onKey);
@@ -192,6 +197,7 @@ export function App() {
         onStep={() => session.stepOnce()}
         onRetry={retry}
         onNewMap={newMap}
+        onInspect={() => setInspecting(true)}
         onSeed={(seed) => {
           noteSeed(selectedId, seed);
           session.start(seed);
@@ -202,6 +208,13 @@ export function App() {
         }}
         onAutoRestart={setAutoRestart}
       />
+      {inspecting && (
+        <InputInspector
+          history={state.history}
+          policyId={state.policyId}
+          onClose={() => setInspecting(false)}
+        />
+      )}
     </div>
   );
 }

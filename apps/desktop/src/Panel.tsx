@@ -25,6 +25,7 @@ export interface PanelProps {
   onStep(): void;
   onRetry(): void;
   onNewMap(): void;
+  onInspect(): void;
   onSeed(seed: number): void;
   onSound(on: boolean): void;
   onAutoRestart(on: boolean): void;
@@ -71,7 +72,7 @@ export function Panel(props: PanelProps) {
         onSeed={props.onSeed}
       />
       {state.error && <ErrorCard error={state.error} />}
-      {!state.human && <DecisionCard state={state} />}
+      {!state.human && <DecisionCard state={state} onInspect={props.onInspect} />}
       <StatsCard state={state} />
       <BudgetCard budget={props.budget} choice={choice} gameNeurons={state.neurons} />
       <Footer

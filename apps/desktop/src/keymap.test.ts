@@ -27,6 +27,8 @@ describe("commandForKey", () => {
     ["N", "step"],
     ["r", "retry"],
     ["m", "newMap"],
+    ["i", "inspect"],
+    ["I", "inspect"],
   ])("%j is the %s command", (key, type) => {
     expect(press(key)).toEqual({ type });
   });
