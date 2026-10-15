@@ -17,12 +17,13 @@ Language: code, identifiers, commits and this file in English. `docs/` is in Bra
 
 ## Status
 
-Phases 0-4 are built (380 TS tests + 20 Rust tests). **The gate was NOT passed, in 11 conditions**: Clef-flash (JSON, grid,
+Phases 0-4 are built (406 TS tests + 20 Rust tests). **The gate was NOT passed, in 12 conditions**: Clef-flash (JSON, grid,
 critic-go, minimal manual, relative columns, and the player's view with the whole screen, motion and memory) plays like "always forward" (~3.7 rows),
 image input is significantly worse, and Clef 27B chose "forward" every time (`docs/07-experimentos.md`). Diagnosis: 72-96% of hops into water are
 fatal and the model puts its top probability on "forward" even when the platform is written right in front of it. Scripted readers of the same views make
 13-19 rows, so the information is in the view and the model does not use it. Clef 27B is the only one that moves in the probes (71% fatal choices into
-deadly water against 96%) and it costs ~30 neurons per decision. `clef-omni` with a picture did not change anything.
+deadly water against 96%) and it costs ~30 neurons per decision. `clef-omni` with a picture did not change anything. Writing the options as "when each move applies" (`manual: routing`, how the service's docs use `criteria`) flipped the
+model from "forward" to "mostly wait or left" without making it read the state (AUC 0.56-0.63; worse than always-forward over 7 games): the option text decides, not the column.
 The app offers **one** Clef (`DEFAULT_CLEF`: clef-flash, `json-fx` view, choice, full manual); other views, strategies and the 27B are benchmark axes, not players.
 The owner authorized commits on 2026-10-14 (history is on `main`, Conventional Commits, one logical change each, with the
 `Co-Authored-By` trailer). Pushing still needs their say-so. `.env` holds a working `CF_API_TOKEN` and `CF_ACCOUNT_ID`; `.env.second` (gitignored) holds a second account's.
@@ -39,6 +40,8 @@ Installed: Node 24, pnpm 10, git, MSVC, WebView2, Rust 1.99 (rustup, user-level)
 - `pnpm bench run --run <name> --policies <ids> --seeds 1..100 [--latency fixed:300:pipelined]`, `pnpm bench report --run <name>`,
   `pnpm bench diagnose --run <name>` (AUC of the model's P(forward) against real safety) and
   `pnpm bench export --run <name> [--policy id] [--min-score n]` (RL trajectories as NDJSON). Both read files only, no API call.
+- `pnpm bench show-input --seed 4 --actions hop_forward [--policy <id>]` prints the exact request a model would get for a state (no network, no key). In the app, the **I** key opens
+  a window with what the model read for each decision (state, question, options, answer): use it before guessing why the chicken does something.
 - `pnpm bench probe-sample` (90 labelled decision points from the free players' games, no API call), `probe-run --run <name> --policies <ids> --max-calls n`
   (one question per policy and state, same client, cache and ledger as `run`) and `probe-report --run <name>` (no API call): about a tenth of the cost of whole games.
 - `play.cmd` opens the release app; `play-clef.cmd` opens it on Clef-flash, seed 1 (cached, free). `CCR_PLAYER` and `CCR_SEED`

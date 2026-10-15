@@ -54,8 +54,9 @@ Resultados em `runs/<nome>/episodes.ndjson` (retomável) e `reports/`. As açõe
 | `clef-flash` · **JSON relativo (`json-rel`)** · `choice` (40 seeds) | 3,20 (referência nas mesmas 40 seeds: 3,30) | −0,10 [−0,30, 0,00] | indistinguível |
 | `clef-flash` · **vista de jogador (`json-fx`)** · `choice` | 3,73 | −0,05 [−0,21, 0,08] | indistinguível |
 | **Clef 27B** · vista de jogador (`json-fx`) (8 seeds) | 2,63 | 0,00 [0,00, 0,00] | idêntico (preliminar: só 8 partidas) |
+| `clef-flash` · `view-fx` · estilo **`routing`** (7 partidas, de 10; parou no teto de chamadas) | 1,43 | **−1,29 [−2,57, −0,29]** | **pior**: 43% estagnaram, 57% afogaram |
 
-**Resultado: o gate NÃO passou, em nenhuma das 11 condições testadas** (as quatro primeiras de 2026-10-14 na conta antiga, as demais nas contas novas; a última, só em 8 partidas, por custo). Com estes prompts o Clef-flash se comporta como `always-forward`:
+**Resultado: o gate NÃO passou, em nenhuma das 12 condições testadas** (as quatro primeiras de 2026-10-14 na conta antiga, as demais nas contas novas; as duas últimas, só em 8 e 7 partidas, por custo). Com estes prompts o Clef-flash se comporta como `always-forward`:
 - No `choice`, escolhe `hop_forward` em quase todas as decisões (a taxa de movimentos inválidos de 5% a 16% mostra que às vezes tenta outro caminho e bate numa árvore).
 - No `critic`, o modelo dá ao "avançar em grama aberta" risco de 0,30 contra 0,05 para um passo lateral, então uma regra de menor risco nunca avança. Com a regra `critic-go` (avançar a menos que o risco passe de 50%) ele sempre avança, porque o risco de avançar nunca passa de 50%.
 - Os modelos separam **tipo de terreno**, não **cinemática** ([06](06-observacao-e-prompts.md)).
@@ -164,6 +165,26 @@ O 27B custa ~30 neurons por decisão (o free tier de uma conta dá ~300 decisõe
 
 **Decisão sobre o app.** O Clef do app passou a ser o `json-fx` (a vista de jogador): no placar ele é igual ao `json` (3,73 contra 3,70), as decisões das seeds 1 a 100 estão no cache para essa vista (replays seguem grátis) e a memória
 ajuda onde o modelo mais trava. É uma escolha sobre o que o modelo vê, não sobre pontuação.
+
+### Opções que dizem quando cada jogada serve (`routing`, 2026-10-15)
+
+Depois do visualizador, a revisão do que o modelo recebe ([06](06-observacao-e-prompts.md)) apontou que a documentação do Clef usa **uma pergunta curta e opções que dizem quando cada uma serve**, e o app fazia o contrário. O estilo `routing`
+(`manual: "routing"`) escreve as regras sem nomes de campo e as opções como condições gerais (iguais para todo estado, sem números). Sonda de 90 estados, Clef-flash:
+
+| Condição (Flash) | Água mortal: escolha fatal (n=24) | Água aberta: boa jogada (n=12) | Rua mortal: fatal (n=12) | Grama aberta: boa jogada (n=8) | Árvore, 2ª tentativa: repete | Boa jogada, todos | Jogadas escolhidas (90) |
+|---|---|---|---|---|---|---|---|
+| `json-fx` · `full` (o app até aqui) | 96% | 100% | 100% | 100% | 50% | 44% | 82 frente, 5 esq., 2 dir., 1 trás |
+| `json-fx` · **`routing`** | **33%** | 42% | 33% | 63% | 30% | 52% (Δ +14 [1, 28] contra o controle `json`) | **16 frente, 56 esq., 12 esperar, 6 dir.** |
+| `view-fx` · **`routing`** | **13%** | 33% | 25% | 50% | 20% | 59% (Δ +21 [7, 36]) | **13 frente, 44 esperar, 31 esq., 2 dir.** |
+
+AUC de P(avançar) entre estados abertos e mortais: `json-fx` `routing` 0,56 na água e 0,61 na rua; `view-fx` `routing` 0,63 e 0,57 (o `full` tinha 0,66 e 0,85).
+
+**Partidas completas** (`view-fx` + `routing`, 10 seeds pedidas, 7 terminadas antes do teto de 150 chamadas): **1,43 ruas** contra 2,80 do `always-forward` nas mesmas seeds (Δ −1,29 [−2,57, −0,29], **pior**), 57% afogamento, **43% estagnação**, 24% das jogadas batendo em árvore.
+Nas 220 decisões escolheu `stay` 143 vezes, `hop_left` 67 e `hop_forward` 10; nunca `hop_right` nem `hop_back`. Na seed 6, 28 de 40 jogadas foram esquerda contra a mesma árvore.
+
+**Leitura.** O texto das opções **muda tudo o que o modelo escolhe** (de "82 de 90 para frente" para "16 de 90") e quase nada do **quanto ele olha para o estado**: a AUC fica em 0,56 a 0,63 em qualquer redação. Com as opções antigas o modelo ia reto;
+com as novas ele se **protege** (a escolha fatal na água mortal cai de 96% para 13–33%), mas também deixa de avançar quando dá (água aberta: 33–42% de boa jogada), espera, anda de lado e bate em árvore. A decisão é puxada pelo **significado das palavras das opções**, não pela coluna da plataforma. Isso explica por que nenhuma vista ajudou.
+A regra de parada da sonda (melhoria na água de ≥ 25 pontos com IC sem zero) também não foi atendida (Δ +11 e +19, ICs com zero), e a partida completa confirmou. Custo: 944 neurons na sonda e 1.062 nas partidas, **2.006 na conta `f173…`** (a `df5a…` não gastou nada no dia 2026-10-15 UTC).
 
 ## Atraso: a pergunta do modo tempo real
 

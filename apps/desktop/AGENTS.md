@@ -37,4 +37,5 @@ lets a person play.
 - The scene follows the hero with upstream's 3% per frame easing, expressed frame-rate independently (`followFactor`).
 - There is **one** model player (`CLEF_ID`, built from `DEFAULT_CLEF`). The other views, the critic and the 27B are benchmark conditions; do not add them back as players. An unknown `CCR_PLAYER` falls back to the free look-ahead.
 - Human key presses go straight to `Game.act`; holding a key or pressing faster than a hop just keeps one input queued in the core.
+- The **I** key (or "What it read" on the decision card) opens `InputInspector` with `Decision.sent`, the request exactly as the policy sent it. `ClefPolicy` builds it in one place (`requestFor`), so what is shown is what was sent; the episode records do not keep it.
 - `Session` keeps the same `Memory` the benchmark runner builds and hands it to the policy (a test pins this: it is what makes the benchmark's cached answers valid in the app). An AI that goes `DEFAULT_STALL_LIMIT` decisions without a new row is stopped (`stalled`) and stops spending.

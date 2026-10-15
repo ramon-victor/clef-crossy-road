@@ -53,7 +53,7 @@ decisão de 9B, que devolve probabilidades por opção, consegue jogar um jogo d
 
 Os riscos 1 e 3 da tabela acima se materializaram:
 
-- **Risco 1 (o modelo não supera o baseline): confirmado em 11 condições.** O Clef-flash, em JSON, em grade ASCII, com a estratégia `critic-go`,
+- **Risco 1 (o modelo não supera o baseline): confirmado em 12 condições.** O Clef-flash, em JSON, em grade ASCII, com a estratégia `critic-go`,
   com o manual mínimo e com as colunas medidas a partir da galinha (`json-rel`, 40 seeds), é **indistinguível de "sempre em frente"** (≈ 3,7 ruas contra 3,78; diferenças pareadas com IC cruzando zero). Com **imagem (E2)
   é significativamente pior** (−0,42 [−0,82, −0,05]) e o **Clef 27B** escolheu avançar em todas as decisões (Δ 0,00). O gate não passou ([07](07-experimentos.md)).
   Só o `clef-omni` ficou sem teste.

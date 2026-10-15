@@ -20,6 +20,8 @@ Três categorias, e um teste para qualquer campo novo: *"uma pessoa jogando sabe
 | **Memória** (o que o jogador lembra) | As últimas jogadas e o que cada uma fez ("andou", "a árvore bloqueou"), as linhas cruzadas, há quantas jogadas não ganha linha nova | — |
 | **Julgamento** (o que o jogador conclui) | — | "Seguro/perigoso", "morre se...", lista de jogadas válidas, tempo-até-colisão, "alcançável", qualquer avaliação por jogada. Quem pensa é o modelo; nenhuma regra nossa decide por ele |
 
+**Conhecimento de jogo** é uma quarta categoria, permitida: as regras e como se joga ("a água afoga sem plataforma", "uma árvore bloqueia", "avançar serve quando a linha à frente pode ser pisada"), **iguais para todo estado e sem números**. Um jogador sabe isso antes de olhar a tela, e é o jeito como a documentação do Clef usa as opções (`criteria` diz quando cada uma serve). Opções escritas assim são uma **condição própria** (`manual: routing`), rotulada no id da política; o que nunca pode entrar é algo calculado a partir do estado diante do modelo.
+
 A previsão a 0,2 s é uma função pura da observação (`col + velocidade × 0,2 s`). Ela é **igual para qualquer jogada e para qualquer posição da
 galinha**, e um teste confere que bate com o simulador 12 ticks depois (`packages/agent/src/forecast.test.ts`).
 
@@ -40,4 +42,5 @@ argumento de `decide(obs, memory)`. Os encoders antigos a ignoram, então suas r
 - (+) O modelo passa a receber o que um jogador usa, e o resultado mede o que o Clef faz com isso.
 - (+) Cada condição tem rótulo, então ninguém compara `json` com `json-fx` sem saber o que muda.
 - (−) A fronteira "percepção ou julgamento" é uma decisão humana; os campos novos passam pelo teste acima e por um teste de palavras proibidas.
-- Resultado medido: [07](../07-experimentos.md) ("Vista de jogador"). Nenhuma das vistas fez o Clef jogar melhor que "sempre em frente".
+- Resultado medido: [07](../07-experimentos.md) ("Vista de jogador" e "Opções que dizem quando cada jogada serve"). Nenhuma das vistas, nem o estilo `routing`, fez o Clef jogar melhor que "sempre em frente".
+- O que o modelo recebe pode ser visto no app (tecla I) e com `pnpm bench show-input`, que imprimem o pedido exatamente como é enviado.

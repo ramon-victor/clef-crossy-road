@@ -99,3 +99,27 @@ trabalho, não para concluir.** Detalhes e números em [00](00-viabilidade.md).
 "sempre em frente", e E2 (imagem) fica pior. O diagnóstico de AUC mostra que as probabilidades dos modelos separam **tipos de terreno**, mas não
 dizem quais saltos para a água sobrevivem. O resultado negativo é o achado do projeto, e o caminho natural é o fine-tuning com este núcleo como ambiente
 ([ADR-0006](adr/0006-sem-fine-tuning-nem-self-host.md)).
+
+## Auditoria do que o modelo recebe (2026-10-14)
+
+O pedido que o app manda para uma decisão tem três partes (`ModelInput` em `packages/agent/src/policy.ts`), e o app e o benchmark montam exatamente o mesmo (uma função só, `requestFor`, em `clef-policy.ts`):
+
+| Parte | O que é | Exemplo (primeiro rio da seed 4) |
+|---|---|---|
+| `state` | O conteúdo a avaliar: o mundo, pela vista escolhida | JSON com 12 linhas (`dz` −3 a +8), a memória e, no `json-fx`, a coluna de cada objeto daqui a 0,2 s |
+| `questions.move.instructions` | A pergunta e as regras | ~2.000 caracteres no estilo `full` |
+| `questions.move.criteria` | As opções e o texto de cada uma | `hop_forward: "Hop one row forward (dz +1), same column."` |
+
+Dá para ver tudo isso **no app** (tecla **I**, ou "What it read" no cartão da decisão) e **na linha de comando** (`pnpm bench show-input --seed 4 --actions hop_forward`, sem rede e sem custo).
+
+**O que a revisão achou.** Os **dados** estão certos: posições, tamanhos, velocidades, árvores, previsão a 0,2 s e memória batem com o simulador (há testes) e o app envia o mesmo que o benchmark (o autoteste responde do cache). O que estava errado é a **forma**:
+
+| # | Achado | Situação |
+|---|---|---|
+| 1 | A documentação do Clef usa uma pergunta curta e opções que dizem **quando cada uma serve** (`billing: "Payments, invoices, and refunds"`); o app mandava regras longas e opções que só dizem **o que a jogada faz** | Testado: estilo `routing` (abaixo). Mudou o que o modelo escolhe, mas não o acerto |
+| 2 | O manual falava em `col` e `blocked_cols`, e as vistas relativas trazem `dcol` e `blocked_dcols`, corrigido só numa nota no fim | Corrigido no estilo `routing`: regras sem nomes de campo e uma nota por vista que os define. `full` e `minimal` ficam como estavam (o cache depende do texto exato; um teste fixa o hash) |
+| 3 | Das 12 linhas, as que decidem o salto são as 3 primeiras à frente | Não mudado: um jogador vê a tela toda (ADR-0009) |
+| 4 | "Get as far forward as possible" e "the single best action" empurram para "frente" | O estilo `routing` pergunta "Which move does the chicken make now?" |
+| 5 | Não dava para ver nada disso | O visualizador e o `show-input` |
+
+O estilo `routing` usa opções iguais para todo estado e sem números (conhecimento geral de jogo, [ADR-0009](adr/0009-percepcao-memoria-e-julgamento.md)): `hop_forward: "The row straight ahead can be entered when the hop ends: no tree in the chicken's column, and on water a log or lily pad under that column, ..."`. Resultado em [07](07-experimentos.md).

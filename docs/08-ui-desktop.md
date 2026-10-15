@@ -31,6 +31,7 @@ são os do Expo-Crossy-Road, baixados localmente por `node scripts/fetch-assets.
 | Tempo | **Step**: o mundo espera o modelo, como no benchmark. **Real-time**: o mundo corre a 60 Hz e a ação vale quando a resposta chega |
 | Controles | Pausa (espaço), passo-a-passo (N, só em Step e pausado), retry da mesma seed (R), mapa novo (M), seed editável, velocidade 0,5× a 4× |
 | Teclado | Setas ou WASD. Apertar mais rápido que o salto, ou segurar a tecla, deixa a jogada **na fila** (1 vaga, a última vence) e ela começa quando o salto pousa, depois de o pouso ser checado: não dá para atravessar água nem rua encadeando saltos ([04](04-game-core.md), D9) |
+| **O que o modelo leu** | Tecla **I** (ou o botão "What it read" no cartão da decisão) abre uma janela sobre o jogo com o pedido da decisão **exatamente como foi enviado**: **State** (o mundo, uma linha por linha), **Question** (as instruções), **Options** (as opções e o texto de cada uma) e **Answer** (probabilidades, tokens, neurons, latência, cache). Mostra a política, o que ela vê e como é perguntada, volta nas últimas 14 decisões e copia o pedido em JSON. Esc fecha |
 | Painel | Barras com as `probabilities` **reais** do modelo; `confidence` rotulado como não documentado; histórico das últimas 14 jogadas; tag "cached" |
 | Orçamento | Medidor de neurons do dia (UTC), custo estimado por decisão nova, aviso quando o teto é atingido; uma decisão do cache aparece como "cached" e custa 0 |
 | Fim de partida | Cartão com a causa da morte, linhas cruzadas e melhor do dia; repetir a mesma seed ou mapa novo. **"Preso"**: um jogador de IA que passa 40 decisões sem uma linha nova (a regra do benchmark) encerra a partida, para de perguntar e de gastar, e o cartão diz "Stuck: no new row in 40 decisions" |
@@ -76,7 +77,8 @@ O Rust só aceita `clef`, `clef-flash` e `clef-omni`, sem URL arbitrária.
 | Modo Clef por atalho | Verificado com uma captura só da janela (`PrintWindow`): Clef-flash JSON, seed 1, etiqueta "cached", probabilidades reais e `confidence` 0,06, e o cartão "Drowned · 2 rows" |
 | Cartão "Preso" (2026-10-14, WebView2) | Com o jogador aleatório (gratuito) na seed 5, que não ganha linha nova: após 40 decisões aparece "Stuck: no new row in 40 decisions", com Retry e Novo mapa (captura só da janela) |
 | Clef padrão pelo cache (2026-10-14) | Autoteste do `.exe` com `json-fx`: 2 de 2 decisões do cache, 0 neurons, gasto do dia inalterado (a memória que o app monta é a do benchmark: há um teste) |
-| Testes | 52 testes do app (`Session`, teclas, seeds, estatísticas, políticas, memória e estagnação) e 20 testes Rust (datas UTC, taxas de neurons, ledger por conta, linha parcial, cache, erro, seeds) |
+| Visualizador (2026-10-15, WebView2) | O autoteste abre a janela com a tecla I no `.exe` real: estado com as linhas do mundo (1.450 caracteres), regras na pergunta, as cinco jogadas nas opções, e fecha de novo. Captura só da janela mostrando o JSON de uma decisão do Clef |
+| Testes | 57 testes do app (`Session`, teclas, seeds, estatísticas, políticas, memória e estagnação) e 20 testes Rust (datas UTC, taxas de neurons, ledger por conta, linha parcial, cache, erro, seeds) |
 
 Não verifiquei: teclas físicas do teclado (só eventos sintéticos no mesmo `keydown`), o instalador (`tauri build` com bundle NSIS) e o app com uma
 chamada de rede ao vivo em tempo real (as decisões do Clef na janela vieram do cache; o pipeline de rede é o mesmo do benchmark, já exercitado com a API).
