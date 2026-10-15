@@ -35,8 +35,11 @@ export function optionsOf(question: Question): Array<[string, string]> {
     : [];
 }
 
-/** The input as plain text, the way `bench show-input` prints it. */
-export function inputAsText(input: ModelInput): string {
+/**
+ * The part of a request that is the same for every decision of a game: each question with its
+ * instructions and its options, as plain text.
+ */
+export function questionsAsText(input: ModelInput): string {
   const sections: string[] = [];
   for (const [id, question] of Object.entries(input.questions)) {
     sections.push(
@@ -53,11 +56,17 @@ export function inputAsText(input: ModelInput): string {
       );
     }
   }
-  sections.push("== STATE ==", prettyState(input.state));
-  if (input.images)
+  return sections.join("\n");
+}
+
+/** The input as plain text, the way `bench show-input` prints it. */
+export function inputAsText(input: ModelInput): string {
+  const sections = [questionsAsText(input), "== STATE ==", prettyState(input.state)];
+  if (input.images) {
     sections.push(
       "",
       `(${input.images} picture${input.images === 1 ? "" : "s"} sent with the state)`,
     );
+  }
   return sections.join("\n");
 }

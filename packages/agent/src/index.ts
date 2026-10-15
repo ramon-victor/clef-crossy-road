@@ -36,7 +36,14 @@ export {
   renderSceneImage,
   type SceneImage,
 } from "./image.ts";
-export { inputAsJson, inputAsText, optionsOf, prettyState, sentences } from "./input-text.ts";
+export {
+  inputAsJson,
+  inputAsText,
+  optionsOf,
+  prettyState,
+  questionsAsText,
+  sentences,
+} from "./input-text.ts";
 export {
   emptyMemory,
   MEMORY_MOVES,
