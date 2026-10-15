@@ -9,7 +9,9 @@ import {
 } from "@ccr/clef";
 import { ACTIONS, type Action, type Observation } from "@ccr/core";
 import { ACTION_PREFERENCE } from "./baselines.ts";
-import { ENCODER_IDS, type EncoderId, encodeRequest } from "./encode.ts";
+import { ENCODER_IDS, ENCODER_LEVEL, type EncoderId, encodeRequest } from "./encode.ts";
+import { Executor, MANEUVER_ACTION, MANEUVER_IDS, type Maneuver } from "./executor.ts";
+import { lanesState } from "./lanes.ts";
 import type { Memory } from "./memory.ts";
 import type { Decision, ModelInput, ObservationPolicy, PolicyFactory } from "./policy.ts";
 import {
@@ -30,8 +32,12 @@ import {
  *            says it is more likely than not to die (see selectGoUnlessRisky).
  * The critic strategies add our own decision rule on top of the model, so they are separate
  * experimental conditions from `choice` and must be reported as such.
+ * maneuver:  one `choice` question over five manoeuvres; the model picks WHAT to do and the executor
+ *            (executor.ts) picks the moment and does the hopping, asking the model again only when the
+ *            manoeuvre is over or cannot be carried out. Only with the `lanes` view and the `rules` manual.
+ *            Steps the executor takes are not model calls and cost nothing (ADR-0010).
  */
-export const STRATEGY_IDS = ["choice", "critic", "critic-go"] as const;
+export const STRATEGY_IDS = ["choice", "critic", "critic-go", "maneuver"] as const;
 export type StrategyId = (typeof STRATEGY_IDS)[number];
 
 export interface ClefPolicyConfig {
@@ -82,12 +88,38 @@ export function parseClefPolicyId(id: string): ClefPolicyConfig {
   if (id === DEFAULT_CLEF_ID) return { ...DEFAULT_CLEF };
   const [prefix, model, encoder, strategy, manual = "full"] = id.split(":");
   if (prefix !== "clef") throw new Error(`Not a Clef policy id: "${id}"`);
-  return {
+  const config: ClefPolicyConfig = {
     model: oneOf(CLEF_MODELS, model, "model", id),
     encoder: oneOf(ENCODER_IDS, encoder, "encoder", id),
     strategy: oneOf(STRATEGY_IDS, strategy, "strategy", id),
     manual: oneOf(MANUAL_IDS, manual, "manual", id),
   };
+  assertSupported(config, id);
+  return config;
+}
+
+/** The `rules` options name the fields of the `lanes` view, and manoeuvres only exist for those options. */
+function assertSupported(config: ClefPolicyConfig, id: string): void {
+  if (config.manual === "rules" && config.encoder !== "lanes") {
+    throw new Error(`The rules manual only reads the lanes view: "${id}"`);
+  }
+  if (config.strategy === "maneuver" && (config.encoder !== "lanes" || config.manual !== "rules")) {
+    throw new Error(`The maneuver strategy needs the lanes view and the rules manual: "${id}"`);
+  }
+  if (
+    config.encoder === "lanes" &&
+    (config.strategy === "critic" || config.strategy === "critic-go")
+  ) {
+    throw new Error(`The critic strategies are not defined for the lanes view: "${id}"`);
+  }
+}
+
+/** What the help to the model amounts to, for reports: the view, plus the rules and the executor when they are on. */
+export function helpLabel(config: ClefPolicyConfig): string {
+  const parts: string[] = [ENCODER_LEVEL[config.encoder]];
+  if (config.manual === "rules") parts.push("rules");
+  if (config.strategy === "maneuver") parts.push("executor");
+  return parts.join(" + ");
 }
 
 /** Risks within this distance of the lowest one count as equally safe. */
@@ -111,11 +143,14 @@ export function selectGoUnlessRisky(risk: Record<Action, number>): Action {
 export function clefPolicy(client: ClefClient, config: ClefPolicyConfig): PolicyFactory {
   const id = clefPolicyId(config);
   const cacheTag = `${PROMPT_VERSION}|${config.encoder}|${config.strategy}|${config.manual}`;
+  const maneuvers = config.strategy === "maneuver";
 
   const choiceQuestion: Question = {
     type: "choice",
-    instructions: choiceInstructions(config.manual, config.encoder),
-    criteria: { ...criteriaFor(config.manual) },
+    instructions: choiceInstructions(config.manual, config.encoder, config.strategy),
+    criteria: {
+      ...(maneuvers ? criteriaFor(config.manual, "maneuver") : criteriaFor(config.manual)),
+    },
   };
   const riskQuestions: Record<string, Question> = Object.fromEntries(
     ACTIONS.map((a) => [
@@ -124,29 +159,61 @@ export function clefPolicy(client: ClefClient, config: ClefPolicyConfig): Policy
     ]),
   );
 
-  const questions = config.strategy === "choice" ? { move: choiceQuestion } : riskQuestions;
+  const questions =
+    config.strategy === "choice" || maneuvers ? { move: choiceQuestion } : riskQuestions;
 
   /** The one place a request is put together, so what is shown is what is sent. */
-  const requestFor = (obs: Observation, memory?: Memory): ClefRequest => {
+  const requestFor = (obs: Observation, memory?: Memory, lastManeuver?: string): ClefRequest => {
+    if (maneuvers) {
+      return {
+        model: config.model,
+        state: lanesState(obs, memory, lastManeuver),
+        questions,
+        cacheTag,
+      };
+    }
     const { state, images } = encodeRequest(config.encoder, obs, memory);
     return { model: config.model, state, ...(images ? { images } : {}), questions, cacheTag };
   };
 
-  const policy: ObservationPolicy = {
-    kind: "observation",
-    id,
-    describe: (obs, memory) => inputOf(requestFor(obs, memory)),
-    async decide(obs: Observation, memory?: Memory): Promise<Decision> {
-      const request = requestFor(obs, memory);
-      const result = await client.run(request);
-      const decision =
-        config.strategy === "choice"
-          ? fromChoice(result)
-          : fromRisk(result, config.strategy === "critic-go" ? selectGoUnlessRisky : selectByRisk);
-      return { ...decision, sent: inputOf(request) };
-    },
+  /** A policy is created per episode: the executor remembers the manoeuvre in progress. */
+  const create = (): ObservationPolicy => {
+    const executor = new Executor();
+    return {
+      kind: "observation",
+      id,
+      describe: (obs, memory) => inputOf(requestFor(obs, memory, executor.lastResult)),
+      async decide(obs: Observation, memory?: Memory): Promise<Decision> {
+        if (!maneuvers) {
+          const request = requestFor(obs, memory);
+          const result = await client.run(request);
+          const decision =
+            config.strategy === "choice"
+              ? fromChoice(result)
+              : fromRisk(
+                  result,
+                  config.strategy === "critic-go" ? selectGoUnlessRisky : selectByRisk,
+                );
+          return { ...decision, sent: inputOf(request) };
+        }
+        const state = lanesState(obs, memory);
+        const step = executor.next(state);
+        if (step) return { action: step.action, source: "executor", note: step.note };
+        const request = requestFor(obs, memory, executor.lastResult);
+        const chosen = fromManeuver(await client.run(request));
+        const first = executor.start(chosen.maneuver, state);
+        return {
+          ...chosen.decision,
+          action: first.action,
+          source: "model",
+          note: `model chose ${chosen.maneuver}; ${first.note}`,
+          extra: { maneuver: chosen.maneuver },
+          sent: inputOf(request),
+        };
+      },
+    };
   };
-  return { id, create: () => policy };
+  return { id, create };
 }
 
 function inputOf({ model, state, questions, images }: ClefRequest): ModelInput {
@@ -180,6 +247,31 @@ function fromChoice(result: ClefResult): Decision {
     probabilities,
     ...(answer.confidence !== undefined ? { confidence: answer.confidence } : {}),
     ...meta(result),
+  };
+}
+
+const isManeuver = (value: string): value is Maneuver =>
+  (MANEUVER_IDS as readonly string[]).includes(value);
+
+/** The model's pick among manoeuvres. Its probabilities are reported on the move each manoeuvre is made of. */
+function fromManeuver(result: ClefResult): { maneuver: Maneuver; decision: Decision } {
+  const answer: Answer | undefined = result.answers.move;
+  if (answer?.type !== "choice") throw new Error("Clef returned no `move` choice answer");
+  if (!isManeuver(answer.choice))
+    throw new Error(`Clef chose an unknown manoeuvre: ${answer.choice}`);
+  const probabilities: Partial<Record<Action, number>> = {};
+  for (const maneuver of MANEUVER_IDS) {
+    const p = answer.probabilities[maneuver];
+    if (p !== undefined) probabilities[MANEUVER_ACTION[maneuver]] = p;
+  }
+  return {
+    maneuver: answer.choice,
+    decision: {
+      action: MANEUVER_ACTION[answer.choice],
+      probabilities,
+      ...(answer.confidence !== undefined ? { confidence: answer.confidence } : {}),
+      ...meta(result),
+    },
   };
 }
 

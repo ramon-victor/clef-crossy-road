@@ -87,6 +87,8 @@ export interface DecisionRecord {
   inputTokens?: number;
   neurons?: number;
   cached?: boolean;
+  /** Set only for steps the executor took inside a manoeuvre the model chose. */
+  source?: "model" | "executor";
   extra?: Record<string, unknown>;
 }
 
@@ -191,6 +193,7 @@ function toRecord(
   if (decision.inputTokens !== undefined) record.inputTokens = decision.inputTokens;
   if (decision.neurons !== undefined) record.neurons = decision.neurons;
   if (decision.cached !== undefined) record.cached = decision.cached;
+  if (decision.source === "executor") record.source = decision.source;
   if (decision.extra) record.extra = decision.extra;
   return record;
 }

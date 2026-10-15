@@ -1,5 +1,6 @@
 import { type Action, MAX_ABS_X, type Observation, type ObsRow } from "@ccr/core";
 import { HOP_SECONDS, worldAfter } from "./forecast.ts";
+import { canStand, type LanesState, lanesState } from "./lanes.ts";
 import type { Memory } from "./memory.ts";
 import type { Decision, ObservationPolicy, PolicyFactory } from "./policy.ts";
 
@@ -97,3 +98,45 @@ function rulePolicy(id: string, forecast: boolean): PolicyFactory {
 export const ruleView = rulePolicy("rule-view", false);
 /** Reads the map as it is now and as it will be when the hop lands. */
 export const ruleViewFx = rulePolicy("rule-view-fx", true);
+
+/**
+ * What a careful person would do with the words of the `lanes` view and nothing else: hop forward when
+ * the cell ahead can be stood on, otherwise step to a side from which the way ahead is open, otherwise
+ * wait if where it stands is safe, otherwise leave. It is the ideal follower of the `rules` manual and
+ * a free sufficiency test of the view, never a model.
+ */
+export function readLanes(state: LanesState): Action {
+  const { forward, sideways, backward, chicken } = state;
+  if (canStand(forward.lands_on)) return "hop_forward";
+
+  const left = canStand(sideways.left_lands_on) && canStand(forward.lands_on_after_stepping_left);
+  const right =
+    canStand(sideways.right_lands_on) && canStand(forward.lands_on_after_stepping_right);
+  if (left && right) {
+    return chicken.place_in_world === "at_left_edge" || chicken.place_in_world === "left"
+      ? "hop_right"
+      : "hop_left";
+  }
+  if (left) return "hop_left";
+  if (right) return "hop_right";
+
+  if (canStand(chicken.stays_on)) return "stay";
+
+  if (canStand(sideways.left_lands_on)) return "hop_left";
+  if (canStand(sideways.right_lands_on)) return "hop_right";
+  if (canStand(backward.lands_on)) return "hop_back";
+  return "hop_forward";
+}
+
+/** The ideal follower of the words, one decision per hop. */
+export const ruleLanes: PolicyFactory = (() => {
+  const id = "rule-lanes";
+  const policy: ObservationPolicy = {
+    kind: "observation",
+    id,
+    decide: async (obs: Observation, memory?: Memory) => ({
+      action: readLanes(lanesState(obs, memory)),
+    }),
+  };
+  return { id, create: () => policy };
+})();

@@ -1,6 +1,7 @@
 import type { Observation, ObsMover, ObsRow } from "@ccr/core";
 import { columnAfter, HOP_SECONDS } from "./forecast.ts";
 import { renderSceneImage } from "./image.ts";
+import { lanesState } from "./lanes.ts";
 import { emptyMemory, type Memory } from "./memory.ts";
 import { outcomeText, renderView } from "./view.ts";
 
@@ -12,6 +13,7 @@ export const ENCODER_IDS = [
   "view",
   "view-fx",
   "json-fx",
+  "lanes",
 ] as const;
 export type EncoderId = (typeof ENCODER_IDS)[number];
 
@@ -21,8 +23,11 @@ export type EncoderId = (typeof ENCODER_IDS)[number];
  * - now:      the facts at the instant of the decision, in whatever format.
  * - memory:   plus what the player remembers of its last moves.
  * - forecast: plus where the moving objects will be when the next hop lands.
+ * - words:    the same knowledge as `forecast`, but compared by the code and told as the word for what
+ *            fills each cell (`lanes`, ADR-0010). Nothing is added about the world; the model no longer
+ *            has to subtract and compare.
  */
-export type PerceptionLevel = "now" | "memory" | "forecast";
+export type PerceptionLevel = "now" | "memory" | "forecast" | "words";
 
 export const ENCODER_LEVEL: Readonly<Record<EncoderId, PerceptionLevel>> = {
   json: "now",
@@ -32,6 +37,7 @@ export const ENCODER_LEVEL: Readonly<Record<EncoderId, PerceptionLevel>> = {
   view: "memory",
   "view-fx": "forecast",
   "json-fx": "forecast",
+  lanes: "words",
 };
 
 /**
@@ -46,6 +52,7 @@ export const ENCODER_LEVEL: Readonly<Record<EncoderId, PerceptionLevel>> = {
  * - `view` (E4): the whole screen as a text map around the chicken, plus the memory (view.ts).
  * - `view-fx` (E5): `view` plus a second map of the moving objects as they will be in 0.2 s.
  * - `json-fx` (E6): `json-rel` plus each object's column in 0.2 s and the memory as fields.
+ * - `lanes` (E7): what fills the cells the chicken could land on, in a closed vocabulary of words (lanes.ts).
  */
 export function encodeState(encoder: EncoderId, obs: Observation, memory?: Memory): unknown {
   return encodeRequest(encoder, obs, memory).state;
@@ -66,6 +73,8 @@ export function encodeRequest(
       return {
         state: relativeState(obs, { horizon: HOP_SECONDS, memory: memory ?? emptyMemory() }),
       };
+    case "lanes":
+      return { state: lanesState(obs, memory) };
     case "view":
       return { state: renderView(obs, memory, { forecast: false }) };
     case "view-fx":

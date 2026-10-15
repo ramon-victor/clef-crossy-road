@@ -12,6 +12,7 @@ export {
   DEFAULT_CLEF,
   DEFAULT_CLEF_ID,
   GO_RISK_LIMIT,
+  helpLabel,
   parseClefPolicyId,
   RISK_TOLERANCE,
   STRATEGY_IDS,
@@ -28,6 +29,23 @@ export {
   encodeState,
   type PerceptionLevel,
 } from "./encode.ts";
+export {
+  type Act,
+  alwaysCross,
+  type Chooser,
+  Executor,
+  execCross,
+  execRules,
+  executorPolicy,
+  MANEUVER_ACTION,
+  MANEUVER_IDS,
+  MAX_WAIT_STEPS,
+  type Maneuver,
+  maneuverByRules,
+  type Plan,
+  type Step,
+  stepPlan,
+} from "./executor.ts";
 export { columnAfter, HOP_SECONDS, worldAfter } from "./forecast.ts";
 export {
   IMAGE_COLS,
@@ -44,6 +62,16 @@ export {
   questionsAsText,
   sentences,
 } from "./input-text.ts";
+export {
+  CELL_WORDS,
+  type Cell,
+  canStand,
+  cellAt,
+  isPermanent,
+  type LanesState,
+  lanesState,
+  STANDABLE,
+} from "./lanes.ts";
 export {
   emptyMemory,
   MEMORY_MOVES,
@@ -63,15 +91,17 @@ export {
   ACTION_CRITERIA,
   choiceInstructions,
   criteriaFor,
+  MANEUVER_CRITERIA,
   MANUAL_IDS,
   MANUALS,
   type ManualId,
   PROMPT_VERSION,
   ROUTING_CRITERIA,
+  RULES_CRITERIA,
   riskInstructions,
   riskQuestionId,
 } from "./prompts.ts";
-export { ruleView, ruleViewFx } from "./rule.ts";
+export { readLanes, ruleLanes, ruleView, ruleViewFx } from "./rule.ts";
 export {
   type ApplyOptions,
   applyDecision,

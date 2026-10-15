@@ -23,6 +23,8 @@ const CHOICE_TOKENS: Readonly<Record<EncoderId, { tokens: number; measured: bool
   view: { tokens: 1367, measured: true },
   "view-fx": { tokens: 1540, measured: true },
   "json-fx": { tokens: 1425, measured: true },
+  // An estimate from the size of the request against `json-fx`, until a probe reads the real figure.
+  lanes: { tokens: 1260, measured: false },
 };
 
 /** The critic asks five questions, so it repeats the instructions five times. Only measured with `json`. */
@@ -33,7 +35,7 @@ export function decisionCost(config: {
   encoder: EncoderId;
   strategy: StrategyId;
 }): DecisionCost {
-  const critic = config.strategy !== "choice";
+  const critic = config.strategy === "critic" || config.strategy === "critic-go";
   const { tokens, measured } = critic
     ? { tokens: CRITIC_TOKENS, measured: config.encoder === "json" }
     : CHOICE_TOKENS[config.encoder];

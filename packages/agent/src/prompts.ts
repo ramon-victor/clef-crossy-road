@@ -1,5 +1,6 @@
 import type { Action } from "@ccr/core";
 import type { EncoderId } from "./encode.ts";
+import type { Maneuver } from "./executor.ts";
 import { IMAGE_LEGEND } from "./image.ts";
 
 /**
@@ -15,8 +16,12 @@ export const PROMPT_VERSION = "p1";
  * routing: the way the service's documentation uses a choice question: a short question, and options
  * that say when each one applies. The rules and the options are the same for every state: general
  * knowledge of how the game is played, nothing worked out from the state (ADR-0009).
+ * rules: for the `lanes` view only. The rules of the game plus options that name the fields of that view
+ * and the words they can hold, the way the Doom player of the other Jev projects writes its threshold into
+ * the option text. It measures whether the model applies a written policy to words, and is labelled so
+ * (ADR-0010). The same for every state.
  */
-export const MANUAL_IDS = ["full", "minimal", "routing"] as const;
+export const MANUAL_IDS = ["full", "minimal", "routing", "rules"] as const;
 export type ManualId = (typeof MANUAL_IDS)[number];
 
 const MINIMAL = [
@@ -51,10 +56,22 @@ const ROUTING = [
   "The moves: hop_forward goes one row ahead, hop_back one row behind, hop_left one column to the left (col -1), hop_right one to the right (col +1), and stay waits.",
 ].join(" ");
 
+/** The rules and the vocabulary of the `lanes` view. Field names are explained by the view's own note. */
+const RULES = [
+  "You control a chicken in a Crossy Road style game. It crosses rows of grass, road, rail and water, one hop at a time, and the world keeps moving while it hops.",
+  "A decision is one hop of 0.2 seconds, or staying still for that long.",
+  "The state has already worked out what fills the cells the chicken could land on, for the moment a hop ends.",
+  "A cell holds one of these words: empty (nothing there), tree, water (open water, no platform), log, lily_pad, vehicle, train, train_coming (the rail warning light is on), outside_world (past the edge of the world) or unseen.",
+  "The chicken can stand on empty, log and lily_pad and on nothing else: a tree stops it (it stays where it was), water drowns it, a vehicle or a train hits it, and outside_world kills it.",
+  "A log or lily pad carries the chicken sideways while it stands on it.",
+  "The moves: hop_forward goes one row ahead, hop_back one row behind, hop_left one column to the left, hop_right one column to the right, and stay waits.",
+].join(" ");
+
 export const MANUALS: Readonly<Record<ManualId, string>> = {
   minimal: MINIMAL,
   full: FULL,
   routing: ROUTING,
+  rules: RULES,
 };
 
 /** Option ids are sorted as strings and read by the model, so they are descriptive. */
@@ -83,9 +100,40 @@ export const ROUTING_CRITERIA: Readonly<Record<Action, string>> = {
   stay: "The way straight ahead cannot be entered yet but is about to open (a platform drifting under the column, a vehicle about to pass), and the chicken is not in danger where it stands.",
 };
 
+const STANDABLE_WORDS = "empty, log or lily_pad";
+
+/**
+ * Options that name the fields of the `lanes` view and the words they hold. Each says when it is the
+ * right move, the same for every state; none of them is worked out from the state in front of the model.
+ */
+export const RULES_CRITERIA: Readonly<Record<Action, string>> = {
+  hop_forward: `Correct when forward.lands_on is ${STANDABLE_WORDS}: the chicken can stand where a hop forward lands.`,
+  hop_left: `Correct when forward.lands_on is not ${STANDABLE_WORDS}, and sideways.left_lands_on is ${STANDABLE_WORDS}, and forward.lands_on_after_stepping_left is ${STANDABLE_WORDS}. If the same is true of hop_right, take the side away from the nearer edge (chicken.place_in_world). Also correct when chicken.stays_on is not ${STANDABLE_WORDS} and sideways.left_lands_on is.`,
+  hop_right: `Correct when forward.lands_on is not ${STANDABLE_WORDS}, and sideways.right_lands_on is ${STANDABLE_WORDS}, and forward.lands_on_after_stepping_right is ${STANDABLE_WORDS}. If the same is true of hop_left, take the side away from the nearer edge (chicken.place_in_world). Also correct when chicken.stays_on is not ${STANDABLE_WORDS} and sideways.right_lands_on is.`,
+  stay: `Correct when forward.lands_on is not ${STANDABLE_WORDS}, neither side step leads to a forward cell that is, and chicken.stays_on is ${STANDABLE_WORDS}: where the chicken stands cannot hurt it, so it waits for the row ahead to open.`,
+  hop_back: `Correct only when chicken.stays_on is not ${STANDABLE_WORDS}, neither side can be stood on, and backward.lands_on is ${STANDABLE_WORDS}.`,
+};
+
+/** The `maneuver` strategy: the model picks what to do, the controller picks the moment and hops. */
+export const MANEUVER_CRITERIA: Readonly<Record<Maneuver, string>> = {
+  cross_ahead: `Go forward through the row ahead; the controller waits for the right moment and hops. Correct when forward.lands_on is ${STANDABLE_WORDS}, or when it is water, vehicle, train or train_coming and forward.things_move is left or right (logs or traffic keep passing, so a place will open). Not correct when forward.lands_on is a tree.`,
+  sidestep_left: `Step one column to the left, then be asked again; the controller hops when that cell can be stood on. Correct when going straight ahead will not work (forward.lands_on is a tree, or water in a row where forward.things_move is no) and forward.lands_on_after_stepping_left is ${STANDABLE_WORDS}.`,
+  sidestep_right: `Step one column to the right, then be asked again; the controller hops when that cell can be stood on. Correct when going straight ahead will not work (forward.lands_on is a tree, or water in a row where forward.things_move is no) and forward.lands_on_after_stepping_right is ${STANDABLE_WORDS}. If the left side works too, take the side away from the nearer edge (chicken.place_in_world).`,
+  back_off: `Go one row back, then be asked again. Correct only when chicken.stays_on is not ${STANDABLE_WORDS}, neither side can be stood on, and backward.lands_on is ${STANDABLE_WORDS}.`,
+  wait_here: `Do nothing for one step, then be asked again. Correct when no other option applies and chicken.stays_on is ${STANDABLE_WORDS}.`,
+};
+
 /** The options of a choice question for this prompt style. */
-export const criteriaFor = (manual: ManualId): Readonly<Record<Action, string>> =>
-  manual === "routing" ? ROUTING_CRITERIA : ACTION_CRITERIA;
+export function criteriaFor(manual: ManualId): Readonly<Record<Action, string>>;
+export function criteriaFor(
+  manual: ManualId,
+  strategy: "maneuver",
+): Readonly<Record<Maneuver, string>>;
+export function criteriaFor(manual: ManualId, strategy?: string): Readonly<Record<string, string>> {
+  if (strategy === "maneuver") return MANEUVER_CRITERIA;
+  if (manual === "routing") return ROUTING_CRITERIA;
+  return manual === "rules" ? RULES_CRITERIA : ACTION_CRITERIA;
+}
 
 /** What the plain `json` fields are called, for the style whose rules carry no field names. */
 const ABSOLUTE_NOTE =
@@ -105,7 +153,15 @@ const FORECAST_NOTE =
 const VIEW_NOTE =
   "In this view the world is drawn as a text map around the chicken, which is @ in the row marked dz=0 (rows with larger dz are further ahead, so the top of the map is the furthest). Each cell is one column; the columns run from -5 to +5 relative to the chicken's own column, so the middle cell is straight ahead of it, and # is outside the world. Cells: . open ground or empty road, T tree, ~ water, L log, o lily pad, > vehicle moving to larger col, < vehicle moving to smaller col, X train or stopped vehicle, = rail. Next to each row with moving objects are their exact numbers: dcol is the object's centre minus the chicken's column and half is its half_extent, so the chicken's centre is inside an object when |dcol| < half.";
 
+/** How the `lanes` view is read. A legend of its fields, nothing more. */
+const LANES_NOTE =
+  "In the state, chicken.stays_on is what is under the chicken when this hop ends if it does not move. forward.lands_on is the cell a hop forward lands on; forward.lands_on_after_stepping_left and forward.lands_on_after_stepping_right are the cell a hop forward would land on one hop later, if the chicken first stepped one column to that side. sideways.left_lands_on and sideways.right_lands_on are the cells a hop to that side lands on, and backward.lands_on the cell a hop back lands on. forward.things_move is the way the vehicles or logs of the row ahead move on the screen (no when they stand still); chicken.carried_towards is the way a platform carries the chicken; chicken.place_in_world says how close it is to the left or right edge of the world, where it dies. memory lists its last moves with what each did; blocked_last_two is true when its last two moves were both stopped by a tree, and no_new_row_for_a_while when several moves have passed without reaching a new row.";
+
+const MANEUVER_NOTE =
+  "The moves are manoeuvres: a controller waits for the right moment and does the hopping, then the chicken is asked again. memory.last_maneuver says how the previous one went.";
+
 const ENCODER_NOTES: Readonly<Partial<Record<EncoderId, string>>> = {
+  lanes: LANES_NOTE,
   image: IMAGE_LEGEND,
   "json-rel": RELATIVE_NOTE,
   view: `${VIEW_NOTE} ${MEMORY_NOTE}`,
@@ -124,9 +180,18 @@ const CHOICE_QUESTION: Readonly<Record<ManualId, string>> = {
   full: "Choose the single best action for this decision step.",
   minimal: "Choose the single best action for this decision step.",
   routing: "Which move does the chicken make now?",
+  rules:
+    "Which move does the chicken make now? Check the options in this order: hop_forward, then the side steps, then stay, then leaving a spot it cannot stand on.",
 };
 
-export function choiceInstructions(manual: ManualId, encoder?: EncoderId): string {
+export function choiceInstructions(
+  manual: ManualId,
+  encoder?: EncoderId,
+  strategy?: string,
+): string {
+  if (strategy === "maneuver") {
+    return `${withEncoderNote(manual, encoder)} ${MANEUVER_NOTE} Which manoeuvre does the chicken start now?`;
+  }
   return `${withEncoderNote(manual, encoder)} ${CHOICE_QUESTION[manual]}`;
 }
 

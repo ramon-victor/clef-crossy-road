@@ -26,6 +26,13 @@ export interface Decision {
   /** Strategy-specific numbers (for example per-action death risk in the critic strategy). */
   extra?: Record<string, unknown>;
   /**
+   * Who made the move. A model's answer is the default; `executor` marks a step the code took inside a
+   * manoeuvre the model had chosen, which asked the model nothing and cost nothing (ADR-0010).
+   */
+  source?: "model" | "executor";
+  /** In a sentence, what happened, for the log and the inspector (executor steps). */
+  note?: string;
+  /**
    * What the model read to give this answer. For people to look at (the app shows it); the episode
    * records do not keep it.
    */
