@@ -8,6 +8,7 @@
   },
   "scripts": {
     "dev": "node scripts/fetch-assets.mjs && pnpm --filter @ccr/desktop dev",
+    "dev:desktop": "node scripts/fetch-assets.mjs && pnpm --filter @ccr/desktop tauri dev",
     "typecheck": "pnpm -r typecheck",
     "test": "pnpm -r test",
     "bench": "node --env-file-if-exists=.env apps/bench/src/cli.ts",

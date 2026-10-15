@@ -35,6 +35,16 @@ em **Setup → Cloudflare → Configure** e selecione Clef-flash ou Clef (27B).
 
 ## Ver o app desktop rodando
 
+Na raiz, para abrir a janela desktop em modo de desenvolvimento:
+
+```bash
+pnpm run dev:desktop
+```
+
+O comando prepara os assets, inicia o Vite e compila/abre o Tauri com recarga automática.
+Requer Rust, as ferramentas de compilação C++ do Windows e WebView2. A primeira compilação pode demorar.
+Use **Ctrl+C** no terminal para encerrar. Encerre antes qualquer `pnpm run dev`, pois ambos usam a porta 5173.
+
 Depois de construir uma vez (comandos abaixo), basta dar **duplo clique**:
 
 | Arquivo | O que abre |
@@ -58,7 +68,7 @@ pnpm typecheck && pnpm lint && pnpm test
 
 pnpm --filter @ccr/desktop build
 cd apps/desktop && pnpm tauri build --no-bundle && cd ../..   # gera o .exe de release (precisa do Rust: rustup)
-pnpm --filter @ccr/desktop tauri dev   # ou: abre o app em modo de desenvolvimento
+pnpm run dev:desktop                 # ou: abre o app em modo de desenvolvimento
 pnpm bench plan --policies lookahead,always-forward --seeds 1..100
 pnpm bench run  --run minha-execucao --policies always-forward,random,lookahead --seeds 1..100
 pnpm bench report --run minha-execucao

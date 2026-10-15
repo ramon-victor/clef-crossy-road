@@ -29,6 +29,7 @@ lets a person play.
 ## Commands
 
 - `pnpm run dev` at the repository root prepares assets and serves the browser UI at `http://localhost:5173`.
+- `pnpm run dev:desktop` at the root prepares assets and starts Tauri development, including its Vite server.
 - `pnpm --filter @ccr/desktop test` (Session, key map, seeds, policies; no DOM and no real timers) and `typecheck`.
 - `pnpm --filter @ccr/desktop tauri dev`; add `CCR_SELFTEST=1` for the scripted check that writes `runs/selftest.json`.
 - `cargo test --lib` in `src-tauri` (PATH needs `%USERPROFILE%\.cargo\bin`).

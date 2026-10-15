@@ -36,6 +36,7 @@ Installed: Node 24, pnpm 10, git, MSVC, WebView2, Rust 1.99 (rustup, user-level)
 
 - `pnpm install`; `node scripts/fetch-assets.mjs` once, to download Evan's models/audio locally (gitignored)
 - `pnpm run dev` at the root prepares assets and serves `http://localhost:5173`, starting with the free look-ahead player.
+- `pnpm run dev:desktop` prepares assets and launches Tauri development (Rust/C++ tools/WebView2 required); stop browser dev first (same port).
 - `pnpm typecheck` / `pnpm lint` / `pnpm test`: run all three before declaring work done
 - `pnpm --filter @ccr/core test`: core only, no network, ~3 s
 - `pnpm bench plan --policies <ids> --seeds 1..100`: estimates neurons and splits a run over days. **Run it before any `run` or `probe-run` that uses a model.**

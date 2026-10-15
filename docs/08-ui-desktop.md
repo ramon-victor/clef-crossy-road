@@ -15,6 +15,11 @@ ou `?player=clef-flash&seed=6` sobrescreve essa escolha; um jogador desconhecido
 O desktop mantém o Clef-flash na primeira seed conhecida; a gratuidade desse replay depende do cache
 local completo, que fica fora do git. Selecionar um modelo pode fazer chamadas pagas em neurons.
 
+Para desenvolver na janela desktop: `pnpm run dev:desktop` na raiz. O comando prepara os assets
+e executa `tauri dev`, que inicia seu próprio Vite e compila/abre a janela com recarga automática.
+Requer Rust, ferramentas de compilação C++ do Windows e WebView2. Não executar junto com `pnpm run dev`:
+os dois usam a porta 5173. Ctrl+C encerra o processo.
+
 ```
 ┌───────────────────────────────────────┬──────────────────────┐
 │ 86                                    │ QUEM JOGA [select] ⓘ │
