@@ -2,6 +2,7 @@ import type { Action } from "@ccr/core";
 import type { EncoderId } from "./encode.ts";
 import type { Maneuver } from "./executor.ts";
 import { IMAGE_LEGEND } from "./image.ts";
+import { LOOKUP_GAME, SCENE_NOTE } from "./route-prompts.ts";
 
 /**
  * Prompt text is versioned: a change bumps PROMPT_VERSION, which is part of every cache key and
@@ -28,8 +29,18 @@ export const PROMPT_VERSION = "p1";
  * exclusive: for the `moves` view only. The same game text and the same short options, but each one also
  * states the cases that rule it out, so exactly one is true in any state (what the Doom `rule` options do:
  * "do not pick this if...").
+ * lookup: for the `scene` view and the `route` strategy only. The game text and the two questions with one
+ * lookup each and solved examples (route-prompts.ts), the same for every state (ADR-0011).
  */
-export const MANUAL_IDS = ["full", "minimal", "routing", "rules", "ordered", "exclusive"] as const;
+export const MANUAL_IDS = [
+  "full",
+  "minimal",
+  "routing",
+  "rules",
+  "ordered",
+  "exclusive",
+  "lookup",
+] as const;
 export type ManualId = (typeof MANUAL_IDS)[number];
 
 const MINIMAL = [
@@ -90,6 +101,7 @@ export const MANUALS: Readonly<Record<ManualId, string>> = {
   rules: RULES,
   ordered: ORDERED,
   exclusive: ORDERED,
+  lookup: LOOKUP_GAME,
 };
 
 /** Option ids are sorted as strings and read by the model, so they are descriptive. */
@@ -286,6 +298,7 @@ const MOVES_NOTE =
 const ENCODER_NOTES: Readonly<Partial<Record<EncoderId, string>>> = {
   lanes: LANES_NOTE,
   moves: MOVES_NOTE,
+  scene: SCENE_NOTE,
   image: IMAGE_LEGEND,
   "json-rel": RELATIVE_NOTE,
   view: `${VIEW_NOTE} ${MEMORY_NOTE}`,
@@ -308,6 +321,7 @@ const CHOICE_QUESTION: Readonly<Record<ManualId, string>> = {
     "Which move does the chicken make now? Check the options in this order: hop_forward, then the side steps, then stay, then leaving a spot it cannot stand on.",
   exclusive:
     "Which move does the chicken make now? Exactly one of these moves is true: hop_forward, hop_left, hop_right, stay or hop_back. If none is, take hop_forward.",
+  lookup: "Which manoeuvre does the chicken start now?",
   ordered:
     "Which move does the chicken make now? Go through the moves in this order and take the first whose rule is true: hop_forward, hop_left, hop_right, stay, hop_back. If none is true, take hop_forward.",
 };

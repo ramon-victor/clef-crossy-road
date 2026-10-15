@@ -3,6 +3,7 @@ import { columnAfter, HOP_SECONDS } from "./forecast.ts";
 import { renderSceneImage } from "./image.ts";
 import { ACTION_NAMES, lanesState, movesState } from "./lanes.ts";
 import { emptyMemory, type Memory } from "./memory.ts";
+import { sceneState } from "./scene.ts";
 import { outcomeText, renderView } from "./view.ts";
 
 export const ENCODER_IDS = [
@@ -15,6 +16,7 @@ export const ENCODER_IDS = [
   "json-fx",
   "lanes",
   "moves",
+  "scene",
 ] as const;
 export type EncoderId = (typeof ENCODER_IDS)[number];
 
@@ -40,6 +42,7 @@ export const ENCODER_LEVEL: Readonly<Record<EncoderId, PerceptionLevel>> = {
   "json-fx": "forecast",
   lanes: "words",
   moves: "words",
+  scene: "words",
 };
 
 /**
@@ -78,6 +81,8 @@ export function encodeRequest(
       };
     case "lanes":
       return { state: lanesState(obs, memory) };
+    case "scene":
+      return { state: sceneState(obs, memory ?? emptyMemory()) };
     case "moves":
       return { state: movesState(lanesState(obs, memory), ACTION_NAMES) };
     case "view":

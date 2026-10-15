@@ -40,6 +40,9 @@ const covers = (mover: ObsMover, col: number, seconds: number): boolean =>
 /** The moments looked at for what is under a chicken that stays: the next two steps, because a vehicle that arrives right after the first still hits it before it can move again. */
 const STAYING = [HOP_SECONDS / 2, HOP_SECONDS, (HOP_SECONDS * 3) / 2, 2 * HOP_SECONDS];
 
+/** The spacing of the moments a window looks at: three ticks at 60 Hz. */
+const SAMPLE = 0.05;
+
 /** A hop is over a road row from about its middle, so a vehicle counts if it covers the cell at any point after that. */
 const sweep = (seconds: number): number[] => [seconds / 2, (seconds * 3) / 4, seconds];
 
@@ -48,21 +51,43 @@ const sweep = (seconds: number): number[] => [seconds / 2, (seconds * 3) / 4, se
  * keeps its speed. The same for any candidate move and any chicken position.
  */
 export function cellAt(row: ObsRow | undefined, col: number, seconds: number): Cell {
-  return cellOver(row, col, sweep(seconds), false);
+  return cellOver(row, col, sweep(seconds), seconds, false);
+}
+
+/**
+ * What fills a cell for a chicken that lands on it `landing` seconds from now and stays there until
+ * `until` (the middle of the next hop, or later if it waits). The simulator hits a chicken with a
+ * vehicle from the middle of the hop that brings it onto the row, and checks water and rail only when it
+ * is at rest, so vehicles count over the whole window and platforms at the landing (a train also while it
+ * waits). A route that crosses several rows is checked one window per hop.
+ */
+export function cellWindow(
+  row: ObsRow | undefined,
+  col: number,
+  landing: number,
+  until: number,
+  waiting = false,
+): Cell {
+  // The simulator puts the chicken on the next row as soon as its height passes one half, which the quick
+  // first half of a hop does after about three ticks (0.05 s): measured by replaying deaths, 2026-10-15.
+  const from = landing - HOP_SECONDS + SAMPLE;
+  const times: number[] = [];
+  for (let t = from; t < until + SAMPLE / 2; t += SAMPLE) times.push(t);
+  return cellOver(row, col, times, landing, waiting);
 }
 
 /**
  * What fills the cell over the given moments. A chicken in a hop is hit by a vehicle at any of them; a
  * train only hits it at rest, so for a hop only the last moment counts, and while it stays (`resting`)
- * every moment does.
+ * every moment does. Platforms are looked at in `landing`.
  */
 function cellOver(
   row: ObsRow | undefined,
   col: number,
   times: readonly number[],
+  landing: number,
   resting: boolean,
 ): Cell {
-  const last = times[times.length - 1] ?? 0;
   if (Math.abs(col) > MAX_ABS_X) return "outside_world";
   if (!row) return "unseen";
   switch (row.kind) {
@@ -72,11 +97,11 @@ function cellOver(
       return times.some((t) => row.vehicles.some((v) => covers(v, col, t))) ? "vehicle" : "empty";
     case "water": {
       // Upstream lets the last overlapping platform win.
-      const platform = [...row.platforms].reverse().find((p) => covers(p, col, last));
+      const platform = [...row.platforms].reverse().find((p) => covers(p, col, landing));
       return platform ? platform.type : "water";
     }
     case "rail":
-      if ((resting ? times : [last]).some((t) => covers(row.train, col, t))) return "train";
+      if ((resting ? times : [landing]).some((t) => covers(row.train, col, t))) return "train";
       return row.warning_light === "on" ? "train_coming" : "empty";
   }
 }
@@ -191,7 +216,7 @@ export function lanesState(
       stays_on:
         riding && here?.kind === "water"
           ? (here.platforms.find((p) => covers(p, col, 0))?.type ?? cellAt(here, col, HOP_SECONDS))
-          : cellOver(here, col, STAYING, true),
+          : cellOver(here, col, STAYING, 2 * HOP_SECONDS, true),
     },
     forward: {
       row: ahead?.kind ?? "unseen",

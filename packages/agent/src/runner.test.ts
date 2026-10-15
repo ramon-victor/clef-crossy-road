@@ -57,11 +57,12 @@ describe("playEpisode", () => {
 
   it("tells the policy what it remembers: its moves, what they did, the score", async () => {
     const seen = await remembered(constantPolicy("hop_forward"), 3, 2);
-    expect(seen[0]).toEqual({ recent: [], score: 0, sinceProgress: 0 });
+    expect(seen[0]).toEqual({ recent: [], score: 0, sinceProgress: 0, behindFrontier: 0 });
     expect(seen[1]).toEqual({
       recent: [{ action: "hop_forward", outcome: "hop" }],
       score: 1,
       sinceProgress: 0,
+      behindFrontier: 0,
     });
   });
 

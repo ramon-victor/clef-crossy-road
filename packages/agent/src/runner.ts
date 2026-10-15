@@ -89,6 +89,8 @@ export interface DecisionRecord {
   cached?: boolean;
   /** Set only for steps the executor took inside a manoeuvre the model chose. */
   source?: "model" | "executor";
+  /** What the controller or the policy said it was doing (executor steps and the model's manoeuvre). */
+  note?: string;
   extra?: Record<string, unknown>;
 }
 
@@ -140,7 +142,7 @@ export async function playEpisode(
     });
     actions.push(decision.action);
     records.push(toRecord(records.length, tick, row, decision, outcome, waited));
-    memory = remember(memory, { action: decision.action, outcome }, game.score);
+    memory = remember(memory, { action: decision.action, outcome }, game.score, game.heroRow);
     stalled = stallLimit > 0 && memory.sinceProgress >= stallLimit;
   }
 
@@ -194,6 +196,7 @@ function toRecord(
   if (decision.neurons !== undefined) record.neurons = decision.neurons;
   if (decision.cached !== undefined) record.cached = decision.cached;
   if (decision.source === "executor") record.source = decision.source;
+  if (decision.note !== undefined) record.note = decision.note;
   if (decision.extra) record.extra = decision.extra;
   return record;
 }

@@ -68,6 +68,7 @@ export {
   type Cell,
   canStand,
   cellAt,
+  cellWindow,
   isPermanent,
   type LanesState,
   lanesState,
@@ -107,6 +108,20 @@ export {
   riskInstructions,
   riskQuestionId,
 } from "./prompts.ts";
+export {
+  execRoute,
+  MAX_DETOUR_STEPS,
+  ROUTE_ACTION,
+  ROUTE_DEPTH,
+  ROUTE_IDS,
+  type Route,
+  type RouteAct,
+  RouteExecutor,
+  type RouteManeuver,
+  type RouteRequest,
+  routeChoice,
+  searchRoute,
+} from "./route.ts";
 export { readLanes, readOrdered, ruleLanes, ruleMoves, ruleView, ruleViewFx } from "./rule.ts";
 export {
   type ApplyOptions,
@@ -120,3 +135,17 @@ export {
   type LatencyModel,
   playEpisode,
 } from "./runner.ts";
+export {
+  type BehindFrontier,
+  DISTANCE_WORDS,
+  type Distance,
+  OWN_ROW_WORDS,
+  type OwnRow,
+  openingAhead,
+  ownRowThatWay,
+  type SceneContext,
+  type SceneSide,
+  type SceneState,
+  type SideName,
+  sceneState,
+} from "./scene.ts";

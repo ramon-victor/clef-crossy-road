@@ -58,9 +58,14 @@ describe("Clef policy ids", () => {
     expect(parseClefPolicyId(clefPolicyId(config))).toEqual(config);
   });
 
-  it("`clef` alone is the default Clef, which is the plainest condition", () => {
+  it("`clef` alone is the default Clef, the gameplay of ADR-0011", () => {
     expect(parseClefPolicyId(DEFAULT_CLEF_ID)).toEqual(DEFAULT_CLEF);
-    expect(DEFAULT_CLEF).toMatchObject({ model: "clef-flash", strategy: "choice", manual: "full" });
+    expect(DEFAULT_CLEF).toMatchObject({
+      model: "clef-flash",
+      encoder: "scene",
+      strategy: "route",
+      manual: "lookup",
+    });
     expect(parseClefPolicyId(clefPolicyId(DEFAULT_CLEF))).toEqual(DEFAULT_CLEF);
   });
 

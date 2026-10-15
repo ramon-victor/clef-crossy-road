@@ -26,6 +26,7 @@ const CHOICE_TOKENS: Readonly<Record<EncoderId, { tokens: number; measured: bool
   // An estimate from the size of the request against `json-fx`, until a probe reads the real figure.
   lanes: { tokens: 1260, measured: false },
   moves: { tokens: 800, measured: false },
+  scene: { tokens: 1650, measured: false },
 };
 
 /** The critic asks five questions, so it repeats the instructions five times. Only measured with `json`. */
@@ -37,6 +38,10 @@ export function decisionCost(config: {
   strategy: StrategyId;
 }): DecisionCost {
   // Two questions in one request, each with the game text: about 1.5 times a choice with the moves view.
+  if (config.strategy === "route") {
+    // Two questions with their examples and the scene state in one request, an estimate until a probe reads it.
+    return { tokens: 1650, measured: false, neurons: neuronsForTokens(config.model, 1650) };
+  }
   if (config.strategy === "graph" || config.strategy === "graph-maneuver") {
     return { tokens: 1250, measured: false, neurons: neuronsForTokens(config.model, 1250) };
   }

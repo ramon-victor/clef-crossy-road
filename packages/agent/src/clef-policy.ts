@@ -29,6 +29,7 @@ import {
   riskInstructions,
   riskQuestionId,
 } from "./prompts.ts";
+import { routePolicy } from "./route-policy.ts";
 
 /**
  * choice:    one `choice` question over the five actions; the action is the model's argmax.
@@ -47,6 +48,9 @@ import {
  *            routing: go means hop_forward, hold means the answer of the second question. Only with the
  *            `moves` view and the `ordered` manual (ADR-0010).
  * graph-maneuver: the same two questions about manoeuvres, with the executor of `maneuver` doing the hopping.
+ * route:     two small lookups in one request (`ahead`: open, passing or closed; `around`: left, right or
+ *            wait) and a controller that crosses, waits for a gap, or walks a detour (route.ts). Only with the
+ *            `scene` view and the `lookup` manual (ADR-0011).
  */
 export const STRATEGY_IDS = [
   "choice",
@@ -55,6 +59,7 @@ export const STRATEGY_IDS = [
   "maneuver",
   "graph",
   "graph-maneuver",
+  "route",
 ] as const;
 export type StrategyId = (typeof STRATEGY_IDS)[number];
 
@@ -66,17 +71,18 @@ export interface ClefPolicyConfig {
 }
 
 /**
- * The one Clef the desktop app plays and the bare `clef` policy means on the bench command line: the
- * model's own argmax over the five actions, the full manual, no rule of ours on top, and the view a
- * player has (the screen, where things will be in 0.2 s, and the last moves: ADR-0009). Over 100 games
- * it plays exactly like the plain `json` view (docs/07), so this is a choice about what the model is
- * shown, not about score. Every other combination is an experiment axis of the benchmark.
+ * The Clef the desktop app plays (Clef-flash, and the 27B with the same gameplay) and the bare `clef` policy
+ * means on the bench command line: the most help the benchmark tried (ADR-0010 and ADR-0011). The code turns
+ * the screen into words (`scene`), three small lookups with solved examples ask the model (`route`, `lookup`),
+ * and a controller does the hopping and the detours. The report labels it "words + rules + graph + route
+ * executor". The first twelve conditions, which show the model the world and leave the hopping to it, played
+ * like "always forward" (docs/07); they stay in the benchmark as controls and open in the app as `Custom`.
  */
 export const DEFAULT_CLEF: ClefPolicyConfig = {
   model: "clef-flash",
-  encoder: "json-fx",
-  strategy: "choice",
-  manual: "full",
+  encoder: "scene",
+  strategy: "route",
+  manual: "lookup",
 };
 
 /** The short policy id that `parseClefPolicyId` reads as `DEFAULT_CLEF`. */
@@ -146,8 +152,14 @@ function assertSupported(config: ClefPolicyConfig, id: string): void {
   ) {
     throw new Error(`The graph strategies need the moves view and the ordered manual: "${id}"`);
   }
+  const routes = config.strategy === "route";
+  if (routes !== (config.encoder === "scene") || routes !== (config.manual === "lookup")) {
+    throw new Error(
+      `The route strategy, the scene view and the lookup manual only go together: "${id}"`,
+    );
+  }
   if (
-    (config.encoder === "lanes" || config.encoder === "moves") &&
+    (config.encoder === "lanes" || config.encoder === "moves" || config.encoder === "scene") &&
     (config.strategy === "critic" || config.strategy === "critic-go")
   ) {
     throw new Error(`The critic strategies are not defined for the words views: "${id}"`);
@@ -157,10 +169,22 @@ function assertSupported(config: ClefPolicyConfig, id: string): void {
 /** What the help to the model amounts to, for reports: the view, plus the rules and the executor when they are on. */
 export function helpLabel(config: ClefPolicyConfig): string {
   const parts: string[] = [ENCODER_LEVEL[config.encoder]];
-  if (config.manual === "rules" || config.manual === "ordered" || config.manual === "exclusive") {
+  if (
+    config.manual === "rules" ||
+    config.manual === "ordered" ||
+    config.manual === "exclusive" ||
+    config.manual === "lookup"
+  ) {
     parts.push("rules");
   }
-  if (config.strategy === "graph" || config.strategy === "graph-maneuver") parts.push("graph");
+  if (
+    config.strategy === "graph" ||
+    config.strategy === "graph-maneuver" ||
+    config.strategy === "route"
+  ) {
+    parts.push("graph");
+  }
+  if (config.strategy === "route") parts.push("route executor");
   if (config.strategy === "maneuver" || config.strategy === "graph-maneuver")
     parts.push("executor");
   return parts.join(" + ");
@@ -186,6 +210,7 @@ export function selectGoUnlessRisky(risk: Record<Action, number>): Action {
 
 export function clefPolicy(client: ClefClient, config: ClefPolicyConfig): PolicyFactory {
   const id = clefPolicyId(config);
+  if (config.strategy === "route") return routePolicy(client, config, id);
   const cacheTag = `${PROMPT_VERSION}|${config.encoder}|${config.strategy}|${config.manual}`;
   const maneuvers = config.strategy === "maneuver" || config.strategy === "graph-maneuver";
   const graphs = config.strategy === "graph" || config.strategy === "graph-maneuver";
