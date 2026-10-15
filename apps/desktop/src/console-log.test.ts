@@ -97,6 +97,30 @@ describe("what is printed", () => {
     expect(text).toContain("ANSWER: hop_forward");
   });
 
+  it("a step the controller took says so and why, in the brief line and in the full block", () => {
+    const step: DecisionLog = {
+      index: 4,
+      tick: 60,
+      row: 9,
+      action: "stay",
+      decision: {
+        action: "stay",
+        source: "executor",
+        note: "cross_ahead: waiting for the cell (water) to clear, 2/15",
+      },
+      wallMs: 0,
+    };
+    expect(formatBrief(step)).toBe(
+      "#5 row 9 -> wait (controller)  | cross_ahead: waiting for the cell (water) to clear, 2/15",
+    );
+    expect(formatFull(step)).toBe(formatBrief(step));
+    const model = logOf({
+      note: "model chose cross_ahead; cross_ahead: the cell is clear, hopping",
+    });
+    expect(formatBrief(model)).toContain("| model chose cross_ahead");
+    expect(formatFull(model)).toContain("NOTE: model chose cross_ahead");
+  });
+
   it("a decision with nothing sent falls back to the brief line", () => {
     expect(formatFull(bare())).toBe("#3 row 9 -> forward");
   });

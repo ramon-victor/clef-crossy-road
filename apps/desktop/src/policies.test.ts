@@ -6,6 +6,8 @@ import {
   CLEF_27B_CONFIG,
   CLEF_27B_ID,
   CLEF_ID,
+  CLEF_WORDS_CONFIG,
+  CLEF_WORDS_ID,
   canonicalPlayerId,
   customChoice,
   freeSeedRange,
@@ -17,16 +19,17 @@ const byId = (id: string) => choices.find((c) => c.id === id);
 const random = () => 987_654;
 
 describe("who can play", () => {
-  it("offers you, the two sizes of Clef, and the references; the other conditions stay in the benchmark", () => {
+  it("offers you, the two sizes of Clef, the Clef with words and a controller, and the references; the other conditions stay in the benchmark", () => {
     expect(choices.map((c) => c.id)).toEqual([
       "human",
       CLEF_ID,
       CLEF_27B_ID,
+      CLEF_WORDS_ID,
       "lookahead",
       "always-forward",
       "random",
     ]);
-    expect(choices.filter((c) => c.kind === "model")).toHaveLength(2);
+    expect(choices.filter((c) => c.kind === "model")).toHaveLength(3);
   });
 
   it("each Clef reports that it may spend, and what a decision costs", () => {
@@ -52,9 +55,25 @@ describe("who can play", () => {
     expect(CLEF_27B_CONFIG).toMatchObject({ model: "clef", encoder: "json-fx", manual: "full" });
   });
 
+  it("the Clef with words and a controller says what helps it and what it costs per question", () => {
+    const words = byId(CLEF_WORDS_ID);
+    expect(CLEF_WORDS_CONFIG).toEqual({
+      model: "clef-flash",
+      encoder: "moves",
+      strategy: "graph-maneuver",
+      manual: "ordered",
+    });
+    expect(words?.usesApi).toBe(true);
+    expect(words?.neuronsPerDecision).toBeCloseTo(decisionCost(CLEF_WORDS_CONFIG).neurons, 5);
+    expect(words?.detail).toMatch(/controller/);
+    expect(words?.detail).toMatch(/words/);
+    expect(freeSeedRange(words)).toEqual({ min: 1, max: 40 });
+  });
+
   it("has no Clef to play until a client exists", () => {
     expect(byId(CLEF_ID)?.factory).toBeNull();
     expect(byId(CLEF_27B_ID)?.factory).toBeNull();
+    expect(byId(CLEF_WORDS_ID)?.factory).toBeNull();
   });
 });
 
@@ -98,6 +117,7 @@ describe("ids from shortcuts", () => {
     expect(customChoice("clef:clef-flash:video:choice", client)).toBeUndefined();
     expect(customChoice(clefPolicyId(CLEF_27B_CONFIG), client)).toBeUndefined();
     expect(customChoice("clef:clef-flash:json-fx:choice:full", client)).toBeUndefined();
+    expect(customChoice(clefPolicyId(CLEF_WORDS_CONFIG), client)).toBeUndefined();
   });
 });
 

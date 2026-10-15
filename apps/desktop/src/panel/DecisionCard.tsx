@@ -21,8 +21,10 @@ export function DecisionCard({ state, onInspect }: DecisionCardProps) {
             <span class="chosen-arrow">{ACTION_GLYPH[last.action]}</span>
             <span>{ACTION_LABEL[last.action]}</span>
             {decision?.cached && <span class="tag">cached</span>}
+            {decision?.source === "executor" && <span class="tag">controller</span>}
           </div>
-          {!probabilities && (
+          {decision?.note && <p class="hint">{decision.note}</p>}
+          {!probabilities && decision?.source !== "executor" && (
             <p class="hint">
               This player does not report probabilities: it is a reference, not a model.
             </p>

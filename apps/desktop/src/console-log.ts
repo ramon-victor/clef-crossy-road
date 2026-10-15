@@ -59,7 +59,9 @@ export function formatBrief(log: DecisionLog): string {
   const answer = log.decision.probabilities
     ? `  [${probabilitiesText(log)}]  ${costText(log)}`
     : "";
-  return `#${log.index + 1} row ${log.row} -> ${ACTION_LABEL[log.action]}${answer}`;
+  const who = log.decision.source === "executor" ? " (controller)" : "";
+  const note = log.decision.note ? `  | ${log.decision.note}` : "";
+  return `#${log.index + 1} row ${log.row} -> ${ACTION_LABEL[log.action]}${who}${answer}${note}`;
 }
 
 /** The request of a decision with its state and the answer, for the full log. */
@@ -73,6 +75,7 @@ export function formatFull(log: DecisionLog): string {
     `STATE (as sent, ${state.length} characters):`,
     state,
     `ANSWER: ${log.action}   [${probabilitiesText(log)}]`,
+    ...(log.decision.note ? [`NOTE: ${log.decision.note}`] : []),
   ].join("\n");
 }
 

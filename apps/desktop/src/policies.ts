@@ -61,12 +61,27 @@ export function nextMapSeed(
 /** The ids of the two model players, which is what `CCR_PLAYER` and `?player=` select. */
 export const CLEF_ID = "clef-flash";
 export const CLEF_27B_ID = "clef-27b";
+export const CLEF_WORDS_ID = "clef-words";
 
 /**
  * The same view and the same question for the bigger model, so the only thing that changes is the
  * model. `DEFAULT_CLEF` is Clef-flash's.
  */
 export const CLEF_27B_CONFIG: ClefPolicyConfig = { ...DEFAULT_CLEF, model: "clef" };
+
+/**
+ * Clef-flash with the most help the benchmark tried (ADR-0010): the code compares positions and tells
+ * the model, in words, what fills each cell; the options are short rules about those words; two small
+ * questions instead of five options; and a controller that picks the instant of each hop. Labelled as
+ * such everywhere. It is the only condition of the benchmark that beat "always forward" with its
+ * interval above zero (docs/07).
+ */
+export const CLEF_WORDS_CONFIG: ClefPolicyConfig = {
+  model: "clef-flash",
+  encoder: "moves",
+  strategy: "graph-maneuver",
+  manual: "ordered",
+};
 
 /** Ids that shortcuts used before there were two models: `clef` was Clef-flash. */
 const ALIASES: Readonly<Record<string, string>> = { clef: CLEF_ID };
@@ -118,6 +133,7 @@ const REFERENCES: readonly PolicyChoice[] = [
 function modelChoices(client: ClefClient | null): PolicyChoice[] {
   const flash = decisionCost(DEFAULT_CLEF);
   const large = decisionCost(CLEF_27B_CONFIG);
+  const words = decisionCost(CLEF_WORDS_CONFIG);
   return [
     {
       id: CLEF_ID,
@@ -140,13 +156,23 @@ function modelChoices(client: ClefClient | null): PolicyChoice[] {
       freeReplay: "1-8",
       factory: client ? clefPolicy(client, CLEF_27B_CONFIG) : null,
     },
+    {
+      id: CLEF_WORDS_ID,
+      label: "Clef-flash + words and controller",
+      detail: `Clef-flash with the most help we tried: our code compares positions and tells it in words what is where, the options are short rules about those words, and a controller picks the instant of each hop. It still picks every manoeuvre. About ${Math.round(words.neurons)} neurons per question, and the controller's steps cost nothing. Over 40 games it made 10.1 rows, against 3.3 for always forward on the same maps.`,
+      kind: "model",
+      usesApi: true,
+      neuronsPerDecision: words.neurons,
+      freeReplay: "1-40",
+      factory: client ? clefPolicy(client, CLEF_WORDS_CONFIG) : null,
+    },
   ];
 }
 
 /**
  * A player made from a benchmark id, `clef:<model>:<view>:<strategy>[:<style>]`, given in `CCR_PLAYER` to
  * try a combination while watching the log. Nothing about it is cached, so every move spends. Not a
- * valid id, or one of the two standard players, gives nothing (the standard ones are already listed).
+ * valid id, or one of the standard players, gives nothing (the standard ones are already listed).
  */
 export function customChoice(id: string, client: ClefClient | null): PolicyChoice | undefined {
   if (!id.startsWith("clef:")) return undefined;
@@ -157,9 +183,8 @@ export function customChoice(id: string, client: ClefClient | null): PolicyChoic
     return undefined;
   }
   const canonical = clefPolicyId(config);
-  if (canonical === clefPolicyId(DEFAULT_CLEF) || canonical === clefPolicyId(CLEF_27B_CONFIG)) {
-    return undefined;
-  }
+  const standard = [DEFAULT_CLEF, CLEF_27B_CONFIG, CLEF_WORDS_CONFIG].map(clefPolicyId);
+  if (standard.includes(canonical)) return undefined;
   const { neurons } = decisionCost(config);
   return {
     id: canonical,
