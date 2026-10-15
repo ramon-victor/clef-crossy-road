@@ -9,7 +9,7 @@ import {
 import { constantPolicy } from "@ccr/agent/testing";
 import { type Action, Game } from "@ccr/core";
 import { describe, expect, it } from "vitest";
-import { Session } from "./session.ts";
+import { Session, type SessionEvent } from "./session.ts";
 
 const FRAME = 1 / 60;
 
@@ -134,6 +134,63 @@ describe("Session: what the policy remembers", () => {
     spy.seen.length = 0;
     await runUntil(s, () => spy.seen.length >= 1, 1000);
     expect(spy.seen[0]?.memory).toEqual({ recent: [], score: 0, sinceProgress: 0 });
+  });
+});
+
+describe("Session: events for the terminal log", () => {
+  it("says when a game starts, each decision a policy makes, and when it ends", async () => {
+    const events: SessionEvent[] = [];
+    const s = new Session();
+    s.subscribeEvents((e) => events.push(e));
+    s.setPolicy(alwaysForward, 11);
+    await runUntil(s, () => !s.game.alive, 4000);
+
+    const types = events.map((e) => e.type);
+    expect(types[0]).toBe("start");
+    expect(types.filter((t) => t === "start")).toHaveLength(1);
+    expect(types.at(-1)).toBe("end");
+    expect(types.filter((t) => t === "end")).toHaveLength(1); // said once, however often it is checked
+    const decisions = events.filter((e) => e.type === "decision");
+    expect(decisions.length).toBe(s.state().decisions);
+    expect(events[0]).toMatchObject({ seed: 11, policyId: "always-forward", timing: "step" });
+    expect(events.at(-1)).toMatchObject({ type: "end", state: { alive: false, seed: 11 } });
+  });
+
+  it("starts the new game on the seed it was given and tells a new listener nothing about the past", () => {
+    const s = new Session();
+    s.setPolicy(alwaysForward, 5);
+    const events: SessionEvent[] = [];
+    const stop = s.subscribeEvents((e) => events.push(e));
+    s.start(9);
+    stop();
+    s.start(10);
+    expect(events).toHaveLength(1);
+    expect(events[0]).toMatchObject({ type: "start", seed: 9 });
+    expect(s.state().seed).toBe(10);
+  });
+
+  it("does not send decisions for a person at the keyboard, but starts and ends", () => {
+    const s = new Session();
+    const events: SessionEvent[] = [];
+    s.subscribeEvents((e) => events.push(e));
+    s.start(7);
+    s.humanInput("hop_forward");
+    run(s, 0.5);
+    expect(events.map((e) => e.type)).toEqual(["start"]);
+    expect(events[0]).toMatchObject({ policyId: null });
+  });
+
+  it("reports a game that stalls as an end, once", async () => {
+    const spy = spyOn("stay");
+    const s = new Session();
+    s.setSpeed(8);
+    s.setPolicy(spy.factory, 3);
+    const events: SessionEvent[] = [];
+    s.subscribeEvents((e) => events.push(e));
+    await runUntil(s, () => s.state().stalled, 8000);
+    await runUntil(s, () => false, 60);
+    expect(events.filter((e) => e.type === "end")).toHaveLength(1);
+    expect(events.at(-1)).toMatchObject({ type: "end", state: { stalled: true, alive: true } });
   });
 });
 

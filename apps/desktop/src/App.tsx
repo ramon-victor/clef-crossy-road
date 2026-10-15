@@ -3,12 +3,20 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "preact/hooks"
 import { Sounds } from "./audio.ts";
 import { createBridge, createClefClient } from "./bridge/clef.ts";
 import type { BudgetStatus } from "./bridge/types.ts";
+import { createConsoleLog, terminalWriter } from "./console-log.ts";
 import { GameCanvas } from "./GameCanvas.tsx";
 import { commandForKey } from "./keymap.ts";
 import { readLaunchOptions } from "./launch.ts";
 import { Panel } from "./Panel.tsx";
 import { InputInspector } from "./panel/InputInspector.tsx";
-import { buildPolicyChoices, freeSeedRange, nextMapSeed } from "./policies.ts";
+import {
+  buildPolicyChoices,
+  canonicalPlayerId,
+  customChoice,
+  freeSeedRange,
+  nextMapSeed,
+  type PolicyChoice,
+} from "./policies.ts";
 import { randomSeed } from "./seed.ts";
 import { runSelfTest } from "./selftest.ts";
 import { Session, type SessionState, type Timing } from "./session.ts";
@@ -20,7 +28,17 @@ const RESTART_DELAY_MS = 2200;
 export function App() {
   const bridge = useMemo(createBridge, []);
   const client = useMemo(() => createClefClient(bridge), [bridge]);
-  const choices = useMemo(() => buildPolicyChoices(client), [client]);
+  const standardChoices = useMemo(() => buildPolicyChoices(client), [client]);
+  const standardById = useMemo(
+    () => new Map(standardChoices.map((c) => [c.id, c])),
+    [standardChoices],
+  );
+  // A player made from a benchmark id in CCR_PLAYER joins the list after the launch options are read.
+  const [custom, setCustom] = useState<PolicyChoice | null>(null);
+  const choices = useMemo(
+    () => (custom ? [...standardChoices, custom] : standardChoices),
+    [standardChoices, custom],
+  );
   const byId = useMemo(() => new Map(choices.map((c) => [c.id, c])), [choices]);
   const sounds = useMemo(() => new Sounds(), []);
   const session = useMemo(() => {
@@ -65,31 +83,39 @@ export function App() {
   const lastFree = useRef(new Map<string, number>());
   const noteSeed = useCallback(
     (id: string, seed: number) => {
-      const range = freeSeedRange(byId.get(id));
+      const range = freeSeedRange(standardById.get(id));
       if (range && seed >= range.min && seed <= range.max) lastFree.current.set(id, seed);
     },
-    [byId],
+    [standardById],
   );
 
   // Starting point: the free reference unless a shortcut asked for something else (CCR_PLAYER / CCR_SEED).
   // The default never spends anything.
   useEffect(() => {
     let cancelled = false;
+    let stopLogging = () => {};
     void readLaunchOptions().then((options) => {
       if (cancelled) return;
-      const wanted = byId.get(options.player ?? "") ?? byId.get(DEFAULT_PLAYER);
-      if (!wanted) return;
-      setSelectedId(wanted.id);
-      session.setPolicy(wanted.factory);
-      if (options.seed !== undefined) {
-        noteSeed(wanted.id, options.seed);
-        session.start(options.seed);
+      // Listening first, so the log starts with the very first game.
+      if (options.log) {
+        stopLogging = session.subscribeEvents(createConsoleLog(options.log, terminalWriter()));
       }
+      const requested = options.player ?? "";
+      const wanted =
+        standardById.get(canonicalPlayerId(requested)) ??
+        customChoice(requested, client) ??
+        standardById.get(DEFAULT_PLAYER);
+      if (!wanted) return;
+      if (!standardById.has(wanted.id)) setCustom(wanted);
+      setSelectedId(wanted.id);
+      if (options.seed !== undefined) noteSeed(wanted.id, options.seed);
+      session.setPolicy(wanted.factory, options.seed);
     });
     return () => {
       cancelled = true;
+      stopLogging();
     };
-  }, [byId, session, noteSeed]);
+  }, [standardById, client, session, noteSeed]);
 
   const select = useCallback(
     (id: string) => {

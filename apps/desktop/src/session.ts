@@ -67,6 +67,15 @@ export interface SessionState {
   cacheHits: number;
 }
 
+/**
+ * What happens in a game, for whoever wants to follow it without polling the state (the terminal log).
+ * `decision` is only sent for policies, not for a person at the keyboard.
+ */
+export type SessionEvent =
+  | { type: "start"; seed: number; policyId: string | null; timing: Timing }
+  | { type: "decision"; seed: number; policyId: string | null; log: DecisionLog }
+  | { type: "end"; state: SessionState };
+
 const HISTORY = 14;
 
 export class Session {
@@ -94,6 +103,8 @@ export class Session {
   private last: DecisionLog | null = null;
   private stats = new EpisodeStats();
   private readonly listeners = new Set<() => void>();
+  private readonly eventListeners = new Set<(event: SessionEvent) => void>();
+  private endReported = false;
   private readonly decisionTicks: number;
   private readonly now: () => number;
 
@@ -108,8 +119,25 @@ export class Session {
     return () => this.listeners.delete(listener);
   }
 
+  /** Calls `listener` for every start, decision and end of a game. Returns how to stop. */
+  subscribeEvents(listener: (event: SessionEvent) => void): () => void {
+    this.eventListeners.add(listener);
+    return () => this.eventListeners.delete(listener);
+  }
+
   private emit(): void {
     for (const l of this.listeners) l();
+  }
+
+  private announce(event: SessionEvent): void {
+    for (const l of this.eventListeners) l(event);
+  }
+
+  /** The game is over (it died, or a policy stopped getting anywhere): said once per game. */
+  private reportEnd(): void {
+    if (this.endReported) return;
+    this.endReported = true;
+    this.announce({ type: "end", state: this.state() });
   }
 
   /** Starts a fresh episode on `seed` with the current policy. In-flight answers are discarded. */
@@ -131,12 +159,20 @@ export class Session {
     this.history = [];
     this.last = null;
     this.stats = new EpisodeStats();
+    this.endReported = false;
     this.emit();
+    this.announce({
+      type: "start",
+      seed: this.seed,
+      policyId: this.policy?.id ?? null,
+      timing: this.timing,
+    });
   }
 
-  setPolicy(factory: PolicyFactory | null): void {
+  /** Changes who plays and starts a new game on `seed` (the current one by default). */
+  setPolicy(factory: PolicyFactory | null, seed: number = this.seed): void {
     this.factory = factory;
-    this.start(this.seed);
+    this.start(seed);
   }
 
   setTiming(timing: Timing): void {
@@ -196,7 +232,10 @@ export class Session {
     if (this.stepMode && this.phase === "hopping" && this.hopTicksLeft === 0) this.finishHop();
 
     this.best = Math.max(this.best, this.game.score);
-    if (!this.game.alive) this.emit();
+    if (!this.game.alive) {
+      this.emit();
+      this.reportEnd();
+    }
     return this.acc;
   }
 
@@ -263,6 +302,7 @@ export class Session {
     this.settleLastMove();
     if (this.stalled) {
       this.emit();
+      this.reportEnd();
       return;
     }
     this.requestDecision(policy);
@@ -327,6 +367,7 @@ export class Session {
     this.history = [...this.history.slice(-(HISTORY - 1)), log];
 
     this.stats.add(decision, wallMs);
+    this.announce({ type: "decision", seed: this.seed, policyId: this.policy?.id ?? null, log });
 
     if (this.timing === "step") {
       this.phase = "hopping";

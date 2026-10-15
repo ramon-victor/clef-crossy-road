@@ -6,6 +6,16 @@ describe("launchFromQuery", () => {
     expect(launchFromQuery("?player=clef&seed=7")).toEqual({ player: "clef", seed: 7 });
   });
 
+  it("reads how much to log, and leaves it out when it is off or not a mode", () => {
+    expect(launchFromQuery("?log=full")).toEqual({ log: "full" });
+    expect(launchFromQuery("?player=clef-27b&log=brief")).toEqual({
+      player: "clef-27b",
+      log: "brief",
+    });
+    for (const query of ["?log=off", "?log=", "?log=loud"])
+      expect(launchFromQuery(query)).toEqual({});
+  });
+
   it("asks for nothing by default", () => {
     expect(launchFromQuery("")).toEqual({});
   });
