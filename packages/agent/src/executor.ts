@@ -173,8 +173,10 @@ export const alwaysCross: Chooser = () => "cross_ahead";
 export const maneuverByRules: Chooser = (state) => {
   const { forward, sideways, backward, chicken } = state;
   const ahead = forward.lands_on;
-  const willOpen = !isPermanent(ahead) && (canStand(ahead) || forward.things_move !== "no");
-  if (willOpen) return "cross_ahead";
+  if (canStand(ahead)) return "cross_ahead";
+  // Waiting for a gap is only a plan while where it stands cannot hurt it.
+  const willOpen = !isPermanent(ahead) && forward.things_move !== "no";
+  if (willOpen && canStand(chicken.stays_on)) return "cross_ahead";
 
   const left = canStand(sideways.left_lands_on) && canStand(forward.lands_on_after_stepping_left);
   const right =

@@ -140,3 +140,39 @@ export const ruleLanes: PolicyFactory = (() => {
   };
   return { id, create: () => policy };
 })();
+
+/**
+ * The `ordered` manual read to the letter: the first move, in the stated order, whose rule is true, and
+ * `hop_forward` if none is. The ideal follower of that manual's options, never a model.
+ */
+export function readOrdered(state: LanesState): Action {
+  if (canStand(state.forward.lands_on)) return "hop_forward";
+  if (
+    canStand(state.sideways.left_lands_on) &&
+    canStand(state.forward.lands_on_after_stepping_left)
+  ) {
+    return "hop_left";
+  }
+  if (
+    canStand(state.sideways.right_lands_on) &&
+    canStand(state.forward.lands_on_after_stepping_right)
+  ) {
+    return "hop_right";
+  }
+  if (canStand(state.chicken.stays_on)) return "stay";
+  if (canStand(state.backward.lands_on)) return "hop_back";
+  return "hop_forward";
+}
+
+/** The ideal follower of the `ordered` options, one decision per hop. */
+export const ruleMoves: PolicyFactory = (() => {
+  const id = "rule-moves";
+  const policy: ObservationPolicy = {
+    kind: "observation",
+    id,
+    decide: async (obs: Observation, memory?: Memory) => ({
+      action: readOrdered(lanesState(obs, memory)),
+    }),
+  };
+  return { id, create: () => policy };
+})();

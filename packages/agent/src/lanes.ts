@@ -37,6 +37,9 @@ const LATER = 2 * HOP_SECONDS;
 const covers = (mover: ObsMover, col: number, seconds: number): boolean =>
   Math.abs(col - columnAfter(mover, seconds)) < mover.half_extent;
 
+/** The moments looked at for what is under a chicken that stays: the next two steps, because a vehicle that arrives right after the first still hits it before it can move again. */
+const STAYING = [HOP_SECONDS / 2, HOP_SECONDS, (HOP_SECONDS * 3) / 2, 2 * HOP_SECONDS];
+
 /** A hop is over a road row from about its middle, so a vehicle counts if it covers the cell at any point after that. */
 const sweep = (seconds: number): number[] => [seconds / 2, (seconds * 3) / 4, seconds];
 
@@ -45,22 +48,35 @@ const sweep = (seconds: number): number[] => [seconds / 2, (seconds * 3) / 4, se
  * keeps its speed. The same for any candidate move and any chicken position.
  */
 export function cellAt(row: ObsRow | undefined, col: number, seconds: number): Cell {
+  return cellOver(row, col, sweep(seconds), false);
+}
+
+/**
+ * What fills the cell over the given moments. A chicken in a hop is hit by a vehicle at any of them; a
+ * train only hits it at rest, so for a hop only the last moment counts, and while it stays (`resting`)
+ * every moment does.
+ */
+function cellOver(
+  row: ObsRow | undefined,
+  col: number,
+  times: readonly number[],
+  resting: boolean,
+): Cell {
+  const last = times[times.length - 1] ?? 0;
   if (Math.abs(col) > MAX_ABS_X) return "outside_world";
   if (!row) return "unseen";
   switch (row.kind) {
     case "grass":
       return row.blocked_cols.includes(Math.trunc(col)) ? "tree" : "empty";
     case "road":
-      return sweep(seconds).some((t) => row.vehicles.some((v) => covers(v, col, t)))
-        ? "vehicle"
-        : "empty";
+      return times.some((t) => row.vehicles.some((v) => covers(v, col, t))) ? "vehicle" : "empty";
     case "water": {
       // Upstream lets the last overlapping platform win.
-      const platform = [...row.platforms].reverse().find((p) => covers(p, col, seconds));
+      const platform = [...row.platforms].reverse().find((p) => covers(p, col, last));
       return platform ? platform.type : "water";
     }
     case "rail":
-      if (covers(row.train, col, seconds)) return "train";
+      if ((resting ? times : [last]).some((t) => covers(row.train, col, t))) return "train";
       return row.warning_light === "on" ? "train_coming" : "empty";
   }
 }
@@ -111,7 +127,7 @@ export interface LanesState {
     on_a_platform: boolean;
     carried_towards: Side;
     place_in_world: Place;
-    /** What is under it when this hop ends, if it stays. */
+    /** What is under it over the next two steps (0.4 s), if it stays. */
     stays_on: Cell;
   };
   forward: {
@@ -175,7 +191,7 @@ export function lanesState(
       stays_on:
         riding && here?.kind === "water"
           ? (here.platforms.find((p) => covers(p, col, 0))?.type ?? cellAt(here, col, HOP_SECONDS))
-          : cellAt(here, col, HOP_SECONDS),
+          : cellOver(here, col, STAYING, true),
     },
     forward: {
       row: ahead?.kind ?? "unseen",
@@ -193,5 +209,66 @@ export function lanesState(
       .map((dz) => rowAt(obs, dz)?.kind)
       .filter((kind): kind is RowKind => kind !== undefined),
     memory: memoryWords(memory, lastManeuver),
+  };
+}
+
+/** The names a move goes by in the state, so that the keys are the very words of the options. */
+export interface MoveNames {
+  forward: string;
+  left: string;
+  right: string;
+  back: string;
+  stay: string;
+}
+
+export const ACTION_NAMES: MoveNames = {
+  forward: "hop_forward",
+  left: "hop_left",
+  right: "hop_right",
+  back: "hop_back",
+  stay: "stay",
+};
+
+export const MANEUVER_NAMES: MoveNames = {
+  forward: "cross_ahead",
+  left: "sidestep_left",
+  right: "sidestep_right",
+  back: "back_off",
+  stay: "wait_here",
+};
+
+/**
+ * The same words as `lanesState`, grouped by the move that would land on each cell, under the name of
+ * that move. Each option of the question then reads only the entry that carries its own name. Nothing
+ * is added: it is the cells of `lanesState` put in another order (ADR-0010).
+ */
+export function movesState(
+  lanes: LanesState,
+  names: MoveNames,
+  { movement = false }: { movement?: boolean } = {},
+): Record<string, unknown> {
+  const then = `then_${names.forward}_lands_on`;
+  return {
+    // The name of the row type is left out on purpose: the word "water" next to a `lands_on: log` pulled
+    // the model towards "no" (11 of 12 states with a platform under the column, probed 2026-10-15).
+    [names.forward]: {
+      ...(movement ? { things_move: lanes.forward.things_move } : {}),
+      lands_on: lanes.forward.lands_on,
+    },
+    [names.left]: {
+      lands_on: lanes.sideways.left_lands_on,
+      [then]: lanes.forward.lands_on_after_stepping_left,
+    },
+    [names.right]: {
+      lands_on: lanes.sideways.right_lands_on,
+      [then]: lanes.forward.lands_on_after_stepping_right,
+    },
+    [names.back]: { lands_on: lanes.backward.lands_on },
+    [names.stay]: { stands_on: lanes.chicken.stays_on },
+    chicken: {
+      place_in_world: lanes.chicken.place_in_world,
+      carried_towards: lanes.chicken.carried_towards,
+    },
+    memory: lanes.memory,
   };
 }

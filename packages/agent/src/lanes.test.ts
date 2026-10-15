@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { alwaysForward } from "./baselines.ts";
 import { ENCODER_LEVEL, encodeRequest } from "./encode.ts";
 import {
+  ACTION_NAMES,
   CELL_WORDS,
   type Cell,
   canStand,
@@ -10,6 +11,8 @@ import {
   isPermanent,
   type LanesState,
   lanesState,
+  MANEUVER_NAMES,
+  movesState,
   placeOf,
 } from "./lanes.ts";
 import { emptyMemory, remember } from "./memory.ts";
@@ -266,5 +269,89 @@ describe("readLanes and rule-lanes: the words are enough to play with", () => {
       forward += (await playEpisode(alwaysForward, seed)).score;
     }
     expect(words / seeds.length).toBeGreaterThan(2 * (forward / seeds.length));
+  });
+});
+
+describe("the moves view: the same words under the name of each move", () => {
+  const sample = [...statesOf([1, 2, 3, 4, 5, 6])];
+
+  it("regroups the cells of the lanes view without adding or losing any", () => {
+    for (const { state } of sample) {
+      const moves = movesState(state, ACTION_NAMES) as Record<string, Record<string, unknown>>;
+      expect(moves.hop_forward).toEqual({ lands_on: state.forward.lands_on });
+      expect(moves.hop_left).toEqual({
+        lands_on: state.sideways.left_lands_on,
+        then_hop_forward_lands_on: state.forward.lands_on_after_stepping_left,
+      });
+      expect(moves.hop_right).toEqual({
+        lands_on: state.sideways.right_lands_on,
+        then_hop_forward_lands_on: state.forward.lands_on_after_stepping_right,
+      });
+      expect(moves.hop_back).toEqual({ lands_on: state.backward.lands_on });
+      expect(moves.stay).toEqual({ stands_on: state.chicken.stays_on });
+    }
+  });
+
+  it("leaves out the name of the row: the word water beside a platform pulled the model to no", () => {
+    for (const { state } of sample) {
+      const text = JSON.stringify(movesState(state, ACTION_NAMES));
+      expect(text).not.toContain('"row"');
+      expect(text).not.toContain("things_move");
+    }
+  });
+
+  it("names the moves after the manoeuvres when a controller does the hopping, and then says which way things move", () => {
+    const { state } = sample[0] as { state: LanesState };
+    const moves = movesState(state, MANEUVER_NAMES, { movement: true }) as Record<
+      string,
+      Record<string, unknown>
+    >;
+    expect(Object.keys(moves).sort()).toEqual(
+      [
+        "back_off",
+        "chicken",
+        "cross_ahead",
+        "memory",
+        "sidestep_left",
+        "sidestep_right",
+        "wait_here",
+      ].sort(),
+    );
+    expect(moves.cross_ahead).toHaveProperty("things_move");
+    expect(moves.sidestep_left).toHaveProperty("then_cross_ahead_lands_on");
+  });
+
+  it("has no digits and no word of judgement", () => {
+    for (const { state } of sample) {
+      const text = JSON.stringify(movesState(state, ACTION_NAMES));
+      expect(text).not.toMatch(/\d/);
+      expect(text).not.toMatch(/safe|danger|deadly|dies|fatal|reachable|valid|legal|survive/i);
+    }
+  });
+
+  it("looks two steps ahead for what is under a chicken that stays, because a vehicle that arrives right after still hits it", () => {
+    // A vehicle 1.4 columns from the chicken's column, closing at 5 columns per second: it covers the column
+    // at 0.3 s, not at 0.2 s.
+    const row: ObsRow = {
+      dz: 0,
+      kind: "road",
+      vehicles: [{ col: 2.6, half_extent: 1, speed_cols_per_s: -5 }],
+    };
+    const obs = {
+      player: { col: 0, standing_on: "road" as const, riding: false, hop_ticks_left: 0 },
+      rows: [row],
+    };
+    expect(cellAt(row, 0, 0.2)).toBe("empty");
+    expect(lanesState(obs).chicken.stays_on).toBe("vehicle");
+  });
+
+  it("encodes through the encoder table", () => {
+    const game = new Game({ seed: 3 });
+    game.step("hop_forward");
+    const obs = observe(game);
+    expect(encodeRequest("moves", obs, emptyMemory()).state).toEqual(
+      movesState(lanesState(obs, emptyMemory()), ACTION_NAMES),
+    );
+    expect(ENCODER_LEVEL.moves).toBe("words");
   });
 });

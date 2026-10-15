@@ -63,6 +63,7 @@ export {
   sentences,
 } from "./input-text.ts";
 export {
+  ACTION_NAMES,
   CELL_WORDS,
   type Cell,
   canStand,
@@ -70,6 +71,9 @@ export {
   isPermanent,
   type LanesState,
   lanesState,
+  MANEUVER_NAMES,
+  type MoveNames,
+  movesState,
   STANDABLE,
 } from "./lanes.ts";
 export {
@@ -95,13 +99,15 @@ export {
   MANUAL_IDS,
   MANUALS,
   type ManualId,
+  ORDERED_CRITERIA,
+  ORDERED_MANEUVER_CRITERIA,
   PROMPT_VERSION,
   ROUTING_CRITERIA,
   RULES_CRITERIA,
   riskInstructions,
   riskQuestionId,
 } from "./prompts.ts";
-export { readLanes, ruleLanes, ruleView, ruleViewFx } from "./rule.ts";
+export { readLanes, readOrdered, ruleLanes, ruleMoves, ruleView, ruleViewFx } from "./rule.ts";
 export {
   type ApplyOptions,
   applyDecision,

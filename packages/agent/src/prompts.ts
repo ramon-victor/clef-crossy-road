@@ -20,8 +20,16 @@ export const PROMPT_VERSION = "p1";
  * and the words they can hold, the way the Doom player of the other Jev projects writes its threshold into
  * the option text. It measures whether the model applies a written policy to words, and is labelled so
  * (ADR-0010). The same for every state.
+ * ordered: for the `moves` view only. Short options, each one a single rule about its own entry of the
+ * state, to be tried in a stated order, the first that is true wins (the options of `rules` measured too
+ * alike and too long: the model's answers came out nearly flat). Measured with several options true at
+ * once in most states, and the model took a later one instead of the first (`hop_left` when everything was
+ * free, `hop_back` where `stay` was right).
+ * exclusive: for the `moves` view only. The same game text and the same short options, but each one also
+ * states the cases that rule it out, so exactly one is true in any state (what the Doom `rule` options do:
+ * "do not pick this if...").
  */
-export const MANUAL_IDS = ["full", "minimal", "routing", "rules"] as const;
+export const MANUAL_IDS = ["full", "minimal", "routing", "rules", "ordered", "exclusive"] as const;
 export type ManualId = (typeof MANUAL_IDS)[number];
 
 const MINIMAL = [
@@ -67,11 +75,21 @@ const RULES = [
   "The moves: hop_forward goes one row ahead, hop_back one row behind, hop_left one column to the left, hop_right one column to the right, and stay waits.",
 ].join(" ");
 
+/** The rules and the vocabulary of the `moves` view. Each move has an entry in the state under its own name. */
+const ORDERED = [
+  "You control a chicken in a Crossy Road style game. It hops across rows of grass, road, rail and water while the world keeps moving. A decision is one hop of 0.2 seconds, or staying still.",
+  "The state says, for each move, what fills the cell where that move would land, already worked out for the moment the hop ends.",
+  "A cell holds one of these words: empty, tree, water (open water, no platform), log, lily_pad, vehicle, train, train_coming (the rail warning light is on), outside_world (past the edge of the world) or unseen.",
+  "The chicken can stand on empty, log and lily_pad and on nothing else: a tree stops it, water drowns it, a vehicle or a train hits it, and outside_world kills it.",
+].join(" ");
+
 export const MANUALS: Readonly<Record<ManualId, string>> = {
   minimal: MINIMAL,
   full: FULL,
   routing: ROUTING,
   rules: RULES,
+  ordered: ORDERED,
+  exclusive: ORDERED,
 };
 
 /** Option ids are sorted as strings and read by the model, so they are descriptive. */
@@ -123,6 +141,104 @@ export const MANEUVER_CRITERIA: Readonly<Record<Maneuver, string>> = {
   wait_here: `Do nothing for one step, then be asked again. Correct when no other option applies and chicken.stays_on is ${STANDABLE_WORDS}.`,
 };
 
+const FIRST = "Only if none of the moves before it is true.";
+
+/**
+ * Short options for the `moves` view: one rule each, about the entry of the state that carries the
+ * option's own name, to be tried in the order the question gives. The same for every state.
+ */
+export const ORDERED_CRITERIA: Readonly<Record<Action, string>> = {
+  hop_forward: `True when hop_forward.lands_on is ${STANDABLE_WORDS}.`,
+  hop_left: `True when hop_left.lands_on and hop_left.then_hop_forward_lands_on are both ${STANDABLE_WORDS}. ${FIRST}`,
+  hop_right: `True when hop_right.lands_on and hop_right.then_hop_forward_lands_on are both ${STANDABLE_WORDS}. ${FIRST}`,
+  stay: `True when stay.stands_on is ${STANDABLE_WORDS}. ${FIRST}`,
+  hop_back: `True when hop_back.lands_on is ${STANDABLE_WORDS}. ${FIRST}`,
+};
+
+const NOT_STANDABLE = `is NOT ${STANDABLE_WORDS}`;
+
+/**
+ * The `ordered` options with the cases that rule each one out written in, so that exactly one of them is
+ * true in any state.
+ */
+export const EXCLUSIVE_CRITERIA: Readonly<Record<Action, string>> = {
+  hop_forward: `True when hop_forward.lands_on is ${STANDABLE_WORDS}. When it is true, no other move is.`,
+  hop_left: `True only when hop_forward.lands_on ${NOT_STANDABLE}, and hop_left.lands_on and hop_left.then_hop_forward_lands_on are both ${STANDABLE_WORDS}.`,
+  hop_right: `True only when hop_forward.lands_on ${NOT_STANDABLE}, and hop_left is not true, and hop_right.lands_on and hop_right.then_hop_forward_lands_on are both ${STANDABLE_WORDS}.`,
+  stay: `True only when hop_forward.lands_on ${NOT_STANDABLE}, and neither hop_left nor hop_right is true, and stay.stands_on is ${STANDABLE_WORDS}.`,
+  hop_back: `True only when stay.stands_on ${NOT_STANDABLE}, and hop_forward, hop_left and hop_right are not true, and hop_back.lands_on is ${STANDABLE_WORDS}.`,
+};
+
+/** The same, for the manoeuvres of the `maneuver` strategy: the controller picks the moment and hops. */
+export const ORDERED_MANEUVER_CRITERIA: Readonly<Record<Maneuver, string>> = {
+  cross_ahead: `Go straight ahead; the controller waits for the right moment and hops. True when cross_ahead.lands_on is ${STANDABLE_WORDS}, or when it is water, vehicle, train or train_coming and cross_ahead.things_move is left or right (things keep passing, so a place will open) and wait_here.stands_on is ${STANDABLE_WORDS}.`,
+  sidestep_left: `Step one column left; the controller hops when the cell is clear. True when sidestep_left.lands_on and sidestep_left.then_cross_ahead_lands_on are both ${STANDABLE_WORDS}. ${FIRST}`,
+  sidestep_right: `Step one column right; the controller hops when the cell is clear. True when sidestep_right.lands_on and sidestep_right.then_cross_ahead_lands_on are both ${STANDABLE_WORDS}. ${FIRST}`,
+  wait_here: `Wait one step. True when wait_here.stands_on is ${STANDABLE_WORDS}. ${FIRST}`,
+  back_off: `Go one row back. True when back_off.lands_on is ${STANDABLE_WORDS}. ${FIRST}`,
+};
+
+/**
+ * The `graph` strategy asks two small questions in one request instead of one with five options: can the
+ * chicken hop forward, and if not, which other move. The options of each are exclusive by construction.
+ */
+export const GRAPH_GO_CRITERIA = {
+  go: `hop_forward.lands_on is ${STANDABLE_WORDS}.`,
+  hold: `hop_forward.lands_on ${NOT_STANDABLE}.`,
+} as const;
+
+export const GRAPH_SIDE_CRITERIA: Readonly<Record<Exclude<Action, "hop_forward">, string>> = {
+  hop_left: `hop_left.lands_on and hop_left.then_hop_forward_lands_on are both ${STANDABLE_WORDS}.`,
+  hop_right: `hop_left is not true, and hop_right.lands_on and hop_right.then_hop_forward_lands_on are both ${STANDABLE_WORDS}.`,
+  stay: `neither hop_left nor hop_right is true, and stay.stands_on is ${STANDABLE_WORDS}.`,
+  hop_back: `neither hop_left nor hop_right is true, stay.stands_on ${NOT_STANDABLE}, and hop_back.lands_on is ${STANDABLE_WORDS}.`,
+};
+
+export const GRAPH_QUESTION_IDS = ["go", "side"] as const;
+
+/** The instructions of each question of the `graph` strategy (the `moves` view with the game text of `ordered`). */
+export function graphInstructions(question: (typeof GRAPH_QUESTION_IDS)[number]): string {
+  const common = `${MANUALS.ordered} ${MOVES_NOTE}`;
+  return question === "go"
+    ? `${common} Can the chicken hop forward? It can when hop_forward.lands_on is ${STANDABLE_WORDS}.`
+    : `${common} The chicken cannot hop forward, because hop_forward.lands_on is not ${STANDABLE_WORDS}. Which other move does it make? Exactly one of these is true; if none is, take stay.`;
+}
+
+/**
+ * The same two questions for the manoeuvres (`graph-maneuver`): can the chicken cross the row ahead (which
+ * includes waiting for a gap in moving traffic or logs), and if not, which other manoeuvre. The controller
+ * picks the moment and does the hopping.
+ */
+const MANEUVER_ADDENDUM =
+  "The moves are manoeuvres: a controller waits for the right moment and does the hopping, then the chicken is asked again; memory.last_maneuver says how the previous one went, and cross_ahead.things_move is the way the vehicles or logs of the row ahead move on the screen (no when they stand still).";
+
+const CROSSABLE = `cross_ahead.lands_on is ${STANDABLE_WORDS}, or it is water, vehicle, train or train_coming and cross_ahead.things_move is left or right and wait_here.stands_on is ${STANDABLE_WORDS}`;
+
+export const GRAPH_MANEUVER_GO_CRITERIA = {
+  go: `${CROSSABLE} (things keep passing, so a place will open).`,
+  hold: `cross_ahead.lands_on is a tree, or it is water, vehicle, train or train_coming and either cross_ahead.things_move is no or wait_here.stands_on ${NOT_STANDABLE}.`,
+} as const;
+
+export const GRAPH_MANEUVER_SIDE_CRITERIA: Readonly<
+  Record<Exclude<Maneuver, "cross_ahead">, string>
+> = {
+  sidestep_left: `sidestep_left.lands_on and sidestep_left.then_cross_ahead_lands_on are both ${STANDABLE_WORDS}.`,
+  sidestep_right: `sidestep_left is not true, and sidestep_right.lands_on and sidestep_right.then_cross_ahead_lands_on are both ${STANDABLE_WORDS}.`,
+  wait_here: `neither sidestep_left nor sidestep_right is true, and wait_here.stands_on is ${STANDABLE_WORDS}.`,
+  back_off: `neither sidestep_left nor sidestep_right is true, wait_here.stands_on ${NOT_STANDABLE}, and back_off.lands_on is ${STANDABLE_WORDS}.`,
+};
+
+export function graphManeuverInstructions(question: (typeof GRAPH_QUESTION_IDS)[number]): string {
+  const note = MOVES_NOTE.replace(
+    "then_hop_forward_lands_on is the cell where a hop forward would land one hop later, after that sidestep",
+    "then_cross_ahead_lands_on is the cell where crossing ahead would land one hop later, after that sidestep",
+  );
+  const common = `${MANUALS.ordered} ${note} ${MANEUVER_ADDENDUM}`;
+  return question === "go"
+    ? `${common} Can the chicken cross the row straight ahead? It can when ${CROSSABLE}.`
+    : `${common} The chicken cannot cross the row straight ahead. Which manoeuvre does it start instead? Exactly one of these is true; if none is, take wait_here.`;
+}
+
 /** The options of a choice question for this prompt style. */
 export function criteriaFor(manual: ManualId): Readonly<Record<Action, string>>;
 export function criteriaFor(
@@ -130,8 +246,11 @@ export function criteriaFor(
   strategy: "maneuver",
 ): Readonly<Record<Maneuver, string>>;
 export function criteriaFor(manual: ManualId, strategy?: string): Readonly<Record<string, string>> {
-  if (strategy === "maneuver") return MANEUVER_CRITERIA;
+  if (strategy === "maneuver")
+    return manual === "ordered" ? ORDERED_MANEUVER_CRITERIA : MANEUVER_CRITERIA;
   if (manual === "routing") return ROUTING_CRITERIA;
+  if (manual === "ordered") return ORDERED_CRITERIA;
+  if (manual === "exclusive") return EXCLUSIVE_CRITERIA;
   return manual === "rules" ? RULES_CRITERIA : ACTION_CRITERIA;
 }
 
@@ -160,8 +279,13 @@ const LANES_NOTE =
 const MANEUVER_NOTE =
   "The moves are manoeuvres: a controller waits for the right moment and does the hopping, then the chicken is asked again. memory.last_maneuver says how the previous one went.";
 
+/** How the `moves` view is read. Short: the keys of the state are the names of the moves. */
+const MOVES_NOTE =
+  "Each move has an entry in the state under its own name. lands_on is the cell where that move lands; then_hop_forward_lands_on is the cell where a hop forward would land one hop later, after that sidestep; stands_on is what is under the chicken if it stays. chicken says how close it is to the edges of the world, where it dies, and which way a platform carries it. memory lists its last moves with what each did.";
+
 const ENCODER_NOTES: Readonly<Partial<Record<EncoderId, string>>> = {
   lanes: LANES_NOTE,
+  moves: MOVES_NOTE,
   image: IMAGE_LEGEND,
   "json-rel": RELATIVE_NOTE,
   view: `${VIEW_NOTE} ${MEMORY_NOTE}`,
@@ -182,13 +306,23 @@ const CHOICE_QUESTION: Readonly<Record<ManualId, string>> = {
   routing: "Which move does the chicken make now?",
   rules:
     "Which move does the chicken make now? Check the options in this order: hop_forward, then the side steps, then stay, then leaving a spot it cannot stand on.",
+  exclusive:
+    "Which move does the chicken make now? Exactly one of these moves is true: hop_forward, hop_left, hop_right, stay or hop_back. If none is, take hop_forward.",
+  ordered:
+    "Which move does the chicken make now? Go through the moves in this order and take the first whose rule is true: hop_forward, hop_left, hop_right, stay, hop_back. If none is true, take hop_forward.",
 };
+
+const ORDERED_MANEUVER_QUESTION =
+  "The moves are manoeuvres: a controller waits for the right moment and does the hopping, then the chicken is asked again; memory.last_maneuver says how the previous one went, and cross_ahead.things_move is the way the vehicles or logs of the row ahead move on the screen (no when they stand still). Which manoeuvre does the chicken start now? Go through them in this order and take the first whose rule is true: cross_ahead, sidestep_left, sidestep_right, wait_here, back_off. If none is true, take wait_here.";
 
 export function choiceInstructions(
   manual: ManualId,
   encoder?: EncoderId,
   strategy?: string,
 ): string {
+  if (strategy === "maneuver" && manual === "ordered") {
+    return `${withEncoderNote(manual, encoder)} ${ORDERED_MANEUVER_QUESTION}`;
+  }
   if (strategy === "maneuver") {
     return `${withEncoderNote(manual, encoder)} ${MANEUVER_NOTE} Which manoeuvre does the chicken start now?`;
   }

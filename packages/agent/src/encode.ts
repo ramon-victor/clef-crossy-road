@@ -1,7 +1,7 @@
 import type { Observation, ObsMover, ObsRow } from "@ccr/core";
 import { columnAfter, HOP_SECONDS } from "./forecast.ts";
 import { renderSceneImage } from "./image.ts";
-import { lanesState } from "./lanes.ts";
+import { ACTION_NAMES, lanesState, movesState } from "./lanes.ts";
 import { emptyMemory, type Memory } from "./memory.ts";
 import { outcomeText, renderView } from "./view.ts";
 
@@ -14,6 +14,7 @@ export const ENCODER_IDS = [
   "view-fx",
   "json-fx",
   "lanes",
+  "moves",
 ] as const;
 export type EncoderId = (typeof ENCODER_IDS)[number];
 
@@ -38,6 +39,7 @@ export const ENCODER_LEVEL: Readonly<Record<EncoderId, PerceptionLevel>> = {
   "view-fx": "forecast",
   "json-fx": "forecast",
   lanes: "words",
+  moves: "words",
 };
 
 /**
@@ -53,6 +55,7 @@ export const ENCODER_LEVEL: Readonly<Record<EncoderId, PerceptionLevel>> = {
  * - `view-fx` (E5): `view` plus a second map of the moving objects as they will be in 0.2 s.
  * - `json-fx` (E6): `json-rel` plus each object's column in 0.2 s and the memory as fields.
  * - `lanes` (E7): what fills the cells the chicken could land on, in a closed vocabulary of words (lanes.ts).
+ * - `moves` (E8): the same words grouped under the name of each move, so the keys are the words of the options.
  */
 export function encodeState(encoder: EncoderId, obs: Observation, memory?: Memory): unknown {
   return encodeRequest(encoder, obs, memory).state;
@@ -75,6 +78,8 @@ export function encodeRequest(
       };
     case "lanes":
       return { state: lanesState(obs, memory) };
+    case "moves":
+      return { state: movesState(lanesState(obs, memory), ACTION_NAMES) };
     case "view":
       return { state: renderView(obs, memory, { forecast: false }) };
     case "view-fx":
