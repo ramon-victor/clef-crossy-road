@@ -13,24 +13,43 @@ e quantas ruas ele atravessou. Um benchmark em CLI compara modelos nas mesmas se
   A causa medida: 72% a 96% dos saltos para a água são fatais e o modelo põe a maior probabilidade em avançar mesmo com a plataforma escrita na frente dele. Jogadores roteirizados que leem
   as mesmas vistas fazem 13 a 19 ruas: a informação está lá, o modelo não a usa. Leia [docs/07-experimentos.md](docs/07-experimentos.md).
 - **Para ver o que o modelo recebe:** no app, a tecla **I** abre uma janela com o estado, a pergunta, as opções e a resposta de cada decisão; na linha de comando, `pnpm bench show-input --seed 4 --actions hop_forward`. A revisão mostrou que os dados estão certos e que o texto das opções é o que mais move a escolha do modelo ([docs/06](docs/06-observacao-e-prompts.md), [docs/07](docs/07-experimentos.md)).
-- **O app tem dois modelos no "Who plays"**: **Clef-flash** e **Clef (27B)**, os dois com a jogabilidade nova (palavras, três consultas e controlador de desvio). Abre no Clef-flash num mapa em cache (seeds 6 a 8), então abrir não gasta; qualquer outra combinação abre por `CCR_PLAYER`. Um jogador de IA que passa 40 decisões sem uma linha nova (por exemplo, batendo numa árvore) encerra a partida com o cartão "Preso" e para de gastar.
+- **O app tem dois modelos no "Who plays"**: **Clef-flash** e **Clef (27B)**, os dois com a jogabilidade nova (palavras, três consultas e controlador de desvio). No navegador, abre no look-ahead gratuito. O desktop abre no Clef-flash na seed 6; esse replay só é gratuito quando o cache local está presente (seeds 6 a 8). Qualquer outra combinação abre por `CCR_PLAYER`. Um jogador de IA que passa 40 decisões sem uma linha nova (por exemplo, batendo numa árvore) encerra a partida com o cartão "Preso" e para de gastar.
 - **Regra do projeto:** ficar no free tier (10.000 neurons por dia UTC, por conta). O código recusa chamadas além disso ([ADR-0008](docs/adr/0008-orcamento-diario-no-free-tier.md)).
 
-## Ver o jogo rodando
+## Rodar em localhost
+
+Na raiz do projeto:
+
+```bash
+pnpm install
+pnpm run dev
+```
+
+Abra **http://localhost:5173**. O comando baixa os assets ausentes e inicia o servidor com atualização
+automática. Na primeira vez, o download precisa de internet e Git. Para encerrar, pressione **Ctrl+C** no terminal.
+Se a porta 5173 estiver ocupada, encerre o servidor anterior; a porta permanece fixa para compatibilidade com o Tauri.
+
+O navegador começa com o **look-ahead gratuito**, sem precisar de token, cache ou Rust.
+Para jogar manualmente, escolha **You** em **Who plays**. Para testar um modelo, configure as credenciais
+em **Setup → Cloudflare → Configure** e selecione Clef-flash ou Clef (27B).
+
+## Ver o app desktop rodando
 
 Depois de construir uma vez (comandos abaixo), basta dar **duplo clique**:
 
 | Arquivo | O que abre |
 |---|---|
-| `play.cmd` | O app no modo normal: o look-ahead (referência gratuita) jogando e reiniciando sozinho. Troque o jogador no seletor (Clef-flash, Clef 27B, você, referências). **Roda no terminal e mostra os logs do que é mandado ao modelo** a cada decisão (`CCR_LOG=full`, padrão; `brief` ou `off` para mudar); o mesmo texto vai para `runslogsplay.log` |
-| `play-clef.cmd` | O **Clef-flash jogando a seed 6**, com as probabilidades reais no painel e os logs no terminal. Vem do cache, então **não gasta neurons**; a tecla `M` abre o próximo mapa em cache |
+| `play.cmd` | O app no modo normal: Clef-flash na seed 6 (replay gratuito se o cache local estiver presente). Troque o jogador no seletor (Clef-flash, Clef 27B, você, referências). **Roda no terminal e mostra os logs do que é mandado ao modelo** a cada decisão (`CCR_LOG=full`, padrão; `brief` ou `off` para mudar); o mesmo texto vai para `runs/logs/play.log` |
+| `play-clef.cmd` | O **Clef-flash jogando a seed 6**, com as probabilidades reais no painel e os logs no terminal. Com o cache local completo, **não gasta neurons**; a tecla `M` abre o próximo mapa em cache |
 
-Para abrir direto em outro jogador: `set CCR_PLAYER=clef-27b` (seeds 1 a 8 vêm do cache) ou um id do benchmark como `clef:clef-flash:view-fx:choice:routing`, e `set CCR_SEED=1`, antes de `.play.cmd`.
+No PowerShell, para abrir direto em outro jogador: `$env:CCR_PLAYER="lookahead"` (gratuito),
+`$env:CCR_PLAYER="clef-27b"` (sem mapa em cache) ou um id do benchmark como `clef:clef-flash:view-fx:choice:routing`,
+e `$env:CCR_SEED="1"`, antes de `.\play.cmd`.
 
 No app: setas ou WASD para você jogar, espaço pausa, `N` dá um passo, `R` repete o mapa, `M` abre outro. O painel mostra, a cada decisão, a ação, a probabilidade
 de cada ação, a latência, os tokens e quantos neurons do dia já foram usados.
 
-## Começar
+## Outros comandos
 
 ```bash
 pnpm install
@@ -53,7 +72,7 @@ Antes de qualquer execução com modelo, rode `pnpm bench plan`: ele estima os n
 2. O token deve ter **só** a permissão *Workers AI* e uma data de expiração.
 3. O `.env` é ignorado pelo git. Nunca o publique nem o cole em conversas.
 
-Requisitos: Node 24, pnpm 10, Rust (para o app desktop) e o WebView2 (já vem no Windows 11).
+Requisitos: Node 24, pnpm 10 e Git para o localhost. Rust e WebView2 (já vem no Windows 11) são necessários para o app desktop.
 
 ## Por onde ler
 

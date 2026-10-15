@@ -30,7 +30,8 @@ export function launchFromQuery(search: string): LaunchOptions {
  */
 export async function readLaunchOptions(): Promise<LaunchOptions> {
   try {
-    if (!isTauri()) return launchFromQuery(window.location.search);
+    // The cache is local and gitignored. A fresh checkout must work without credentials or API spend.
+    if (!isTauri()) return { player: "lookahead", ...launchFromQuery(window.location.search) };
     const raw = await invoke<{ player?: string | null; seed?: number | null; log?: string }>(
       "launch_options",
     );

@@ -21,12 +21,14 @@ lets a person play.
   `runs/cache/spend.ndjson`. The TypeScript `BridgeBudget` only reads it. Do not move enforcement into the webview.
 - `clef_run` accepts only `clef`, `clef-flash` and `clef-omni`; no caller-supplied URLs.
 - The dev bridge refuses requests from other origins and exists only for `vite serve` (`apply: "serve"`). Keep it that way.
-- Opening the app must never spend anything: the default player is the free look-ahead reference.
+- Browser development defaults to the free look-ahead reference, independent of the local cache.
+  Native defaults to Clef-flash on a cached seed; replay is free only when that cache is present.
 - Code uses explicit `.ts`/`.tsx` extensions and only erasable TypeScript syntax (no enums, no constructor parameter properties).
 - Third-party assets live in `public/assets/` (gitignored) and come from `node scripts/fetch-assets.mjs`. Do not commit them.
 
 ## Commands
 
+- `pnpm run dev` at the repository root prepares assets and serves the browser UI at `http://localhost:5173`.
 - `pnpm --filter @ccr/desktop test` (Session, key map, seeds, policies; no DOM and no real timers) and `typecheck`.
 - `pnpm --filter @ccr/desktop tauri dev`; add `CCR_SELFTEST=1` for the scripted check that writes `runs/selftest.json`.
 - `cargo test --lib` in `src-tauri` (PATH needs `%USERPROFILE%\.cargo\bin`).

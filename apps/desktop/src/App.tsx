@@ -49,7 +49,9 @@ export function App() {
   }, []);
 
   const [state, setState] = useState<SessionState>(() => session.state());
-  const [selectedId, setSelectedId] = useState(DEFAULT_PLAYER);
+  const [selectedId, setSelectedId] = useState(
+    bridge.kind === "http" ? "lookahead" : DEFAULT_PLAYER,
+  );
   const [budget, setBudget] = useState<BudgetStatus | null>(null);
   const [credentials, setCredentials] = useState<CredentialStatus | null>(null);
   const [configuring, setConfiguring] = useState(false);
@@ -107,8 +109,8 @@ export function App() {
     [standardById],
   );
 
-  // Starting point: Clef-flash on the first map whose decisions are cached, unless a shortcut asked for something
-  // else (CCR_PLAYER / CCR_SEED). The default never spends anything: that map is replayed from the cache.
+  // Native starts on Clef-flash's first cached map; browser development defaults to a free reference.
+  // A cached replay is only free if that worktree actually contains all of its cached decisions.
   useEffect(() => {
     let cancelled = false;
     let stopLogging = () => {};
@@ -118,11 +120,11 @@ export function App() {
       if (options.log) {
         stopLogging = session.subscribeEvents(createConsoleLog(options.log, terminalWriter()));
       }
-      const requested = options.player ?? "";
+      const requested = options.player ?? DEFAULT_PLAYER;
       const wanted =
         standardById.get(canonicalPlayerId(requested)) ??
         customChoice(requested, client) ??
-        standardById.get(DEFAULT_PLAYER);
+        standardById.get("lookahead");
       if (!wanted) return;
       if (!standardById.has(wanted.id)) setCustom(wanted);
       setSelectedId(wanted.id);

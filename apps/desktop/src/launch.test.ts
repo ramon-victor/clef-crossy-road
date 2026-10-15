@@ -1,5 +1,19 @@
-import { describe, expect, it } from "vitest";
-import { launchFromQuery } from "./launch.ts";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { launchFromQuery, readLaunchOptions } from "./launch.ts";
+
+afterEach(() => vi.unstubAllGlobals());
+
+describe("browser launch", () => {
+  it("uses a free player on a fresh localhost launch without needing a model cache", async () => {
+    vi.stubGlobal("window", { location: { search: "" } });
+    expect(await readLaunchOptions()).toEqual({ player: "lookahead" });
+  });
+
+  it("keeps explicit player, seed and logging query options", async () => {
+    vi.stubGlobal("window", { location: { search: "?player=human&seed=6&log=full" } });
+    expect(await readLaunchOptions()).toEqual({ player: "human", seed: 6, log: "full" });
+  });
+});
 
 describe("launchFromQuery", () => {
   it("reads the player and the seed", () => {

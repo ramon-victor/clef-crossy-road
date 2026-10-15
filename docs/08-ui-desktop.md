@@ -8,6 +8,13 @@ Uma janela Tauri v2 (WebView2) de 1180×800 (mínimo 980×660), com a cena Three
 O painel usa `clamp(264px, 24vw, 280px)`: 264 px na janela mínima e 280 px na janela padrão. Os modelos, texturas, fonte e sons
 são os do Expo-Crossy-Road, baixados localmente por `node scripts/fetch-assets.mjs` (ficam fora do git).
 
+Para desenvolver no navegador: `pnpm install` e `pnpm run dev` na raiz, depois abrir
+**http://localhost:5173**. O comando prepara os assets e sobe o Vite na porta fixa 5173; Ctrl+C encerra.
+O navegador abre no **look-ahead gratuito**, sem depender de credenciais nem de cache. `?player=human`
+ou `?player=clef-flash&seed=6` sobrescreve essa escolha; um jogador desconhecido cai no look-ahead.
+O desktop mantém o Clef-flash na primeira seed conhecida; a gratuidade desse replay depende do cache
+local completo, que fica fora do git. Selecionar um modelo pode fazer chamadas pagas em neurons.
+
 ```
 ┌───────────────────────────────────────┬──────────────────────┐
 │ 86                                    │ QUEM JOGA [select] ⓘ │
@@ -28,7 +35,7 @@ são os do Expo-Crossy-Road, baixados localmente por `node scripts/fetch-assets.
 
 | Recurso | Como funciona |
 |---|---|
-| Quem joga | **Dois modelos**, os dois com a mesma jogabilidade ([ADR-0011](adr/0011-controlador-com-rota-e-tres-consultas.md)): o código transforma a tela em palavras, **três perguntas pequenas** vão ao modelo (dá para pisar na casa da frente? as coisas dessa linha se movem? de que lado contornar?) e um **controlador** dá os saltos e caminha os desvios, com passos que não gastam neurons. **Clef-flash** (`clef-flash`, ~6 neurons por conjunto de perguntas; as seeds **6–8** estão no cache) e **Clef (27B)** (`clef-27b`, cerca de 6,3× o custo, ~39 neurons por conjunto, sem mapa em cache). O app **abre no Clef-flash na primeira seed em cache**, então abrir não gasta. Mais **você** (setas/WASD) e as referências sem API (look-ahead, sempre em frente, aleatório). O `json-fx` antigo (que joga como "sempre em frente"), JSON x grade x imagem e `critic` eram condições do benchmark, não jogadores: ficam em `pnpm bench`, mas qualquer combinação pode ser aberta com `CCR_PLAYER=clef:<modelo>:<vista>:<estratégia>[:<estilo>]` (aparece como "Custom"). **Abrir o app nunca gasta nada**: o padrão é Clef-flash na primeira seed em cache |
+| Quem joga | **Dois modelos**, os dois com a mesma jogabilidade ([ADR-0011](adr/0011-controlador-com-rota-e-tres-consultas.md)): o código transforma a tela em palavras, **três perguntas pequenas** vão ao modelo (dá para pisar na casa da frente? as coisas dessa linha se movem? de que lado contornar?) e um **controlador** dá os saltos e caminha os desvios, com passos que não gastam neurons. **Clef-flash** (`clef-flash`, ~6 neurons por conjunto de perguntas; seeds **6–8** verificadas no cache de desenvolvimento) e **Clef (27B)** (`clef-27b`, cerca de 6,3× o custo, ~39 neurons por conjunto, sem mapa em cache). O desktop **abre no Clef-flash na primeira seed conhecida**; o replay só é gratuito se o cache local estiver completo. O navegador abre no look-ahead gratuito. Mais **você** (setas/WASD) e as referências sem API (look-ahead, sempre em frente, aleatório). O `json-fx` antigo (que joga como "sempre em frente"), JSON x grade x imagem e `critic` eram condições do benchmark, não jogadores: ficam em `pnpm bench`, mas qualquer combinação pode ser aberta com `CCR_PLAYER=clef:<modelo>:<vista>:<estratégia>[:<estilo>]` (aparece como "Custom") |
 | Tempo | Em **Setup**: **Step**, em que o mundo espera o modelo, como no benchmark; **Real-time**, em que o mundo corre a 60 Hz e a ação vale quando a resposta chega. O modo atual aparece no resumo mesmo com Setup fechado |
 | Controles | Pausa (espaço), passo-a-passo (N, só em Step e pausado), retry da mesma seed (R) e mapa novo (M) ficam sempre no topo. **Setup**, inicialmente fechado, reúne tempo, velocidade 0,5× a 4×, seed editável e auto-restart; seu resumo mostra modo, velocidade e seed atuais |
 | Teclado | Setas ou WASD. Apertar mais rápido que o salto, ou segurar a tecla, deixa a jogada **na fila** (1 vaga, a última vence) e ela começa quando o salto pousa, depois de o pouso ser checado: não dá para atravessar água nem rua encadeando saltos ([04](04-game-core.md), D9) |
@@ -98,6 +105,14 @@ as verificações anteriores no WebView2 estão registradas abaixo.
   valor digitado, salvar/reabrir/recarregar sem preencher segredos, limpeza ao fechar, retorno de foco,
   jogo pausado e atualização do orçamento. Credenciais fictícias e `.env` em diretório temporário isolado.
   Capturas em `reports/credentials/` (gerado, fora do git).
+
+## Verificação do localhost (2026-10-15)
+
+- `pnpm run dev` na raiz serviu a UI em `http://localhost:5173`; download inicial dos assets
+  verificado em diretório temporário sem arquivos, com reutilização na segunda execução.
+- Chromium em 1180×800: entrada sem query abre look-ahead, jogador desconhecido também; `?player=human&seed=6`
+  abre You na seed pedida. Canvas renderizado, assets sem erros HTTP, nenhum erro JavaScript e nenhuma chamada à API.
+  Captura em `reports/dev/localhost-1180x800.png` (gerado, fora do git).
 
 ## Arquitetura do app
 

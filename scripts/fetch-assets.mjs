@@ -8,9 +8,13 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
 const REVISION = "6f2e84e580c9c8f2b432aa365f706d45d96d8bc9";
-const target = resolve("apps/desktop/public/assets");
+const target = resolve(import.meta.dirname, "../apps/desktop/public/assets");
+const directories = ["models", "audio", "fonts"];
 
-if (existsSync(join(target, "models")) && !process.argv.includes("--force")) {
+if (
+  directories.every((dir) => existsSync(join(target, dir))) &&
+  !process.argv.includes("--force")
+) {
   console.log(`assets already present in ${target} (use --force to refetch)`);
   process.exit(0);
 }
@@ -24,7 +28,7 @@ try {
   git("fetch", "--depth", "1", "--filter=blob:none", "origin", REVISION);
   git("checkout", "-q", "FETCH_HEAD");
   mkdirSync(target, { recursive: true });
-  for (const dir of ["models", "audio", "fonts"]) {
+  for (const dir of directories) {
     cpSync(join(tmp, "assets", dir), join(target, dir), { recursive: true });
   }
   console.log(`assets copied to ${target} (revision ${REVISION.slice(0, 7)})`);
