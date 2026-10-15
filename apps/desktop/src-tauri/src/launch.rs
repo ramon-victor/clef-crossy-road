@@ -15,15 +15,15 @@ fn parse_seed(text: &str) -> Option<u32> {
     text.trim().parse::<u32>().ok()
 }
 
-/// Optional launch settings (`CCR_PLAYER`, `CCR_SEED`) so a shortcut can open the app on a given player
-/// and map, for example Clef-flash replaying seed 1 from the cache.
+/// Optional launch settings (`CCR_PLAYER`, `CCR_SEED`, `CCR_LOG`) so a shortcut can open the app on a given
+/// player and map, for example Clef-flash replaying seed 1 from the cache, and say how much to log.
 #[tauri::command]
-pub fn launch_options() -> Value {
+pub fn launch_options(state: State<'_, AppState>) -> Value {
     let player = std::env::var("CCR_PLAYER")
         .ok()
         .filter(|s| !s.trim().is_empty());
     let seed = std::env::var("CCR_SEED").ok().and_then(|s| parse_seed(&s));
-    json!({ "player": player, "seed": seed })
+    json!({ "player": player, "seed": seed, "log": state.log.mode().as_str() })
 }
 
 fn selftest_requested() -> bool {

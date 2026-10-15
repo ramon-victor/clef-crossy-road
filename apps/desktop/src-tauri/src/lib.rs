@@ -11,6 +11,7 @@ mod error;
 mod files;
 mod launch;
 mod ledger;
+mod logging;
 
 use std::{collections::HashMap, path::PathBuf, sync::Mutex, time::Duration};
 
@@ -25,6 +26,8 @@ pub struct AppState {
     cache: Mutex<HashMap<String, Value>>,
     /// Serialises ledger reads and appends so concurrent calls cannot interleave a record.
     ledger: Mutex<()>,
+    /// What `CCR_LOG` asked to be printed in the terminal (nothing, unless it was set).
+    log: logging::ConsoleLog,
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -33,6 +36,7 @@ pub fn run() {
     credentials::load(&root);
     let state = AppState {
         cache: Mutex::new(cache::load(&root)),
+        log: logging::ConsoleLog::open(&root, logging::LogMode::from_env()),
         root,
         http: reqwest::Client::builder()
             .timeout(HTTP_TIMEOUT)
@@ -48,6 +52,7 @@ pub fn run() {
             commands::cache_get,
             commands::cache_put,
             commands::budget_status,
+            logging::console_log,
             launch::launch_options,
             launch::selftest_enabled,
             launch::report_selftest
