@@ -8,6 +8,7 @@ const STYLE_TEXT: Readonly<Record<ManualId, string>> = {
   rules: "short rules, and options that name the fields of the state and the words they hold",
   ordered: "short rules, and one short rule per move to try in a stated order",
   exclusive: "short rules, and one short rule per move, written so that only one is true",
+  lookup: "two small questions with one lookup each, and solved examples",
 };
 
 const LEVEL_TEXT: Readonly<Record<PerceptionLevel, string>> = {

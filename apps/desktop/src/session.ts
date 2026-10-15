@@ -315,7 +315,7 @@ export class Session {
    */
   private settleLastMove(): void {
     if (this.pendingMove) {
-      this.memory = remember(this.memory, this.pendingMove, this.game.score);
+      this.memory = remember(this.memory, this.pendingMove, this.game.score, this.game.heroRow);
       this.pendingMove = null;
     }
     this.stalled = this.memory.sinceProgress >= DEFAULT_STALL_LIMIT;

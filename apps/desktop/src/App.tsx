@@ -21,7 +21,7 @@ import { randomSeed } from "./seed.ts";
 import { runSelfTest } from "./selftest.ts";
 import { Session, type SessionState, type Timing } from "./session.ts";
 
-const DEFAULT_PLAYER = "lookahead";
+const DEFAULT_PLAYER = "clef-flash";
 /** Pause before an attract-mode game starts the next map, long enough to read the result card. */
 const RESTART_DELAY_MS = 2200;
 
@@ -89,8 +89,8 @@ export function App() {
     [standardById],
   );
 
-  // Starting point: the free reference unless a shortcut asked for something else (CCR_PLAYER / CCR_SEED).
-  // The default never spends anything.
+  // Starting point: Clef-flash on the first map whose decisions are cached, unless a shortcut asked for something
+  // else (CCR_PLAYER / CCR_SEED). The default never spends anything: that map is replayed from the cache.
   useEffect(() => {
     let cancelled = false;
     let stopLogging = () => {};
@@ -108,8 +108,10 @@ export function App() {
       if (!wanted) return;
       if (!standardById.has(wanted.id)) setCustom(wanted);
       setSelectedId(wanted.id);
-      if (options.seed !== undefined) noteSeed(wanted.id, options.seed);
-      session.setPolicy(wanted.factory, options.seed);
+      // Without a seed from a shortcut, a player with cached maps starts on the first of them.
+      const seed = options.seed ?? freeSeedRange(wanted)?.min;
+      if (seed !== undefined) noteSeed(wanted.id, seed);
+      session.setPolicy(wanted.factory, seed);
     });
     return () => {
       cancelled = true;

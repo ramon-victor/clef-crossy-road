@@ -4,7 +4,11 @@ import type { GameView } from "@ccr/render";
 import { invoke } from "@tauri-apps/api/core";
 import { isTauri } from "./bridge/tauri.ts";
 import type { Bridge } from "./bridge/types.ts";
-import { CLEF_ID, type PolicyChoice } from "./policies.ts";
+import { CLEF_CACHED_SEEDS, CLEF_ID, type PolicyChoice } from "./policies.ts";
+
+/** The first map whose decisions the benchmark left in the cache for Clef-flash. */
+const CACHED_SEED = Number(CLEF_CACHED_SEEDS.split("-")[0]);
+
 import type { Session } from "./session.ts";
 
 interface Context {
@@ -114,13 +118,13 @@ async function checkBudget(ctx: Context): Promise<Report> {
 }
 
 /**
- * The whole Clef pipeline through the native side WITHOUT spending: seed 1 was already played with
- * this exact policy by the benchmark, so every decision should come from the cache.
+ * The whole Clef pipeline through the native side WITHOUT spending: the first cached map was already played
+ * with this exact policy by the benchmark, so every decision should come from the cache.
  */
 async function checkClefFromCache(ctx: Context): Promise<Report> {
   ctx.select(CLEF_ID);
   ctx.session.setSpeed(4);
-  ctx.session.start(1);
+  ctx.session.start(CACHED_SEED);
   const started = performance.now();
   while (performance.now() - started < 12_000) {
     const s = ctx.session.state();
@@ -215,7 +219,7 @@ async function checkHeldKey(ctx: Context): Promise<Report> {
 async function checkInspector(ctx: Context): Promise<Report> {
   ctx.select(CLEF_ID);
   ctx.session.setSpeed(4);
-  ctx.session.start(1);
+  ctx.session.start(CACHED_SEED);
   const started = performance.now();
   while (performance.now() - started < 12_000 && ctx.session.state().decisions < 1)
     await sleep(100);

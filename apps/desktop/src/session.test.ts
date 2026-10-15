@@ -133,7 +133,12 @@ describe("Session: what the policy remembers", () => {
     s.start(3);
     spy.seen.length = 0;
     await runUntil(s, () => spy.seen.length >= 1, 1000);
-    expect(spy.seen[0]?.memory).toEqual({ recent: [], score: 0, sinceProgress: 0 });
+    expect(spy.seen[0]?.memory).toEqual({
+      recent: [],
+      score: 0,
+      sinceProgress: 0,
+      behindFrontier: 0,
+    });
   });
 });
 

@@ -1,13 +1,12 @@
-import { clefPolicyId, decisionCost } from "@ccr/agent";
+import { clefPolicyId, DEFAULT_CLEF, decisionCost } from "@ccr/agent";
 import { ClefClient } from "@ccr/clef";
 import { describe, expect, it } from "vitest";
 import {
   buildPolicyChoices,
   CLEF_27B_CONFIG,
   CLEF_27B_ID,
+  CLEF_CACHED_SEEDS,
   CLEF_ID,
-  CLEF_WORDS_CONFIG,
-  CLEF_WORDS_ID,
   canonicalPlayerId,
   customChoice,
   freeSeedRange,
@@ -19,67 +18,58 @@ const byId = (id: string) => choices.find((c) => c.id === id);
 const random = () => 987_654;
 
 describe("who can play", () => {
-  it("offers you, the two sizes of Clef, the Clef with words and a controller, and the references; the other conditions stay in the benchmark", () => {
+  it("offers you, the two sizes of Clef and the references; every other condition stays in the benchmark", () => {
     expect(choices.map((c) => c.id)).toEqual([
       "human",
       CLEF_ID,
       CLEF_27B_ID,
-      CLEF_WORDS_ID,
       "lookahead",
       "always-forward",
       "random",
     ]);
-    expect(choices.filter((c) => c.kind === "model")).toHaveLength(3);
+    expect(choices.filter((c) => c.kind === "model")).toHaveLength(2);
   });
 
-  it("each Clef reports that it may spend, and what a decision costs", () => {
+  it("both Clef play the gameplay of ADR-0011: the scene view, three lookups and the route controller", () => {
+    expect(DEFAULT_CLEF).toEqual({
+      model: "clef-flash",
+      encoder: "scene",
+      strategy: "route",
+      manual: "lookup",
+    });
+    expect(CLEF_27B_CONFIG).toEqual({ ...DEFAULT_CLEF, model: "clef" });
+    expect(byId(CLEF_ID)?.detail).toMatch(/controller/);
+    expect(byId(CLEF_ID)?.detail).toMatch(/words/);
+    expect(byId(CLEF_27B_ID)?.detail).toMatch(/same gameplay/);
+  });
+
+  it("each Clef reports that it may spend, and what a question set costs", () => {
     const flash = byId(CLEF_ID);
     const large = byId(CLEF_27B_ID);
     expect(flash?.usesApi).toBe(true);
-    expect(flash?.neuronsPerDecision).toBeCloseTo(
-      decisionCost({ model: "clef-flash", encoder: "json-fx", strategy: "choice" }).neurons,
-      5,
-    );
-    expect(large?.neuronsPerDecision).toBeCloseTo(
-      decisionCost({ model: "clef", encoder: "json-fx", strategy: "choice" }).neurons,
-      5,
-    );
+    expect(flash?.neuronsPerDecision).toBeCloseTo(decisionCost(DEFAULT_CLEF).neurons, 5);
+    expect(large?.neuronsPerDecision).toBeCloseTo(decisionCost(CLEF_27B_CONFIG).neurons, 5);
     for (const c of choices.filter((x) => x.kind !== "model")) expect(c.usesApi).toBe(false);
   });
 
-  it("the 27B costs about six times the Flash and says so, with the same view and question", () => {
+  it("the 27B costs about six times the Flash and says so, and has no cached map", () => {
     const flash = byId(CLEF_ID)?.neuronsPerDecision ?? 0;
     const large = byId(CLEF_27B_ID);
     expect((large?.neuronsPerDecision ?? 0) / flash).toBeCloseTo(6.3, 1);
     expect(large?.detail).toMatch(/6 times the cost/);
-    expect(CLEF_27B_CONFIG).toMatchObject({ model: "clef", encoder: "json-fx", manual: "full" });
-  });
-
-  it("the Clef with words and a controller says what helps it and what it costs per question", () => {
-    const words = byId(CLEF_WORDS_ID);
-    expect(CLEF_WORDS_CONFIG).toEqual({
-      model: "clef-flash",
-      encoder: "moves",
-      strategy: "graph-maneuver",
-      manual: "ordered",
-    });
-    expect(words?.usesApi).toBe(true);
-    expect(words?.neuronsPerDecision).toBeCloseTo(decisionCost(CLEF_WORDS_CONFIG).neurons, 5);
-    expect(words?.detail).toMatch(/controller/);
-    expect(words?.detail).toMatch(/words/);
-    expect(freeSeedRange(words)).toEqual({ min: 1, max: 40 });
+    expect(large?.freeReplay).toBeUndefined();
   });
 
   it("has no Clef to play until a client exists", () => {
     expect(byId(CLEF_ID)?.factory).toBeNull();
     expect(byId(CLEF_27B_ID)?.factory).toBeNull();
-    expect(byId(CLEF_WORDS_ID)?.factory).toBeNull();
   });
 });
 
 describe("ids from shortcuts", () => {
-  it("the old `clef` means Clef-flash", () => {
+  it("the old `clef` and `clef-words` mean Clef-flash", () => {
     expect(canonicalPlayerId("clef")).toBe(CLEF_ID);
+    expect(canonicalPlayerId("clef-words")).toBe(CLEF_ID);
     expect(canonicalPlayerId(CLEF_27B_ID)).toBe(CLEF_27B_ID);
     expect(canonicalPlayerId("lookahead")).toBe("lookahead");
   });
@@ -93,9 +83,9 @@ describe("ids from shortcuts", () => {
   });
 
   it("a benchmark id becomes a custom player with its own id and cost, nothing cached", () => {
-    const custom = customChoice("clef:clef-flash:view-fx:choice:routing", client);
+    const custom = customChoice("clef:clef-flash:json-fx:choice:full", client);
     expect(custom).toMatchObject({
-      id: "clef:clef-flash:view-fx:choice:routing",
+      id: "clef:clef-flash:json-fx:choice:full",
       kind: "model",
       usesApi: true,
     });
@@ -103,6 +93,12 @@ describe("ids from shortcuts", () => {
     expect(custom?.freeReplay).toBeUndefined();
     expect(custom?.factory).not.toBeNull();
     expect(custom?.neuronsPerDecision).toBeGreaterThan(0);
+  });
+
+  it("the first twelve conditions of the benchmark are still there, as custom players", () => {
+    expect(customChoice("clef:clef-flash:view-fx:choice:routing", client)?.id).toBe(
+      "clef:clef-flash:view-fx:choice:routing",
+    );
   });
 
   it("fills in the default style, so the id is the full one", () => {
@@ -116,29 +112,34 @@ describe("ids from shortcuts", () => {
     expect(customChoice("clef:gpt:json:choice", client)).toBeUndefined();
     expect(customChoice("clef:clef-flash:video:choice", client)).toBeUndefined();
     expect(customChoice(clefPolicyId(CLEF_27B_CONFIG), client)).toBeUndefined();
-    expect(customChoice("clef:clef-flash:json-fx:choice:full", client)).toBeUndefined();
-    expect(customChoice(clefPolicyId(CLEF_WORDS_CONFIG), client)).toBeUndefined();
+    expect(customChoice(clefPolicyId(DEFAULT_CLEF), client)).toBeUndefined();
   });
 });
 
 describe("free replay seeds", () => {
-  it("parses the cached range of each Clef and nothing for free players", () => {
-    expect(freeSeedRange(byId(CLEF_ID))).toEqual({ min: 1, max: 100 });
-    expect(freeSeedRange(byId(CLEF_27B_ID))).toEqual({ min: 1, max: 8 });
+  it("parses the cached range of Clef-flash, and nothing for the 27B and the free players", () => {
+    const range = freeSeedRange(byId(CLEF_ID));
+    expect(CLEF_CACHED_SEEDS).toMatch(/^\d+-\d+$/);
+    expect(range?.min).toBeLessThanOrEqual(range?.max ?? 0);
+    expect(freeSeedRange(byId(CLEF_27B_ID))).toBeNull();
     expect(freeSeedRange(byId("lookahead"))).toBeNull();
     expect(freeSeedRange(undefined)).toBeNull();
   });
 
   it("'New map' walks through the cached seeds in order, so it keeps costing nothing", () => {
     const clef = byId(CLEF_ID);
-    expect(nextMapSeed(clef, undefined, random)).toEqual({ seed: 1, free: true });
-    expect(nextMapSeed(clef, 1, random)).toEqual({ seed: 2, free: true });
-    expect(nextMapSeed(clef, 99, random)).toEqual({ seed: 100, free: true });
+    const range = freeSeedRange(clef) ?? { min: 0, max: 0 };
+    expect(nextMapSeed(clef, undefined, random)).toEqual({ seed: range.min, free: true });
+    expect(nextMapSeed(clef, range.min, random)).toEqual({ seed: range.min + 1, free: true });
   });
 
   it("only after the cached seeds are used up does it fall back to a random (paid) map", () => {
-    expect(nextMapSeed(byId(CLEF_ID), 100, random)).toEqual({ seed: 987_654, free: false });
-    expect(nextMapSeed(byId(CLEF_27B_ID), 8, random)).toEqual({ seed: 987_654, free: false });
+    const range = freeSeedRange(byId(CLEF_ID)) ?? { min: 0, max: 0 };
+    expect(nextMapSeed(byId(CLEF_ID), range.max, random)).toEqual({ seed: 987_654, free: false });
+    expect(nextMapSeed(byId(CLEF_27B_ID), undefined, random)).toEqual({
+      seed: 987_654,
+      free: false,
+    });
   });
 
   it("free players always get a random map", () => {

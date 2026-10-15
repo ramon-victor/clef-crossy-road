@@ -61,30 +61,22 @@ export function nextMapSeed(
 /** The ids of the two model players, which is what `CCR_PLAYER` and `?player=` select. */
 export const CLEF_ID = "clef-flash";
 export const CLEF_27B_ID = "clef-27b";
-export const CLEF_WORDS_ID = "clef-words";
 
 /**
- * The same view and the same question for the bigger model, so the only thing that changes is the
- * model. `DEFAULT_CLEF` is Clef-flash's.
+ * The same gameplay for the bigger model (the scene view, the three lookups and the route controller of
+ * ADR-0011), so the only thing that changes is the model. `DEFAULT_CLEF` is Clef-flash's.
  */
 export const CLEF_27B_CONFIG: ClefPolicyConfig = { ...DEFAULT_CLEF, model: "clef" };
 
 /**
- * Clef-flash with the most help the benchmark tried (ADR-0010): the code compares positions and tells
- * the model, in words, what fills each cell; the options are short rules about those words; two small
- * questions instead of five options; and a controller that picks the instant of each hop. Labelled as
- * such everywhere. It is the only condition of the benchmark that beat "always forward" with its
- * interval above zero (docs/07).
+ * Seeds whose decisions the benchmark left in the cache for Clef-flash's exact requests, so replaying them
+ * costs nothing. A prompt change empties this: it is whatever the last benchmark run of the default Clef
+ * covered (docs/07). The 27B has none, because a game of it costs about 6 times as much.
  */
-export const CLEF_WORDS_CONFIG: ClefPolicyConfig = {
-  model: "clef-flash",
-  encoder: "moves",
-  strategy: "graph-maneuver",
-  manual: "ordered",
-};
+export const CLEF_CACHED_SEEDS = "2-8";
 
-/** Ids that shortcuts used before there were two models: `clef` was Clef-flash. */
-const ALIASES: Readonly<Record<string, string>> = { clef: CLEF_ID };
+/** Ids that shortcuts used before: `clef` was Clef-flash, and `clef-words` was its words-and-controller variant. */
+const ALIASES: Readonly<Record<string, string>> = { clef: CLEF_ID, "clef-words": CLEF_ID };
 
 export const canonicalPlayerId = (id: string): string => ALIASES[id] ?? id;
 
@@ -125,46 +117,33 @@ const REFERENCES: readonly PolicyChoice[] = [
 ];
 
 /**
- * The model players: the two sizes of Clef, with the same view and the same question. The other views,
- * the critic and the prompt styles were conditions of the benchmark and none played better than
- * "always forward" (docs/07). The seeds in `freeReplay` are the ones whose decisions the benchmark left
- * in the cache for this exact request.
+ * The model players: the two sizes of Clef, with the same gameplay. The code turns the screen into words,
+ * three small lookups ask the model, and a controller does the hopping and the detours (ADR-0011); the
+ * panel and the log say so. The first twelve benchmark conditions, which leave the hopping to the model,
+ * played like "always forward" and now open only as `Custom`.
  */
 function modelChoices(client: ClefClient | null): PolicyChoice[] {
   const flash = decisionCost(DEFAULT_CLEF);
   const large = decisionCost(CLEF_27B_CONFIG);
-  const words = decisionCost(CLEF_WORDS_CONFIG);
   return [
     {
       id: CLEF_ID,
       label: "Clef-flash",
-      detail:
-        "Cloudflare's 9B decision model picks every move. It sees the whole screen, where things will be in 0.2 s and its last moves, and still plays about like 'always forward' (3.7 rows)",
+      detail: `Cloudflare's 9B decision model. Our code turns the screen into words and asks it three small questions: can it stand on the cell ahead, do things move there, and which side to go round. A controller does the hopping and walks the detours, and its steps cost nothing. About ${Math.round(flash.neurons)} neurons per question set.`,
       kind: "model",
       usesApi: true,
       neuronsPerDecision: flash.neurons,
-      freeReplay: "1-100",
+      freeReplay: CLEF_CACHED_SEEDS,
       factory: client ? clefPolicy(client, DEFAULT_CLEF) : null,
     },
     {
       id: CLEF_27B_ID,
       label: "Clef (27B)",
-      detail: `Cloudflare's larger model, with the same view and question as Clef-flash. About ${Math.round(large.neurons / flash.neurons)} times the cost: ${Math.round(large.neurons)} neurons per move, so the free tier lasts ${Math.floor(10_000 / large.neurons)} moves a day. In our tests it also drowns at the first river.`,
+      detail: `Cloudflare's larger model, with the same gameplay. About ${Math.round(large.neurons / flash.neurons)} times the cost: ${Math.round(large.neurons)} neurons per question set, so the free tier lasts about ${Math.floor(10_000 / large.neurons)} of them a day. No map is cached for it: every move asks the model.`,
       kind: "model",
       usesApi: true,
       neuronsPerDecision: large.neurons,
-      freeReplay: "1-8",
       factory: client ? clefPolicy(client, CLEF_27B_CONFIG) : null,
-    },
-    {
-      id: CLEF_WORDS_ID,
-      label: "Clef-flash + words and controller",
-      detail: `Clef-flash with the most help we tried: our code compares positions and tells it in words what is where, the options are short rules about those words, and a controller picks the instant of each hop. It still picks every manoeuvre. About ${Math.round(words.neurons)} neurons per question, and the controller's steps cost nothing. Over 40 games it made 10.1 rows, against 3.3 for always forward on the same maps.`,
-      kind: "model",
-      usesApi: true,
-      neuronsPerDecision: words.neurons,
-      freeReplay: "1-40",
-      factory: client ? clefPolicy(client, CLEF_WORDS_CONFIG) : null,
     },
   ];
 }
@@ -183,7 +162,7 @@ export function customChoice(id: string, client: ClefClient | null): PolicyChoic
     return undefined;
   }
   const canonical = clefPolicyId(config);
-  const standard = [DEFAULT_CLEF, CLEF_27B_CONFIG, CLEF_WORDS_CONFIG].map(clefPolicyId);
+  const standard = [DEFAULT_CLEF, CLEF_27B_CONFIG].map(clefPolicyId);
   if (standard.includes(canonical)) return undefined;
   const { neurons } = decisionCost(config);
   return {
