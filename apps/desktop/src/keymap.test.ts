@@ -43,4 +43,10 @@ describe("commandForKey", () => {
     expect(press("ArrowLeft", { altKey: true })).toBeUndefined();
     expect(press("m", { metaKey: true })).toBeUndefined();
   });
+
+  it("does not pause for a consumed key or move while text composition is in progress", () => {
+    const modifiers = { ctrlKey: false, metaKey: false, altKey: false };
+    expect(commandForKey({ ...modifiers, key: " ", defaultPrevented: true })).toBeUndefined();
+    expect(commandForKey({ ...modifiers, key: "w", isComposing: true })).toBeUndefined();
+  });
 });

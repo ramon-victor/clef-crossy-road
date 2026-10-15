@@ -1,44 +1,48 @@
 import type { BudgetStatus } from "../bridge/types.ts";
 import { meterLevel } from "../format.ts";
-import type { PolicyChoice } from "../policies.ts";
 
 export interface BudgetCardProps {
   budget: BudgetStatus | null;
-  /** The selected player, to show what one more decision would cost. */
-  choice: PolicyChoice | undefined;
   /** Neurons charged during the current game. */
   gameNeurons: number;
 }
 
-export function BudgetCard({ budget, choice, gameNeurons }: BudgetCardProps) {
+export function BudgetCard({ budget, gameNeurons }: BudgetCardProps) {
   const exhausted = budget !== null && budget.spent >= budget.limit;
   return (
-    <section class="card">
-      <div class="field-label">Neurons today (UTC)</div>
+    <section class={`card budget${exhausted ? " warn" : ""}`}>
+      <div class="budget-head">
+        <div class="field-label">Neurons today (UTC)</div>
+        {budget && (
+          <div class="budget-total">
+            <strong>{Math.round(budget.spent).toLocaleString("en-US")}</strong>
+            <span> / {budget.limit.toLocaleString("en-US")}</span>
+          </div>
+        )}
+      </div>
       {budget ? (
         <>
-          <div class="meter" data-level={meterLevel(budget.spent, budget.limit)}>
+          <div
+            class="meter"
+            data-level={meterLevel(budget.spent, budget.limit)}
+            role="progressbar"
+            aria-label="Daily free neurons used"
+            aria-valuemin={0}
+            aria-valuemax={budget.limit}
+            aria-valuenow={Math.min(budget.spent, budget.limit)}
+            aria-valuetext={`${Math.round(budget.spent)} of ${budget.limit} neurons used`}
+          >
             <div
               class="meter-fill"
               style={{ width: `${Math.min(100, (budget.spent / budget.limit) * 100)}%` }}
             />
           </div>
-          <p class="hint">
-            {Math.round(budget.spent).toLocaleString("en-US")} /{" "}
-            {budget.limit.toLocaleString("en-US")} free
-            {exhausted ? " · budget reached: new model calls are refused" : ""}
-            {gameNeurons > 0 ? ` · this game ${gameNeurons.toFixed(1)}` : ""}
-          </p>
-          {choice?.usesApi && !exhausted && (
-            <p class="hint">
-              ≈ {choice.neuronsPerDecision?.toFixed(1)} neurons per new decision (cache hits are
-              free)
-            </p>
-          )}
+          {exhausted && <p class="hint">Limit reached · new calls refused.</p>}
         </>
       ) : (
         <p class="hint">unavailable</p>
       )}
+      <p class="hint">This game: {gameNeurons.toFixed(1)} neurons</p>
     </section>
   );
 }

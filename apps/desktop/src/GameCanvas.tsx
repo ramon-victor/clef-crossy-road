@@ -102,7 +102,12 @@ export function GameCanvas(props: GameCanvasProps) {
 
   return (
     <div class="stage">
-      <canvas ref={canvasRef} class="game" />
+      <canvas
+        ref={canvasRef}
+        class="game"
+        tabIndex={0}
+        aria-label="Game. Arrow keys or WASD to move; Space to pause."
+      />
 
       <div class="hud">
         <div class="hud-score">{state.score}</div>

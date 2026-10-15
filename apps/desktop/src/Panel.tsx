@@ -5,6 +5,7 @@ import { ControlsCard } from "./panel/ControlsCard.tsx";
 import { DecisionCard } from "./panel/DecisionCard.tsx";
 import { Footer } from "./panel/Footer.tsx";
 import { PlayerCard } from "./panel/PlayerCard.tsx";
+import { SetupCard } from "./panel/SetupCard.tsx";
 import { StatsCard } from "./panel/StatsCard.tsx";
 import type { PolicyChoice } from "./policies.ts";
 import type { SessionState, Timing } from "./session.ts";
@@ -33,7 +34,7 @@ export interface PanelProps {
 
 function ErrorCard({ error }: { error: string }) {
   return (
-    <section class="card warn">
+    <section class="card warn error-card">
       <strong>Stopped</strong>
       <p>{error}</p>
       {isBudgetRefusal(error) && (
@@ -48,41 +49,41 @@ function ErrorCard({ error }: { error: string }) {
 
 export function Panel(props: PanelProps) {
   const { state } = props;
-  const choice = props.choices.find((c) => c.id === props.selectedId);
   return (
-    <aside class="panel">
-      <h1 class="title">
-        Clef <span>Crossy Road</span>
-      </h1>
-      <PlayerCard
-        choices={props.choices}
-        selectedId={props.selectedId}
-        human={state.human}
-        timing={state.timing}
-        onSelect={props.onSelect}
-        onTiming={props.onTiming}
-      />
-      <ControlsCard
-        state={state}
-        onPause={props.onPause}
-        onStep={props.onStep}
-        onRetry={props.onRetry}
-        onNewMap={props.onNewMap}
-        onSpeed={props.onSpeed}
-        onSeed={props.onSeed}
-      />
-      {state.error && <ErrorCard error={state.error} />}
-      {!state.human && <DecisionCard state={state} onInspect={props.onInspect} />}
-      <StatsCard state={state} />
-      <BudgetCard budget={props.budget} choice={choice} gameNeurons={state.neurons} />
-      <Footer
-        fps={props.fps}
-        soundOn={props.soundOn}
-        autoRestart={props.autoRestart}
-        bridgeKind={props.bridgeKind}
-        onSound={props.onSound}
-        onAutoRestart={props.onAutoRestart}
-      />
+    <aside class="panel" aria-label="Game controls and decisions">
+      <h1 class="sr-only">Clef Crossy Road</h1>
+      <div class="panel-top">
+        <PlayerCard
+          choices={props.choices}
+          selectedId={props.selectedId}
+          bridgeKind={props.bridgeKind}
+          onSelect={props.onSelect}
+        />
+        <ControlsCard
+          state={state}
+          onPause={props.onPause}
+          onStep={props.onStep}
+          onRetry={props.onRetry}
+          onNewMap={props.onNewMap}
+        />
+      </div>
+      <div class="panel-body">
+        <SetupCard
+          state={state}
+          autoRestart={props.autoRestart}
+          onTiming={props.onTiming}
+          onSpeed={props.onSpeed}
+          onSeed={props.onSeed}
+          onAutoRestart={props.onAutoRestart}
+        />
+        {state.error && <ErrorCard error={state.error} />}
+        {!state.human && <DecisionCard state={state} onInspect={props.onInspect} />}
+        <StatsCard state={state} />
+      </div>
+      <div class="panel-bottom">
+        <BudgetCard budget={props.budget} gameNeurons={state.neurons} />
+        <Footer fps={props.fps} soundOn={props.soundOn} onSound={props.onSound} />
+      </div>
     </aside>
   );
 }

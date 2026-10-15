@@ -33,9 +33,11 @@ const COMMANDS: Readonly<Record<string, KeyCommand>> = {
  * (Ctrl+R reloads, Ctrl+W closes, Alt+...) are never game input.
  */
 export function commandForKey(
-  event: Pick<KeyboardEvent, "key" | "ctrlKey" | "metaKey" | "altKey">,
+  event: Pick<KeyboardEvent, "key" | "ctrlKey" | "metaKey" | "altKey"> &
+    Partial<Pick<KeyboardEvent, "defaultPrevented" | "isComposing">>,
 ): KeyCommand | undefined {
-  if (event.ctrlKey || event.metaKey || event.altKey) return undefined;
+  if (event.defaultPrevented || event.isComposing || event.ctrlKey || event.metaKey || event.altKey)
+    return undefined;
   const key = event.key.toLowerCase();
   const action = MOVES[key];
   return action ? { type: "move", action } : COMMANDS[key];

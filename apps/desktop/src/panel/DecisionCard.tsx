@@ -11,28 +11,32 @@ export function DecisionCard({ state, onInspect }: DecisionCardProps) {
   const last = state.last;
   const decision = last?.decision;
   const probabilities = decision?.probabilities;
+  const canInspect = state.history.some((entry) => entry.decision.sent);
 
   return (
     <section class="card decision">
-      <div class="field-label">{state.phase === "thinking" ? "Thinking…" : "Last decision"}</div>
+      <header class="decision-head">
+        <div class="field-label">{state.phase === "thinking" ? "Thinking…" : "Last decision"}</div>
+        {decision?.cached && <span class="tag">cached</span>}
+        {decision?.source === "executor" && <span class="tag">controller</span>}
+      </header>
       {last ? (
         <>
           <div class="chosen">
             <span class="chosen-arrow">{ACTION_GLYPH[last.action]}</span>
             <span>{ACTION_LABEL[last.action]}</span>
-            {decision?.cached && <span class="tag">cached</span>}
-            {decision?.source === "executor" && <span class="tag">controller</span>}
           </div>
-          {decision?.note && <p class="hint">{decision.note}</p>}
           {!probabilities && decision?.source !== "executor" && (
-            <p class="hint">
-              This player does not report probabilities: it is a reference, not a model.
-            </p>
+            <p class="hint">No probabilities reported.</p>
           )}
+          {decision?.source === "executor" && <p class="hint">Controller step · no model call.</p>}
           <div class="bars" hidden={!probabilities}>
             {ACTION_ORDER.map((a) => (
               <div class={`bar-row ${a === last.action ? "chosen-row" : ""}`} key={a}>
-                <span class="bar-glyph">{ACTION_GLYPH[a]}</span>
+                <span class="bar-glyph" title={ACTION_LABEL[a]}>
+                  <span class="sr-only">{ACTION_LABEL[a]}: </span>
+                  {ACTION_GLYPH[a]}
+                </span>
                 <div class="bar">
                   <div style={{ width: `${Math.round((probabilities?.[a] ?? 0) * 100)}%` }} />
                 </div>
@@ -40,22 +44,34 @@ export function DecisionCard({ state, onInspect }: DecisionCardProps) {
               </div>
             ))}
           </div>
-          {decision?.confidence !== undefined && (
-            <p class="hint">
-              confidence {decision.confidence.toFixed(2)} <em>(undocumented by Cloudflare)</em>
-            </p>
-          )}
-          {decision?.sent && (
-            <button type="button" class="btn small inspect-button" onClick={onInspect}>
-              What it read (I)
-            </button>
-          )}
           <div class="history" title="Recent decisions">
             {state.history.map((h) => (
               <span class="chip" key={h.index} title={`${ACTION_LABEL[h.action]} at row ${h.row}`}>
-                {ACTION_GLYPH[h.action]}
+                <span class="sr-only">
+                  {ACTION_LABEL[h.action]} at row {h.row};{" "}
+                </span>
+                <span aria-hidden="true">{ACTION_GLYPH[h.action]}</span>
               </span>
             ))}
+          </div>
+          <div class="decision-actions">
+            {canInspect && (
+              <button type="button" class="text-button" onClick={onInspect}>
+                What it read (I)
+              </button>
+            )}
+            {(decision?.note || decision?.confidence !== undefined) && (
+              <details class="decision-details">
+                <summary>Details</summary>
+                {decision.note && <p class="hint">{decision.note}</p>}
+                {decision.confidence !== undefined && (
+                  <p class="hint">
+                    confidence {decision.confidence.toFixed(2)}{" "}
+                    <em>(undocumented by Cloudflare)</em>
+                  </p>
+                )}
+              </details>
+            )}
           </div>
         </>
       ) : (

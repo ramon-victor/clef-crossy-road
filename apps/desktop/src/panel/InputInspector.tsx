@@ -1,5 +1,5 @@
 import { inputAsJson, type ModelInput, optionsOf, prettyState, sentences } from "@ccr/agent";
-import { useEffect, useState } from "preact/hooks";
+import { useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
 import { ACTION_GLYPH, ACTION_LABEL, ACTION_ORDER, ms, percent } from "../format.ts";
 import { copyText, policyFacts } from "../inspect.ts";
 import type { DecisionLog } from "../session.ts";
@@ -113,6 +113,7 @@ function AnswerTab({ log }: { log: DecisionLog }) {
  * options and its answer, as sent. It is the place to look when the chicken does something odd.
  */
 export function InputInspector({ history, policyId, onClose }: InputInspectorProps) {
+  const closeRef = useRef<HTMLButtonElement>(null);
   const [picked, setPicked] = useState<number | null>(null);
   const [tab, setTab] = useState<Tab>("state");
   const [copied, setCopied] = useState(false);
@@ -125,6 +126,14 @@ export function InputInspector({ history, policyId, onClose }: InputInspectorPro
   const controllerSince = log
     ? history.filter((h) => h.index > log.index && h.decision.source === "executor").length
     : 0;
+
+  useLayoutEffect(() => {
+    const previous = document.activeElement;
+    closeRef.current?.focus();
+    return () => {
+      if (previous instanceof HTMLElement && previous.isConnected) previous.focus();
+    };
+  }, []);
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -158,7 +167,7 @@ export function InputInspector({ history, policyId, onClose }: InputInspectorPro
           <button type="button" class="btn small" onClick={copy} disabled={!sent}>
             {copied ? "Copied" : "Copy"}
           </button>
-          <button type="button" class="btn small" onClick={onClose}>
+          <button ref={closeRef} type="button" class="btn small" onClick={onClose}>
             Close
           </button>
         </div>

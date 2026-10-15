@@ -35,6 +35,7 @@ body,
 }
 
 .shell {
+  --panel-width: clamp(264px, 24vw, 280px);
   display: flex;
   height: 100%;
 }
@@ -221,34 +222,6 @@ canvas.game {
   justify-content: center;
 }
 
-/* ---------- panel ---------- */
-
-.panel {
-  width: 372px;
-  flex: none;
-  height: 100%;
-  overflow-y: auto;
-  padding: 14px 14px 10px;
-  background: var(--panel);
-  border-left: 4px solid var(--ink);
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.title {
-  margin: 0;
-  font-family: "Retro", monospace;
-  font-size: 30px;
-  font-weight: 400;
-  line-height: 1;
-}
-
-.title span {
-  color: var(--ink-soft);
-  font-size: 22px;
-}
-
 .card {
   background: var(--card);
   border: 2px solid var(--line);
@@ -261,12 +234,13 @@ canvas.game {
   background: #fff8e6;
 }
 
-.card.warn p {
+.error-card p {
   margin: 4px 0 0;
   font-size: 13px;
 }
 
 .field-label {
+  display: block;
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.06em;
@@ -280,6 +254,7 @@ canvas.game {
   font-size: 12px;
   color: var(--ink-soft);
   line-height: 1.35;
+  overflow-wrap: anywhere;
 }
 
 .small {
@@ -339,19 +314,9 @@ canvas.game {
 
 .controls {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px;
-}
-
-.controls .speeds {
-  grid-column: 1 / -1;
-  margin-top: 0;
-}
-
-.controls .seed {
-  grid-column: 1 / -1;
-  display: flex;
-  gap: 8px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+  padding-bottom: 3px;
 }
 
 .btn {
@@ -392,35 +357,50 @@ canvas.game {
   padding: 6px 14px;
 }
 
-.decision .chosen {
+.decision-head {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 6px;
+  min-height: 21px;
+}
+
+.decision-head .field-label {
+  margin: 0;
+}
+
+.decision .chosen {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  row-gap: 4px;
   font-family: "Retro", monospace;
-  font-size: 22px;
+  font-size: 18px;
   margin-bottom: 8px;
 }
 
 .chosen-arrow {
   display: inline-grid;
   place-items: center;
-  width: 38px;
-  height: 38px;
-  border-radius: 10px;
+  width: 28px;
+  height: 28px;
+  flex: none;
+  border-radius: 8px;
   background: var(--accent);
   color: var(--accent-ink);
-  font-size: 26px;
+  font-size: 22px;
 }
 
 .tag {
   margin-left: auto;
-  padding: 1px 8px;
+  padding: 1px 5px;
   border-radius: 99px;
   border: 2px solid var(--line);
   font-family: "Segoe UI", system-ui, sans-serif;
   font-size: 11px;
   font-weight: 700;
   color: var(--ink-soft);
+  white-space: nowrap;
 }
 
 .bars {
@@ -474,6 +454,73 @@ canvas.game {
   margin-top: 8px;
 }
 
+.panel .bars {
+  gap: 2px;
+}
+
+.panel .bar-row {
+  min-height: 14px;
+  line-height: 1;
+  grid-template-columns: 16px minmax(0, 1fr) 34px;
+  gap: 6px;
+}
+
+.panel .bar-glyph {
+  font-size: 14px;
+  line-height: 1;
+}
+
+.panel .bar {
+  height: 8px;
+}
+
+.panel .bar-num {
+  font-size: 11px;
+}
+
+.panel .history {
+  display: grid;
+  grid-template-columns: repeat(14, minmax(0, 1fr));
+  gap: 2px;
+}
+
+.decision-actions {
+  position: relative;
+  min-height: 28px;
+  margin-top: 6px;
+}
+
+.text-button,
+.decision-details > summary {
+  min-height: 28px;
+  padding: 4px 0;
+  border: 0;
+  background: none;
+  color: var(--ink-soft);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+
+.text-button {
+  position: absolute;
+  left: 0;
+  top: 0;
+}
+
+.text-button:hover,
+.decision-details > summary:hover {
+  color: var(--ink);
+  text-decoration: underline;
+}
+
+.decision-details > summary {
+  width: max-content;
+  margin-left: auto;
+}
+
 .chip {
   display: inline-grid;
   place-items: center;
@@ -487,21 +534,24 @@ canvas.game {
 
 .stats {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 8px 4px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px 4px;
 }
 
 .stat {
+  min-width: 0;
   text-align: center;
 }
 
 .stat-value {
   font-family: "Retro", monospace;
-  font-size: 22px;
+  font-size: 16px;
   line-height: 1.1;
+  overflow-wrap: anywhere;
 }
 
 .stat-label {
+  line-height: 1.1;
   font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.06em;
@@ -514,6 +564,43 @@ canvas.game {
   border-radius: 6px;
   background: #e6eefb;
   overflow: hidden;
+}
+
+.budget-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 2px 6px;
+  margin-bottom: 5px;
+}
+
+.budget-total {
+  font-variant-numeric: tabular-nums;
+}
+
+.budget-total strong {
+  font-size: 13px;
+}
+
+.budget-total span {
+  font-size: 11px;
+  color: var(--ink-soft);
+}
+
+.budget .meter {
+  height: 6px;
+}
+
+.budget .field-label {
+  margin-bottom: 0;
+  font-size: 10px;
+  letter-spacing: 0;
+}
+
+.budget .hint {
+  margin-top: 4px;
+  font-size: 11px;
 }
 
 .meter-fill {
@@ -531,24 +618,21 @@ canvas.game {
 }
 
 .foot {
-  margin-top: auto;
   display: flex;
   flex-wrap: wrap;
   gap: 4px 14px;
   align-items: center;
+  justify-content: space-between;
   font-size: 11px;
   color: var(--ink-soft);
-  padding-top: 4px;
-}
-
-.foot .keys {
-  flex-basis: 100%;
+  padding: 0 2px;
 }
 
 .check {
   display: inline-flex;
   align-items: center;
   gap: 4px;
+  min-height: 28px;
   cursor: pointer;
 }
 
@@ -580,7 +664,7 @@ fieldset.speeds {
   left: 12px;
   top: 12px;
   bottom: 12px;
-  right: 388px;
+  right: calc(var(--panel-width) + 12px);
   z-index: 20;
   display: flex;
   flex-direction: column;
@@ -597,6 +681,19 @@ fieldset.speeds {
   justify-content: space-between;
   align-items: flex-start;
   gap: 12px;
+}
+
+.inspector-head > div:first-child {
+  min-width: 0;
+}
+
+.inspector .bar-row {
+  grid-template-columns: 22px 46px minmax(0, 1fr) 44px;
+}
+
+.inspector :is(button, a):focus-visible {
+  outline: 3px solid var(--ink);
+  outline-offset: 2px;
 }
 
 .inspector-title {
@@ -716,7 +813,298 @@ table.options th {
   color: var(--ink-soft);
 }
 
-.inspect-button {
-  margin-top: 8px;
-  width: 100%;
+/* ---------- panel ---------- */
+
+.panel {
+  width: var(--panel-width);
+  flex: none;
+  height: 100%;
+  min-height: 0;
+  padding: 8px;
+  background: var(--panel);
+  border-left: 4px solid var(--ink);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+.panel-top,
+.panel-bottom {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.panel-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 3px;
+  margin: -3px;
+}
+
+.panel-body > * {
+  flex: none;
+}
+
+.panel .card {
+  min-width: 0;
+  padding: 8px;
+}
+
+.panel :is(button, summary, input, select, a):focus-visible,
+.player-info :is(button, a):focus-visible {
+  outline: 3px solid var(--ink);
+  outline-offset: 2px;
+}
+
+canvas.game:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: -4px;
+}
+
+.player-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.player-row .select {
+  min-width: 0;
+  flex: 1;
+}
+
+.player-label {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 4px;
+  margin-bottom: 4px;
+}
+
+.player-label .field-label {
+  margin: 0;
+  font-size: 10px;
+}
+
+.player-kind {
+  font-size: 10px;
+  color: var(--ink-soft);
+  text-align: right;
+}
+
+.panel .spend-note {
+  margin-top: 4px;
+  font-size: 11px;
+}
+
+.panel .spend-note {
+  color: var(--accent-ink);
+}
+
+.info-button {
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 2px solid var(--line);
+  border-radius: 50%;
+  background: #fff;
+  color: var(--ink);
+  font:
+    bold 16px Georgia,
+    serif;
+  cursor: pointer;
+}
+
+.info-button:hover {
+  border-color: var(--ink);
+  background: #f3f8ff;
+}
+
+.player-info {
+  position: fixed;
+  inset: 12px calc(var(--panel-width) + 8px) auto auto;
+  margin: 0;
+  width: min(360px, calc(100vw - var(--panel-width) - 32px));
+  max-height: calc(100dvh - 24px);
+  overflow-y: auto;
+  padding: 14px;
+  border: 3px solid var(--ink);
+  border-radius: var(--radius);
+  background: var(--card);
+  color: var(--ink);
+  box-shadow: 0 5px 0 rgba(29, 43, 69, 0.25);
+  font-size: 13px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.info-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.info-head h2 {
+  flex: 1;
+  margin: 0;
+  font-family: "Retro", monospace;
+  font-size: 18px;
+  font-weight: 400;
+}
+
+.player-info h3 {
+  margin: 14px 0 4px;
+  font-size: 14px;
+}
+
+.panel .player-info p {
+  margin: 6px 0;
+}
+
+.key-help {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 6px 12px;
+  margin: 8px 0;
+  font-size: 12px;
+}
+
+.key-help dt {
+  font-weight: 700;
+}
+
+.key-help dd {
+  margin: 0;
+  color: var(--ink-soft);
+}
+
+.setup > summary {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  min-height: 28px;
+  margin: -4px;
+  padding: 4px;
+  cursor: pointer;
+}
+
+.panel .setup {
+  padding-block: 4px;
+}
+
+.setup > summary::before {
+  content: "›";
+  font-weight: 700;
+}
+
+.setup[open] > summary::before {
+  content: "⌄";
+}
+
+.setup-label {
+  font-weight: 700;
+}
+
+.setup-current {
+  min-width: 0;
+  margin-left: auto;
+  color: var(--ink-soft);
+  font-size: 11px;
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+
+.setup-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
+}
+
+.setup-body .seed {
+  display: flex;
+  gap: 6px;
+}
+
+.seed .input {
+  min-width: 0;
+}
+
+.setup-body .segmented,
+.setup-body .speeds {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin: 0;
+}
+
+.setup-body .speeds {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.setup-body legend {
+  padding: 0 4px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--ink-soft);
+}
+
+.setup-body .hint {
+  margin-top: 2px;
+}
+
+.panel .btn,
+.panel .select,
+.panel .input {
+  min-height: 32px;
+  padding: 5px 8px;
+}
+
+.panel .segmented button,
+.panel .speeds button {
+  min-height: 28px;
+}
+
+.panel .chip {
+  width: auto;
+  height: 18px;
+  min-width: 0;
+  border-radius: 4px;
+  font-size: 12px;
+}
+
+@media (max-width: 700px) {
+  .player-info {
+    inset: 12px 12px auto;
+    width: calc(100vw - 24px);
+  }
+
+  .inspector {
+    right: 12px;
+  }
+
+  .inspector-head {
+    flex-wrap: wrap;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .panel *,
+  .player-info * {
+    transition: none;
+  }
 }

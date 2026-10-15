@@ -152,8 +152,14 @@ export function App() {
   useEffect(() => {
     const unlockSound = () => sounds.unlock();
     const onKey = (event: KeyboardEvent) => {
-      const target = event.target as HTMLElement | null;
-      if (target && (target.tagName === "INPUT" || target.tagName === "SELECT")) return;
+      const target = event.target;
+      if (
+        target instanceof Element &&
+        target.closest(
+          'input, select, textarea, button, summary, a[href], [contenteditable]:not([contenteditable="false"]), [role="dialog"]',
+        )
+      )
+        return;
       sounds.unlock();
       const command = commandForKey(event);
       if (!command) return;

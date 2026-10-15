@@ -4,43 +4,86 @@
 
 ## O que existe
 
-Uma janela Tauri v2 (WebView2) de 1180×800, com a cena Three.js à esquerda e o painel da IA à direita. Os modelos, texturas, fonte e sons
+Uma janela Tauri v2 (WebView2) de 1180×800 (mínimo 980×660), com a cena Three.js à esquerda e o painel da IA sempre aberto à direita.
+O painel usa `clamp(264px, 24vw, 280px)`: 264 px na janela mínima e 280 px na janela padrão. Os modelos, texturas, fonte e sons
 são os do Expo-Crossy-Road, baixados localmente por `node scripts/fetch-assets.mjs` (ficam fora do git).
 
 ```
 ┌───────────────────────────────────────┬──────────────────────┐
-│ 86                                    │ CLEF CROSSY ROAD     │
-│ rows · best 86 · seed 824413          │ QUEM JOGA: [select]  │
-│                                       │ [Step | Real-time]   │
-│       ┌───┐                           │ [Pausa] [Passo]      │
-│       │ → │  balão sobre a galinha    │ [Retry] [Novo mapa]  │
-│       └─┬─┘  (ação + probabilidade)   │ 0.5× 1× 2× 4×  seed  │
-│         🐔                            │ ÚLTIMA DECISÃO       │
+│ 86                                    │ QUEM JOGA [select] ⓘ │
+│ rows · best 86 · seed 824413          │ cache / aviso gasto  │
+│                                       │ [Pausa] [Passo]      │
+│       ┌───┐                           │ [Retry] [Novo mapa]  │
+│       │ → │  balão sobre a galinha    │ › Setup: Step/1×/seed│
+│       └─┬─┘  (ação + probabilidade)   │ ÚLTIMA DECISÃO       │
+│         🐔                            │ ação · cached        │
 │   (rio, toras, lírios, trilho,        │  ↑ ████████░░ 88%    │
 │    semáforo, caminhões)               │  ← ▌            2%   │
 │                                       │  ...                 │
 │                                       │ Rows · Decisões ·    │
 │                                       │ Latência · Tokens    │
-│                                       │ Neurons hoje 26k/10k │
+│                                       │ Neurons hoje / teto  │
 └───────────────────────────────────────┴──────────────────────┘
 ```
 
 | Recurso | Como funciona |
 |---|---|
-| Quem joga | **Dois modelos**, os dois com a mesma jogabilidade ([ADR-0011](adr/0011-controlador-com-rota-e-tres-consultas.md)): o código transforma a tela em palavras, **três perguntas pequenas** vão ao modelo (dá para pisar na casa da frente? as coisas dessa linha se movem? de que lado contornar?) e um **controlador** dá os saltos e caminha os desvios, com passos que não gastam neurons. **Clef-flash** (`clef-flash`, ~6 neurons por conjunto de perguntas; as seeds **6–8** estão no cache) e **Clef (27B)** (`clef-27b`, cerca de 6,3× o custo, ~39 neurons por conjunto, sem mapa em cache). O app **abre no Clef-flash na primeira seed em cache**, então abrir não gasta. Mais **você** (setas/WASD) e as referências sem API (look-ahead, sempre em frente, aleatório). O `json-fx` antigo (que joga como "sempre em frente"), JSON x grade x imagem e `critic` eram condições do benchmark, não jogadores: ficam em `pnpm bench`, mas qualquer combinação pode ser aberta com `CCR_PLAYER=clef:<modelo>:<vista>:<estratégia>[:<estilo>]` (aparece como "Custom"). O padrão ao abrir é o look-ahead: **abrir o app nunca gasta nada** |
-| Tempo | **Step**: o mundo espera o modelo, como no benchmark. **Real-time**: o mundo corre a 60 Hz e a ação vale quando a resposta chega |
-| Controles | Pausa (espaço), passo-a-passo (N, só em Step e pausado), retry da mesma seed (R), mapa novo (M), seed editável, velocidade 0,5× a 4× |
+| Quem joga | **Dois modelos**, os dois com a mesma jogabilidade ([ADR-0011](adr/0011-controlador-com-rota-e-tres-consultas.md)): o código transforma a tela em palavras, **três perguntas pequenas** vão ao modelo (dá para pisar na casa da frente? as coisas dessa linha se movem? de que lado contornar?) e um **controlador** dá os saltos e caminha os desvios, com passos que não gastam neurons. **Clef-flash** (`clef-flash`, ~6 neurons por conjunto de perguntas; as seeds **6–8** estão no cache) e **Clef (27B)** (`clef-27b`, cerca de 6,3× o custo, ~39 neurons por conjunto, sem mapa em cache). O app **abre no Clef-flash na primeira seed em cache**, então abrir não gasta. Mais **você** (setas/WASD) e as referências sem API (look-ahead, sempre em frente, aleatório). O `json-fx` antigo (que joga como "sempre em frente"), JSON x grade x imagem e `critic` eram condições do benchmark, não jogadores: ficam em `pnpm bench`, mas qualquer combinação pode ser aberta com `CCR_PLAYER=clef:<modelo>:<vista>:<estratégia>[:<estilo>]` (aparece como "Custom"). **Abrir o app nunca gasta nada**: o padrão é Clef-flash na primeira seed em cache |
+| Tempo | Em **Setup**: **Step**, em que o mundo espera o modelo, como no benchmark; **Real-time**, em que o mundo corre a 60 Hz e a ação vale quando a resposta chega. O modo atual aparece no resumo mesmo com Setup fechado |
+| Controles | Pausa (espaço), passo-a-passo (N, só em Step e pausado), retry da mesma seed (R) e mapa novo (M) ficam sempre no topo. **Setup**, inicialmente fechado, reúne tempo, velocidade 0,5× a 4×, seed editável e auto-restart; seu resumo mostra modo, velocidade e seed atuais |
 | Teclado | Setas ou WASD. Apertar mais rápido que o salto, ou segurar a tecla, deixa a jogada **na fila** (1 vaga, a última vence) e ela começa quando o salto pousa, depois de o pouso ser checado: não dá para atravessar água nem rua encadeando saltos ([04](04-game-core.md), D9) |
 | **O que o modelo leu** | Tecla **I** (ou o botão "What it read" no cartão da decisão) abre uma janela sobre o jogo com o pedido da decisão **exatamente como foi enviado**: **State** (o mundo, uma linha por linha), **Question** (as instruções), **Options** (as opções e o texto de cada uma) e **Answer** (probabilidades, tokens, neurons, latência, cache). Mostra a política, o que ela vê e como é perguntada, volta nas últimas 14 decisões e copia o pedido em JSON. Esc fecha |
 | Controlador | Os passos que o código dá dentro de uma manobra aparecem com a etiqueta **controller** e a nota do que ele faz ("cross_ahead: waiting for the cell (water) to clear, 3/15", "detour_right: hop 2, right (2 to go)"); no terminal, `-> wait (controller)  | ...`. O modelo escolhe a manobra; o controlador espera a casa ficar pisável e dá o salto, ou **caminha o desvio** (volta uma linha se precisar, desliza, avança), e devolve a decisão ao modelo se não há rota, se a galinha não pode ficar onde está, se uma tora a leva à borda ou depois de 3 s. A janela **What it read** (tecla I) mostra o último pedido ao modelo e quantos passos do controlador vieram depois |
-| Painel | Barras com as `probabilities` **reais** do modelo; `confidence` rotulado como não documentado; histórico das últimas 14 jogadas; tag "cached" |
-| Orçamento | Medidor de neurons do dia (UTC), custo estimado por decisão nova, aviso quando o teto é atingido; uma decisão do cache aparece como "cached" e custa 0 |
+| Painel | Ação, tags **cached/controller**, barras com as `probabilities` **reais** quando fornecidas, histórico das últimas 14 jogadas em uma faixa e seis métricas em grade 3×2. **Details**, inicialmente fechado, mostra a nota completa e `confidence` rotulado como não documentado. O botão **What it read (I)** continua disponível durante passos do controlador se o histórico contém um pedido ao modelo |
+| Informações ⓘ | Botão ao lado do jogador: título completo do jogo, descrição do jogador selecionado, custo estimado, cache, participação do controlador e atalhos. É um popover nativo, aberto por clique, Enter ou Espaço; Esc, clique externo e o botão × fecham. O aviso de gasto continua visível junto ao seletor |
+| Orçamento | Fica na base, junto ao som e FPS: medidor de neurons do dia (UTC), gasto/limite e custo da partida, com aviso aberto quando o teto é atingido. O custo estimado por decisão nova fica no ⓘ; uma decisão do cache aparece como "cached" e custa 0 |
 | Fim de partida | Cartão com a causa da morte, linhas cruzadas e melhor do dia; repetir a mesma seed ou mapa novo. **"Preso"**: um jogador de IA que passa 40 decisões sem uma linha nova (a regra do benchmark) encerra a partida, para de perguntar e de gastar, e o cartão diz "Stuck: no new row in 40 decisions" |
 | Som | Sons do original, ligados por padrão após o primeiro gesto do usuário (política dos navegadores) |
 | Reinício automático | Para jogadores **gratuitos** (as referências), a janela abre um mapa novo 2,2 s depois de cada fim de partida, para continuar mostrando ação. Jogadores que chamam o modelo **nunca** reiniciam sozinhos: uma janela esquecida aberta não pode gastar o orçamento do dia |
-| Replays gratuitos | Cada Clef mostra quais seeds já estão no cache (Flash: 1–100; 27B: 1–8; ambos do benchmark, para a vista `json-fx`). **"Novo mapa" percorre essas seeds em ordem** antes de partir para um mapa aleatório (que gasta neurons) |
+| Replays gratuitos | Para a jogabilidade atual, Clef-flash tem as seeds **6–8** em cache; Clef 27B não tem mapa em cache. **"Novo mapa" percorre as seeds em cache em ordem** antes de partir para um mapa aleatório (que gasta neurons) |
 | **Logs no terminal** | `.\play.cmd` abre o app **esperando por ele** no mesmo terminal e mostra, a cada decisão, o que foi mandado ao modelo e o que ele respondeu. `CCR_LOG=full` (o padrão do `play.cmd`): no início de cada partida a pergunta e as opções (uma vez, e de novo se mudarem), e por decisão o cabeçalho (`decision N, linha, cached, tokens, neurons, ms`), o **STATE exatamente como enviado** e a resposta com as probabilidades; no fim, a causa da morte, as linhas, as decisões e os neurons da partida. `CCR_LOG=brief`: uma linha por decisão. `CCR_LOG=off` (ou sem a variável, ao abrir o `.exe` direto): nada. As mesmas linhas vão para `runs\logs\play.log` (recriado a cada abertura; bom para colar numa conversa). Só ASCII, para o terminal não quebrar a codificação |
 | Atalhos de abertura | `CCR_PLAYER`, `CCR_SEED` e `CCR_LOG` (lidos pelo Rust; no navegador de desenvolvimento, `?player=...&seed=...&log=...`, e o log vai para o `console` do navegador) escolhem o jogador, o mapa e o log iniciais. `CCR_PLAYER` aceita `human`, `clef-flash` (e os antigos `clef` e `clef-words`), `clef-27b`, `lookahead`, `always-forward`, `random` ou um id de política do benchmark. `play.cmd` abre o modo normal com o log completo; `play-clef.cmd` abre o Clef-flash na seed 6 (do cache, sem custo). Um id que não existe (por exemplo os antigos `clef-flash-json`) cai no look-ahead gratuito |
+
+## Organização compacta e acessibilidade
+
+O topo mantém jogador e quatro controles; a base mantém orçamento, som e FPS. Só o corpo intermediário
+rola quando Setup ou Details estão abertos, há erro ou a altura disponível diminui. No estado inicial,
+com as expansões fechadas, decisão, probabilidades, histórico e métricas cabem na janela mínima,
+inclusive com o aviso de orçamento esgotado. Nenhuma seção corta texto para forçar esse encaixe.
+
+O título grande e os parágrafos explicativos saíram do fluxo; o título permanece como heading acessível e
+no ⓘ. A descrição selecionada e os atalhos podem ser lidos com teclado e toque. Botões principais têm
+32 px de altura; ⓘ, expansões e área clicável do som têm pelo menos 28 px. O foco fica visível.
+Setas, WASD, Espaço e os outros atalhos do jogo não são tratados enquanto o usuário opera campos,
+botões, expansões ou o inspector. Clicar ou focar o canvas devolve o teclado ao jogo. O inspector move
+foco para Close ao abrir e o devolve ao elemento de origem ao fechar.
+
+Setup e Details usam expansões nativas e permanecem abertos durante as atualizações da partida.
+O inspector usa a mesma variável de largura do painel; com viewport equivalente a zoom e menos de
+700 px de largura, ocupa a área disponível. O popover também fica limitado à viewport, com rolagem
+própria se necessário.
+
+A organização segue [divulgação progressiva (NN/g)](https://www.nngroup.com/articles/progressive-disclosure/),
+[ajuda contextual sem ocultar informação necessária (NN/g)](https://www.nngroup.com/articles/tooltip-guidelines/),
+[expansões acessíveis (W3C)](https://www.w3.org/WAI/ARIA/apg/patterns/disclosure/) e
+[alvos de interação (WCAG 2.2)](https://www.w3.org/WAI/WCAG22/Understanding/target-size-minimum.html).
+
+## Verificação do painel compacto (2026-10-15, Chromium)
+
+Capturas da mesma UI Preact, com os assets locais e replays de decisões reais já existentes no cache.
+As rotas de teste bloquearam chamadas externas: **nenhuma chamada à API, nenhum gasto novo**.
+As capturas ficam em `reports/sidebar/` (gerado, fora do git). Esta rodada verifica o frontend no Chromium;
+as verificações anteriores no WebView2 estão registradas abaixo.
+
+| Cenário | Resultado |
+|---|---|
+| 980×660 | Painel de **264 px**; jogo de **716 px**, antes 608 px. Estado inicial completo, sem rolagem horizontal ou vertical do corpo |
+| 1180×800 | Painel de **280 px**; jogo de **900 px**, antes 808 px |
+| 1440×900 | Painel de **280 px**; jogo de **1160 px** |
+| Interação | ⓘ e Setup abrem com Espaço sem pausar; Esc e clique externo fecham o popover; foco retorna à origem. Inspector abre pelo botão e I, fecha com Esc e devolve foco |
+| Estados | Humano, referência sem probabilidades, 14 jogadas no histórico, controlador com acesso ao pedido anterior, Details aberto, seed máxima, seed inválida e jogador Custom com nome longo |
+| Orçamento | Esgotado e indisponível permanecem explícitos na base |
+| Viewports equivalentes a zoom | 125% (784×528) e 150% (653×440), com base visível, ajustes alcançáveis pela rolagem e popover dentro da viewport |
 
 ## Arquitetura do app
 
