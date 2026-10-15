@@ -11,6 +11,8 @@ import {
   readLanes,
   readOrdered,
   remember,
+  routeChoice,
+  sceneState,
 } from "@ccr/agent";
 import { ACTIONS, type Action, createRng, Game, observe, type RowKind } from "@ccr/core";
 import { auc } from "./diagnose.ts";
@@ -67,7 +69,7 @@ export function rebuild(state: Pick<ProbeState, "seed" | "actions">): {
   let memory = emptyMemory();
   for (const action of state.actions) {
     const { outcome } = game.step(action);
-    memory = remember(memory, { action, outcome }, game.score);
+    memory = remember(memory, { action, outcome }, game.score, game.heroRow);
   }
   return { game, memory };
 }
@@ -125,7 +127,7 @@ async function candidatesFor(seeds: readonly number[], maxDecisions: number): Pr
             : await policy.decide(observe(game), memory);
         const { outcome } = game.step(decision.action);
         actions.push(decision.action);
-        memory = remember(memory, { action: decision.action, outcome }, game.score);
+        memory = remember(memory, { action: decision.action, outcome }, game.score, game.heroRow);
       }
     }
   }
@@ -228,6 +230,10 @@ export interface ProbeResult {
   inputTokens?: number;
   neurons?: number;
   cached?: boolean;
+  /** The manoeuvre a route policy chose (the action is only its first step). */
+  maneuver?: string;
+  /** What the route policy answered to each of its questions. */
+  extra?: Record<string, unknown>;
 }
 
 /**
@@ -383,6 +389,27 @@ export function idealMove(policy: string, state: ProbeState): Action | undefined
  * How often the model picks the move the ideal follower of the written rules would pick. It measures
  * obedience to the rules, not skill: the rules are ours (ADR-0010).
  */
+/**
+ * What the ideal follower of the options would pick and what the policy picked, as comparable words: a move
+ * for the words views, a manoeuvre for the route strategy. Undefined for any other policy.
+ */
+function idealAndChosen(
+  policy: string,
+  state: ProbeState,
+  result: ProbeResult,
+): { ideal: string; chosen: string } | undefined {
+  if (policy.startsWith("clef:") && parseClefPolicyId(policy).strategy === "route") {
+    if (result.maneuver === undefined) return undefined;
+    const { game, memory } = rebuild(state);
+    return {
+      ideal: routeChoice(sceneState(observe(game), memory)),
+      chosen: result.maneuver,
+    };
+  }
+  const ideal = idealMove(policy, state);
+  return ideal === undefined ? undefined : { ideal, chosen: result.action };
+}
+
 export function agreementWithWords(
   states: readonly ProbeState[],
   results: readonly ProbeResult[],
@@ -395,9 +422,9 @@ export function agreementWithWords(
   for (const r of results) {
     const state = byId.get(r.state);
     if (r.policy !== policy || !state) continue;
-    const ideal = idealMove(policy, state);
-    if (ideal === undefined) return undefined;
-    const same = ideal === r.action;
+    const pair = idealAndChosen(policy, state, r);
+    if (pair === undefined) return undefined;
+    const same = pair.ideal === pair.chosen;
     n++;
     if (same) agree++;
     const cell = byStratum.get(state.stratum) ?? [0, 0];

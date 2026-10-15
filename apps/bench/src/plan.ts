@@ -25,6 +25,8 @@ export interface Estimate {
 function observedDecisionsPerEpisode({ encoder, strategy }: ClefPolicyConfig): number {
   // Not measured yet: a model that reads the words well lives much longer than one that always hops
   // forward, so the plan assumes long games (model calls per game) rather than short ones.
+  // The route strategy plays long games and asks the model only when a manoeuvre ends (40 is an estimate).
+  if (encoder === "scene") return 40;
   if (encoder === "lanes" || encoder === "moves")
     return strategy === "maneuver" || strategy === "graph-maneuver" ? 30 : 45;
   if (encoder === "image") return 5;

@@ -71,7 +71,7 @@ describe("parsePolicy", () => {
     const transport: Transport = { post: async () => ({ status: 200, json: null }) };
     const client = new ClefClient({ transport });
     expect(isClefPolicy("clef")).toBe(true);
-    expect(parsePolicy("clef", () => client).id).toBe("clef:clef-flash:json-fx:choice:full");
+    expect(parsePolicy("clef", () => client).id).toBe("clef:clef-flash:scene:route:lookup");
   });
 
   it("rejects unknown and malformed ids", () => {
@@ -82,5 +82,18 @@ describe("parsePolicy", () => {
         () => new ClefClient({ transport: { post: async () => ({ status: 200, json: null }) } }),
       ),
     ).toThrow(/model/);
+  });
+});
+
+describe("parsePolicy: the route strategy and its free reference", () => {
+  it("builds exec-route without a client, and reads the route condition", () => {
+    expect(parsePolicy("exec-route", noClient).id).toBe("exec-route");
+    expect(isClefPolicy("exec-route")).toBe(false);
+    const transport: Transport = { post: async () => ({ status: 200, json: {} }) };
+    const client = () => new ClefClient({ transport });
+    expect(parsePolicy("clef:clef-flash:scene:route:lookup", client).id).toBe(
+      "clef:clef-flash:scene:route:lookup",
+    );
+    expect(() => parsePolicy("clef:clef-flash:json:route:lookup", client)).toThrow();
   });
 });

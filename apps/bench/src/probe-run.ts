@@ -83,6 +83,9 @@ export async function runProbe(options: ProbeRunOptions): Promise<ProbeRunSummar
           ...(decision.inputTokens === undefined ? {} : { inputTokens: decision.inputTokens }),
           ...(decision.neurons === undefined ? {} : { neurons: decision.neurons }),
           ...(decision.cached === undefined ? {} : { cached: decision.cached }),
+          ...(typeof decision.extra?.maneuver === "string"
+            ? { maneuver: decision.extra.maneuver, extra: decision.extra }
+            : {}),
         };
         appendNdjson(resultsPath, result);
         asked++;

@@ -125,3 +125,12 @@ describe("compare and report", () => {
     expect(text).toMatch(/\| `random` \| 80 \| .* \| worse \|/);
   });
 });
+
+describe("perceptionOf: the route strategy", () => {
+  it("says what the help amounts to, and what the free reference reads", () => {
+    expect(perceptionOf("clef:clef-flash:scene:route:lookup")).toBe(
+      "words + rules + graph + route executor",
+    );
+    expect(perceptionOf("exec-route")).toBe("scene + rules + route executor (scripted)");
+  });
+});

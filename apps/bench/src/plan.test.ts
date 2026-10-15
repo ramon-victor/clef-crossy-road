@@ -126,3 +126,13 @@ describe("formatSeeds", () => {
     expect(formatSeeds([])).toBe("(none)");
   });
 });
+
+describe("estimatePolicy: the route strategy", () => {
+  it("is an estimate until a probe reads the tokens, and assumes long games", () => {
+    const route = estimatePolicy("clef:clef-flash:scene:route:lookup");
+    expect(route.measured).toBe(false);
+    expect(route.tokensPerDecision).toBeGreaterThan(1000);
+    expect(route.decisionsPerEpisode).toBeGreaterThanOrEqual(30);
+    expect(estimatePolicy("exec-route").usesApi).toBe(false);
+  });
+});

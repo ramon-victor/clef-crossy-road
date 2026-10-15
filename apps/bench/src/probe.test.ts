@@ -261,7 +261,12 @@ describe("runProbe", () => {
     expect(seen).toHaveLength(2);
     for (const shown of seen) {
       expect(shown).not.toMatch(/outcomes|good|dies|fatal|stratum/i);
-      expect(JSON.parse(shown).memory).toEqual({ recent: [], score: 0, sinceProgress: 0 });
+      expect(JSON.parse(shown).memory).toEqual({
+        recent: [],
+        score: 0,
+        sinceProgress: 0,
+        behindFrontier: 0,
+      });
     }
     expect(Object.keys(JSON.parse(seen[0] as string).obs).sort()).toEqual(["player", "rows"]);
   });
