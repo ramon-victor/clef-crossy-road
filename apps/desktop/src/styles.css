@@ -1087,6 +1087,71 @@ canvas.game:focus-visible {
   font-size: 12px;
 }
 
+/* ---------- local Cloudflare configuration ---------- */
+
+.connection-setting {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  border-top: 1px solid var(--line);
+  padding-top: 10px;
+}
+
+.connection-dialog {
+  width: min(440px, calc(100vw - 24px));
+  max-height: calc(100dvh - 24px);
+  overflow-y: auto;
+  padding: 18px;
+  border: 3px solid var(--ink);
+  border-radius: 14px;
+  background: var(--card);
+  color: var(--ink);
+  box-shadow: 0 6px 0 rgba(29, 43, 69, 0.25);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.connection-dialog::backdrop {
+  background: rgba(29, 43, 69, 0.4);
+}
+
+.connection-dialog .field-label {
+  margin-top: 16px;
+}
+
+.connection-dialog code {
+  margin-left: 4px;
+  font-size: 10px;
+}
+
+.connection-dialog .input {
+  min-height: 36px;
+  font-size: 13px;
+}
+
+.connection-dialog :is(button, input):focus-visible {
+  outline: 3px solid var(--ink);
+  outline-offset: 2px;
+}
+
+.connection-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 18px;
+  padding-bottom: 3px;
+}
+
+.connection-error {
+  padding: 8px;
+  border-radius: 8px;
+  background: #fff0ef;
+  color: #9c2424;
+  overflow-wrap: anywhere;
+}
+
 @media (max-width: 700px) {
   .player-info {
     inset: 12px 12px auto;

@@ -8,8 +8,19 @@ export interface BudgetStatus {
   day: string;
 }
 
+/** Entered by the user, sent once to the backend, then cleared from the form. */
+export interface CredentialInput {
+  accountId: string;
+  apiToken: string;
+}
+
+/** No saved credentials, identifiers or token fragments are returned to the UI. */
+export interface CredentialStatus {
+  configured: boolean;
+}
+
 /**
- * Everything the UI needs from the native side. The webview never holds the Cloudflare token: the
+ * Everything the UI needs from the native side. Saved credentials stay in the backend: the
  * Tauri build forwards these calls to Rust commands, the browser dev build to a local Vite plugin.
  * Both enforce the daily budget and record spending themselves.
  */
@@ -19,4 +30,6 @@ export interface Bridge {
   cacheGet(key: string): Promise<CachedEntry | null>;
   cachePut(key: string, value: CachedEntry): Promise<void>;
   budget(): Promise<BudgetStatus>;
+  credentialStatus(): Promise<CredentialStatus>;
+  saveCredentials(input: CredentialInput): Promise<CredentialStatus>;
 }

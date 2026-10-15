@@ -1,6 +1,6 @@
 # ADR-0007 · Desktop em Tauri, token no Rust
 
-- **Status:** aceito · **Data:** 2026-10-14
+- **Status:** aceito · **Data:** 2026-10-14 · **Verificado em:** 2026-10-15
 
 ## Contexto
 
@@ -27,6 +27,22 @@ Retry, schema, cache e métricas ficam em TS, uma vez.
   Isso revisa a alternativa "plugin proxy do Vite", descartada como solução de produção abaixo: continua descartada para produção, mas serve para desenvolvimento.
 - Verificado no WebView2 real: 180 fps médios, a recusa de orçamento vinda do Rust, o pipeline do Clef pelo cache e um bundle sem credenciais ([08](../08-ui-desktop.md)).
 - O autoteste (`CCR_SELFTEST=1`) existe porque a verificação visual por captura de tela copia **tudo** o que está por cima da janela; a captura confiável usa `PrintWindow` na janela do app.
+
+## Atualização (2026-10-15, credenciais configuradas pela interface)
+
+O dono pediu a configuração de `CF_ACCOUNT_ID` e `CF_API_TOKEN` no menu. O formulário em
+**Setup → Cloudflare → Configure** recebe valores novos, envia uma vez ao backend e os limpa
+ao salvar/fechar. Esta é a exceção explícita à proibição original de passar o token pelo webview:
+o usuário pode digitá-lo; **credenciais persistidas nunca são devolvidas**. O status é apenas `{ configured }`.
+
+O Rust oferece `credential_status`/`save_credentials`; a ponte Vite oferece GET/POST `/__ccr/credentials`.
+Ambos validam e substituem o `.env` local, preservando as demais configurações. O arquivo salvo tem
+precedência sobre o ambiente inicial do app. O formulário mantém o jogo pausado e salvar não chama
+a Cloudflare. O armazenamento continua sendo `.env` em texto, não o chaveiro do sistema.
+
+Conta e token são obtidos juntos por chamada; trocar a configuração atualiza o orçamento sem apagar
+gastos. Chamadas em andamento mantêm o par e o ledger da conta original. O acesso REST à Cloudflare
+continua exclusivo do backend e com o mesmo teto diário.
 
 ## Alternativas
 

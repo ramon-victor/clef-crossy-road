@@ -17,7 +17,7 @@ Language: code, identifiers, commits and this file in English. `docs/` is in Bra
 
 ## Status
 
-Phases 0-4 are built (541 TS tests + 26 Rust tests). **The gate was NOT passed, in the first 12 conditions**: Clef-flash (JSON, grid,
+Phases 0-4 are built (549 TS tests + 30 Rust tests). **The gate was NOT passed, in the first 12 conditions**: Clef-flash (JSON, grid,
 critic-go, minimal manual, relative columns, and the player's view with the whole screen, motion and memory) plays like "always forward" (~3.7 rows),
 image input is significantly worse, and Clef 27B chose "forward" every time (`docs/07-experimentos.md`). Diagnosis: 72-96% of hops into water are
 fatal and the model puts its top probability on "forward" even when the platform is written right in front of it. Scripted readers of the same views make
@@ -76,8 +76,9 @@ Installed: Node 24, pnpm 10, git, MSVC, WebView2, Rust 1.99 (rustup, user-level)
    Do not change the observation schema without updating that ADR and the schema test. What the model is shown beyond the
    `Observation` follows `docs/adr/0009`: perception (the whole screen, where things will be in 0.2 s) and memory (its last moves)
    may enter; judgement (safe, reachable, valid moves, time-to-collision) never. Every encoder declares a perception level.
-3. **Secrets**: `CF_API_TOKEN` and `CF_ACCOUNT_ID` live only in `.env` (gitignored). Read them only in Node
-   (bench) or Rust (desktop). Never log them, put them in docs, or send them to the webview.
+3. **Secrets**: persist `CF_API_TOKEN` and `CF_ACCOUNT_ID` only in `.env` (gitignored), read by Node or Rust.
+   The settings form may hold user-entered replacements until submission/close; never return saved values to the webview,
+   store them in browser storage, log them or put them in docs. Settings saves never call the API.
 4. **Dependency direction**: `core` imports nothing; `clef` imports nothing of ours; `render` imports `core`;
    `agent` imports `core` and `clef`; apps wire everything together.
 5. **Evan's repo is a read-only reference.** Port the rules, not the GSAP/TweenMax code. Keep the MIT notice

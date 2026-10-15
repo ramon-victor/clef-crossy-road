@@ -1,6 +1,6 @@
 # 02 · Arquitetura
 
-> **Status:** implementada e verificada · **Verificado em:** 2026-10-14 · **ADRs:** 0001 a 0008
+> **Status:** implementada e verificada · **Verificado em:** 2026-10-15 · **ADRs:** 0001 a 0008
 
 ## Visão geral
 
@@ -18,6 +18,17 @@ flowchart LR
   AGENT --> DESK["apps/desktop (Tauri + Preact)"]
   RENDER --> DESK
 ```
+
+## Configuração local da Cloudflare
+
+**Setup → Cloudflare → Configure** envia os dois valores digitados uma vez ao backend. Rust (desktop)
+ou Node (Vite) valida e grava o `.env` da raiz, preservando outras configurações. Os valores salvos têm
+precedência sobre o ambiente inicial do app. A leitura de status devolve somente `{ configured }`;
+o formulário abre vazio e mantém o jogo pausado. Salvar não faz chamada à Cloudflare.
+
+O backend obtém conta e token juntos por chamada. Trocar as configurações atualiza o orçamento
+da conta exibida; uma resposta que já estava em andamento continua sendo registrada na conta original.
+Detalhes e limites do armazenamento: [10](10-seguranca-e-licencas.md).
 
 ## Pacotes
 

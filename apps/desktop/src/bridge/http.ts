@@ -1,4 +1,4 @@
-import type { Bridge, BudgetStatus } from "./types.ts";
+import type { Bridge, BudgetStatus, CredentialStatus } from "./types.ts";
 
 async function call<T>(path: string, body?: unknown): Promise<T> {
   const response = await fetch(`/__ccr${path}`, {
@@ -22,4 +22,6 @@ export const httpBridge: Bridge = {
     await call("/cache/put", { key, value });
   },
   budget: () => call<BudgetStatus>("/budget"),
+  credentialStatus: () => call<CredentialStatus>("/credentials"),
+  saveCredentials: (input) => call<CredentialStatus>("/credentials", input),
 };

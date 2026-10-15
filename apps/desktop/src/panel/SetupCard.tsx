@@ -1,4 +1,5 @@
 import { useState } from "preact/hooks";
+import type { CredentialStatus } from "../bridge/types.ts";
 import { parseSeedText } from "../seed.ts";
 import type { SessionState, Timing } from "../session.ts";
 
@@ -11,6 +12,8 @@ const TIMINGS: readonly { value: Timing; label: string; title: string }[] = [
 export interface SetupCardProps {
   state: SessionState;
   autoRestart: boolean;
+  credentials: CredentialStatus | null;
+  onConfigure(): void;
   onTiming(timing: Timing): void;
   onSpeed(speed: number): void;
   onSeed(seed: number): void;
@@ -20,6 +23,8 @@ export interface SetupCardProps {
 export function SetupCard({
   state,
   autoRestart,
+  credentials,
+  onConfigure,
   onTiming,
   onSpeed,
   onSeed,
@@ -107,6 +112,21 @@ export function SetupCard({
           <p id="auto-restart-help" class="hint">
             Only free reference players restart automatically. Models never do.
           </p>
+        </div>
+        <div class="connection-setting">
+          <div>
+            <strong>Cloudflare</strong>
+            <p class="hint">
+              {credentials === null
+                ? "Status unavailable"
+                : credentials.configured
+                  ? "Configured locally"
+                  : "Not configured"}
+            </p>
+          </div>
+          <button type="button" class="btn small" onClick={onConfigure}>
+            Configure
+          </button>
         </div>
       </div>
     </details>

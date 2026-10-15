@@ -1,6 +1,6 @@
 //! Native side of Clef Crossy Road.
 //!
-//! The webview never sees the Cloudflare token. It calls `clef_run`, and this process adds the
+//! Saved credentials stay here. The UI submits replacements once; `clef_run` adds the
 //! credentials, enforces the daily neuron budget and records what was spent (see `ledger`).
 
 mod cache;
@@ -26,6 +26,7 @@ pub struct AppState {
     cache: Mutex<HashMap<String, Value>>,
     /// Serialises ledger reads and appends so concurrent calls cannot interleave a record.
     ledger: Mutex<()>,
+    credentials: Mutex<credentials::Credentials>,
     /// What `CCR_LOG` asked to be printed in the terminal (nothing, unless it was set).
     log: logging::ConsoleLog,
 }
@@ -33,7 +34,7 @@ pub struct AppState {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let root = files::find_root();
-    credentials::load(&root);
+    let credentials = Mutex::new(credentials::load(&root));
     let state = AppState {
         cache: Mutex::new(cache::load(&root)),
         log: logging::ConsoleLog::open(&root, logging::LogMode::from_env()),
@@ -43,6 +44,7 @@ pub fn run() {
             .build()
             .expect("failed to build the HTTP client"),
         ledger: Mutex::new(()),
+        credentials,
     };
 
     tauri::Builder::default()
@@ -52,6 +54,8 @@ pub fn run() {
             commands::cache_get,
             commands::cache_put,
             commands::budget_status,
+            commands::credential_status,
+            commands::save_credentials,
             logging::console_log,
             launch::launch_options,
             launch::selftest_enabled,

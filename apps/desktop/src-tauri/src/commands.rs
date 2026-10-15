@@ -1,4 +1,4 @@
-//! The commands the webview can call. It never sees the Cloudflare token: `clef_run` adds the
+//! The commands the webview can call. Saved credentials are write-only: `clef_run` adds the
 //! credentials here, refuses once the day's budget is spent, and records what a call cost.
 
 use serde::Serialize;
@@ -27,14 +27,34 @@ pub struct BudgetStatus {
 }
 
 #[tauri::command]
-pub fn budget_status(state: State<'_, AppState>) -> BudgetStatus {
+pub fn budget_status(state: State<'_, AppState>) -> CommandResult<BudgetStatus> {
     let day = clock::utc_day_now();
-    let tag = credentials::account_id().map(|account| ledger::account_tag(&account));
-    BudgetStatus {
+    let tag = state
+        .credentials
+        .lock()?
+        .account_id
+        .as_deref()
+        .map(ledger::account_tag);
+    Ok(BudgetStatus {
         spent: ledger::spent_on(&state.root, &day, tag.as_deref()),
         limit: ledger::DAILY_LIMIT_NEURONS,
         day,
-    }
+    })
+}
+
+#[tauri::command]
+pub fn credential_status(
+    state: State<'_, AppState>,
+) -> CommandResult<credentials::CredentialStatus> {
+    Ok(state.credentials.lock()?.status())
+}
+
+#[tauri::command]
+pub fn save_credentials(
+    state: State<'_, AppState>,
+    input: credentials::CredentialInput,
+) -> CommandResult<credentials::CredentialStatus> {
+    state.credentials.lock()?.save(&state.root, input)
 }
 
 #[tauri::command]
@@ -68,8 +88,10 @@ pub async fn clef_run(
 ) -> CommandResult<RunResponse> {
     let usd_per_million = ledger::usd_per_million(&model)
         .ok_or_else(|| CommandError::new(format!("model not allowed: {model}")))?;
-    let account = credentials::account_id()
-        .ok_or_else(|| CommandError::new("CF_ACCOUNT_ID is not set (see .env.example)"))?;
+    let credentials = state.credentials.lock()?.clone();
+    let account = credentials.account_id.ok_or_else(|| {
+        CommandError::new("CF_ACCOUNT_ID is not set. Open Setup and configure Cloudflare.")
+    })?;
     let tag = ledger::account_tag(&account);
     let day = clock::utc_day_now();
 
@@ -81,8 +103,9 @@ pub async fn clef_run(
         }
     }
 
-    let token = credentials::api_token()
-        .ok_or_else(|| CommandError::new("CF_API_TOKEN is not set (see .env.example)"))?;
+    let token = credentials.api_token.ok_or_else(|| {
+        CommandError::new("CF_API_TOKEN is not set. Open Setup and configure Cloudflare.")
+    })?;
     let url = format!(
         "https://api.cloudflare.com/client/v4/accounts/{account}/ai/run/@cf/cloudflare/{model}"
     );

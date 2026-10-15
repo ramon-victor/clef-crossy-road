@@ -1,14 +1,16 @@
 # 10 · Segurança e licenças
 
-> **Status:** em vigor desde a Fase 3 · **Verificado em:** 2026-10-14
+> **Status:** em vigor desde a Fase 3; configuração pela UI implementada · **Verificado em:** 2026-10-15
 
 ## Token da Cloudflare
 
 | Regra | Detalhe |
 |---|---|
 | Onde fica | `.env` (no `.gitignore`) com `CF_API_TOKEN` e `CF_ACCOUNT_ID`. `.env.example` traz só os nomes |
-| Quem lê | Só o Node (benchmark, e o plugin de desenvolvimento do Vite) e o Rust (desktop). **Nunca o webview, nunca o bundle** |
-| Carregamento | `node --env-file=.env`; no Rust, `dotenvy` procurando o `.env` na raiz do workspace |
+| Quem lê os valores salvos | Só Node e Rust. A UI recebe apenas `{ configured }`; credenciais salvas não voltam ao webview nem entram no bundle |
+| Entrada pela UI | **Setup → Cloudflare → Configure**, por pedido do dono em 2026-10-15. Apenas os valores recém-digitados passam temporariamente pelo formulário; token em campo password, sem browser storage, limpeza ao salvar/fechar |
+| Carregamento | Benchmark: `node --env-file=.env`. App: `.env` da raiz tem precedência; ambiente inicial é fallback. Mudanças pela UI entram em vigor imediatamente no processo que as salva |
+| Persistência | Substituição por arquivo temporário `.env.ccr-*.tmp` e rename; outros campos e comentários são preservados. O armazenamento continua sendo arquivo local em texto, fora do git |
 | Logs e erros | O token vive numa closure (`@ccr/clef/node`) e em variável local no Rust. Erros carregam só `errors[].message` do serviço; o erro de rede do Rust remove a URL |
 | App empacotado | Migrar para o chaveiro do SO (crate `keyring`); não distribuir `.env` |
 | Escopo | Só a permissão *Workers AI*, com data de expiração |
@@ -21,6 +23,13 @@ considerados expostos. O primeiro estava **ativo e sem data de expiração** e n
 painel da Cloudflare e gerar um novo com permissão só de *Workers AI* e expiração.** Os Account IDs não são segredo, mas também não vão para o git (e não são gravados nos
 arquivos do ledger, só uma marca FNV-1a deles).
 
+**Verificação da configuração em 2026-10-15:** testes usam credenciais fictícias e diretórios temporários.
+O GET de status e a resposta do POST devolvem apenas `{ configured }`, com `Cache-Control: no-store` no
+Vite. O formulário limpa os valores ao salvar/fechar e não usa localStorage nem sessionStorage.
+O Vite restringe Host ao loopback, recusa outra origem e exige JSON para o POST de configuração;
+erros de validação e escrita não ecoam entradas. Uma troca de conta mantém conta/token juntos durante
+cada pedido, inclusive para gravar seu custo no ledger original. Salvar não faz verificação de rede.
+
 ## Orçamento é uma defesa de segurança também
 
 Gastar acima do free tier é o dano mais provável de um erro (loop, execução esquecida em segundo plano). Por isso o teto diário é
@@ -31,7 +40,7 @@ constante e grava o ledger). Ver [ADR-0008](adr/0008-orcamento-diario-no-free-ti
 
 - CSP restritiva em `tauri.conf.json` (o `connect-src` do build de produção só tem `'self'`, `ipc:` e `http://ipc.localhost`): toda chamada à API passa pelo comando Rust. A CSP de desenvolvimento acrescenta o servidor do Vite.
 - O comando `clef_run` só aceita os modelos `clef`, `clef-flash` e `clef-omni`, sem URL arbitrária. Isso impede que um webview comprometido use o token contra outros endpoints.
-- As capabilities do app são só `core:default`; os comandos próprios (`clef_run`, `cache_get`, `cache_put`, `budget_status`) são registrados em `lib.rs`.
+- As capabilities do app são só `core:default`; os comandos próprios, incluindo `credential_status` e `save_credentials`, são registrados em `lib.rs`.
 - **Ponte de desenvolvimento no navegador** (`apps/desktop/dev-bridge.ts`): só existe em `vite serve`, escuta apenas em `localhost`,
   recusa requisições de outra origem (proteção contra outra aba chamando `localhost:5173`), aplica o mesmo teto e grava o mesmo ledger. Não faz parte do build.
 - Auditar dependências Rust (`cargo audit`) antes de distribuir.

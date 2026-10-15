@@ -49,7 +49,7 @@ Antes de qualquer execução com modelo, rode `pnpm bench plan`: ele estima os n
 
 ## Configuração
 
-1. Copie `.env.example` para `.env` e preencha `CF_API_TOKEN` e `CF_ACCOUNT_ID`.
+1. No app desktop ou no navegador de desenvolvimento, abra **Setup → Cloudflare → Configure**, informe **Account ID** (`CF_ACCOUNT_ID`) e **API token** (`CF_API_TOKEN`) e clique em **Save credentials**. O backend salva no `.env` local e aplica sem reiniciar. O jogo fica pausado e salvar não chama a API. Como alternativa, copie `.env.example` para `.env` e preencha os dois campos manualmente (o benchmark também lê esse arquivo).
 2. O token deve ter **só** a permissão *Workers AI* e uma data de expiração.
 3. O `.env` é ignorado pelo git. Nunca o publique nem o cole em conversas.
 

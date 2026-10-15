@@ -11,9 +11,12 @@ lets a person play.
 
 ## Hard rules
 
-- **The webview never holds the token.** All API traffic goes through the Rust command `clef_run` (desktop) or, in browser
+- **The backend never returns saved credentials.** The settings form accepts new values once and clears them on save/close;
+  never prefill from storage or use localStorage/sessionStorage. All API traffic goes through the Rust command `clef_run` (desktop) or, in browser
   development only, the Vite plugin `dev-bridge.ts`. Never import `@ccr/clef/node` from `src/`, never read `.env` in the UI, and never put
   a credential in `index.html`, `tauri.conf.json` or the bundle. After a production build, grep `dist/` for the token prefix.
+- `credential_status` returns only `{ configured }`; `save_credentials` validates and atomically updates the root `.env`.
+  Saved settings override startup environment values. A request must retain one coherent account/token pair through ledger recording.
 - **The budget ceiling is enforced on the native side**, as a constant (10,000 neurons/UTC day), and Rust also writes the ledger
   `runs/cache/spend.ndjson`. The TypeScript `BridgeBudget` only reads it. Do not move enforcement into the webview.
 - `clef_run` accepts only `clef`, `clef-flash` and `clef-omni`; no caller-supplied URLs.

@@ -16,42 +16,50 @@ import {
   LEDGER_FILE,
 } from "@ccr/clef/node";
 import type { Plugin } from "vite";
+import { CredentialsStore, CredentialValidationError } from "./credentials.ts";
 
 /**
  * DEV-ONLY stand-in for the Rust commands, so the UI can be developed and tested in a normal
- * browser. It exposes the same four operations as the Tauri build and enforces the same rules:
- * the token stays in this Node process, the free-tier ceiling is a constant, and every spend is
+ * browser. It exposes the same operations as the Tauri build and enforces the same rules:
+ * saved credentials stay in this Node process, the free-tier ceiling is a constant, and every spend is
  * written to the shared ledger (runs/cache/spend.ndjson). It is not part of the production build
  * (`apply: "serve"`) and only answers same-origin requests.
  */
-export function devBridge(): Plugin {
-  const root = resolve(import.meta.dirname, "../..");
+export function devBridge(
+  options: { root?: string; fetchImpl?: typeof fetch; environment?: NodeJS.ProcessEnv } = {},
+): Plugin {
+  const root = options.root ?? resolve(import.meta.dirname, "../..");
 
-  let budget: FileBudget | undefined;
   let cache: FileCache | undefined;
-  let transport: ReturnType<typeof createNodeTransport> | undefined;
-
-  const state = () => {
-    budget ??= new FileBudget(
-      resolve(root, LEDGER_FILE),
-      FREE_NEURONS_PER_DAY,
-      undefined,
-      process.env.CF_ACCOUNT_ID,
-    );
-    cache ??= new FileCache(resolve(root, CACHE_FILE));
-    return { budget, cache };
+  let budget: FileBudget | undefined;
+  let budgetAccount: string | undefined;
+  const accountBudget = (account: string | undefined) => {
+    if (!budget || budgetAccount !== account) {
+      budget = new FileBudget(resolve(root, LEDGER_FILE), FREE_NEURONS_PER_DAY, undefined, account);
+      budgetAccount = account;
+    }
+    return budget;
   };
 
   const send = (res: ServerResponse, status: number, body: unknown) => {
     res.statusCode = status;
     res.setHeader("content-type", "application/json");
+    res.setHeader("cache-control", "no-store");
     res.end(JSON.stringify(body));
   };
 
-  const readJson = (req: IncomingMessage): Promise<Record<string, unknown>> =>
+  const readJson = (
+    req: IncomingMessage,
+    limit = Number.POSITIVE_INFINITY,
+  ): Promise<Record<string, unknown>> =>
     new Promise((resolveBody, reject) => {
       const chunks: Buffer[] = [];
-      req.on("data", (c: Buffer) => chunks.push(c));
+      let bytes = 0;
+      req.on("data", (c: Buffer) => {
+        bytes += c.length;
+        if (bytes > limit) return reject(new Error("Request too large"));
+        chunks.push(c);
+      });
       req.on("end", () => {
         try {
           resolveBody(JSON.parse(Buffer.concat(chunks).toString("utf8") || "{}"));
@@ -66,24 +74,48 @@ export function devBridge(): Plugin {
     name: "ccr-dev-bridge",
     apply: "serve",
     configureServer(server) {
-      try {
-        process.loadEnvFile(resolve(root, ".env"));
-      } catch {
-        // No .env: Clef calls will report that the credentials are missing.
-      }
+      const credentials = new CredentialsStore(root, options.environment ?? process.env);
 
       server.middlewares.use("/__ccr", async (req, res) => {
         // Refuse anything that is not the app itself talking to its own origin (CSRF from other tabs).
         const origin = req.headers.origin;
         const host = req.headers.host;
-        if (origin && new URL(origin).host !== host) return send(res, 403, { error: "bad origin" });
+        if (!host || !/^(?:localhost|127\.0\.0\.1|\[::1\])(?::\d+)?$/.test(host)) {
+          return send(res, 403, { error: "bad host" });
+        }
+        try {
+          if (origin && new URL(origin).host !== host)
+            return send(res, 403, { error: "bad origin" });
+        } catch {
+          return send(res, 403, { error: "bad origin" });
+        }
         if (req.headers["sec-fetch-site"] && req.headers["sec-fetch-site"] !== "same-origin") {
           return send(res, 403, { error: "bad fetch site" });
         }
 
         try {
           const url = new URL(req.url ?? "/", "http://localhost");
-          const { budget: ledger, cache: store } = state();
+          if (url.pathname === "/credentials") {
+            if (req.method === "GET") return send(res, 200, credentials.status());
+            if (req.method !== "POST") return send(res, 405, { error: "method not allowed" });
+            if (!req.headers["content-type"]?.startsWith("application/json")) {
+              return send(res, 415, { error: "JSON required" });
+            }
+            try {
+              return send(res, 200, credentials.save(await readJson(req, 8192)));
+            } catch (error) {
+              return send(res, error instanceof CredentialValidationError ? 400 : 500, {
+                error:
+                  error instanceof CredentialValidationError
+                    ? error.message
+                    : "Could not save local Cloudflare credentials.",
+              });
+            }
+          }
+          const current = credentials.current();
+          const ledger = accountBudget(current.accountId);
+          cache ??= new FileCache(resolve(root, CACHE_FILE));
+          const store = cache;
 
           if (req.method === "GET" && url.pathname === "/budget") {
             return send(res, 200, {
@@ -111,7 +143,17 @@ export function devBridge(): Plugin {
                 error: budgetRefusal(ledger.spentToday(), FREE_NEURONS_PER_DAY),
               });
             }
-            transport ??= createNodeTransport();
+            if (!current.accountId || !current.apiToken) {
+              return send(res, 400, {
+                error:
+                  "CF_API_TOKEN and CF_ACCOUNT_ID are required. Open Setup and configure Cloudflare.",
+              });
+            }
+            const transport = createNodeTransport({
+              accountId: current.accountId,
+              token: current.apiToken,
+              ...(options.fetchImpl ? { fetchImpl: options.fetchImpl } : {}),
+            });
             const response = await transport.post({ model, body: body.body });
             const tokens = (
               response.json as { result?: { usage?: { input_tokens?: number } } } | null
@@ -126,10 +168,10 @@ export function devBridge(): Plugin {
             return send(res, 200, response);
           }
           return send(res, 404, { error: "not found" });
-        } catch (error) {
+        } catch {
           // Never echo anything that could contain credentials.
           return send(res, 500, {
-            error: error instanceof Error ? error.message.slice(0, 300) : "error",
+            error: "Local bridge request failed.",
           });
         }
       });

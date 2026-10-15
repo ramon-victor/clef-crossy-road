@@ -2,12 +2,13 @@ import type { GameView } from "@ccr/render";
 import { useCallback, useEffect, useMemo, useRef, useState } from "preact/hooks";
 import { Sounds } from "./audio.ts";
 import { createBridge, createClefClient } from "./bridge/clef.ts";
-import type { BudgetStatus } from "./bridge/types.ts";
+import type { BudgetStatus, CredentialStatus } from "./bridge/types.ts";
 import { createConsoleLog, terminalWriter } from "./console-log.ts";
 import { GameCanvas } from "./GameCanvas.tsx";
 import { commandForKey } from "./keymap.ts";
 import { readLaunchOptions } from "./launch.ts";
 import { Panel } from "./Panel.tsx";
+import { ConnectionDialog } from "./panel/ConnectionDialog.tsx";
 import { InputInspector } from "./panel/InputInspector.tsx";
 import {
   buildPolicyChoices,
@@ -50,6 +51,8 @@ export function App() {
   const [state, setState] = useState<SessionState>(() => session.state());
   const [selectedId, setSelectedId] = useState(DEFAULT_PLAYER);
   const [budget, setBudget] = useState<BudgetStatus | null>(null);
+  const [credentials, setCredentials] = useState<CredentialStatus | null>(null);
+  const [configuring, setConfiguring] = useState(false);
   const [fps, setFps] = useState(60);
   const [soundOn, setSoundOn] = useState(true);
   const [autoRestart, setAutoRestart] = useState(true);
@@ -78,6 +81,21 @@ export function App() {
     const timer = setInterval(refreshBudget, 4000);
     return () => clearInterval(timer);
   }, [refreshBudget]);
+
+  useEffect(() => {
+    let cancelled = false;
+    bridge
+      .credentialStatus()
+      .then((status) => {
+        if (!cancelled) setCredentials(status);
+      })
+      .catch(() => {
+        if (!cancelled) setCredentials(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [bridge]);
 
   // The last cached ("free") seed opened per player, so "New map" can walk through them in order.
   const lastFree = useRef(new Map<string, number>());
@@ -156,7 +174,7 @@ export function App() {
       if (
         target instanceof Element &&
         target.closest(
-          'input, select, textarea, button, summary, a[href], [contenteditable]:not([contenteditable="false"]), [role="dialog"]',
+          'input, select, textarea, button, summary, dialog, a[href], [contenteditable]:not([contenteditable="false"]), [role="dialog"]',
         )
       )
         return;
@@ -217,6 +235,11 @@ export function App() {
         choices={choices}
         selectedId={selectedId}
         budget={budget}
+        credentials={credentials}
+        onConfigure={() => {
+          session.setPaused(true);
+          setConfiguring(true);
+        }}
         fps={fps}
         soundOn={soundOn}
         autoRestart={autoRestart}
@@ -242,6 +265,23 @@ export function App() {
         }}
         onAutoRestart={setAutoRestart}
       />
+      {configuring && (
+        <ConnectionDialog
+          bridge={bridge}
+          configured={credentials?.configured ?? false}
+          onClose={() => setConfiguring(false)}
+          onSaved={(status) => {
+            setCredentials(status);
+            // Recover a stopped authentication attempt without starting any API call automatically.
+            const current = session.state();
+            if (current.phase === "error" || current.phase === "thinking")
+              session.start(current.seed);
+            session.setPaused(true);
+            refreshBudget();
+            setConfiguring(false);
+          }}
+        />
+      )}
       {inspecting && (
         <InputInspector
           history={state.history}

@@ -36,6 +36,7 @@ são os do Expo-Crossy-Road, baixados localmente por `node scripts/fetch-assets.
 | Controlador | Os passos que o código dá dentro de uma manobra aparecem com a etiqueta **controller** e a nota do que ele faz ("cross_ahead: waiting for the cell (water) to clear, 3/15", "detour_right: hop 2, right (2 to go)"); no terminal, `-> wait (controller)  | ...`. O modelo escolhe a manobra; o controlador espera a casa ficar pisável e dá o salto, ou **caminha o desvio** (volta uma linha se precisar, desliza, avança), e devolve a decisão ao modelo se não há rota, se a galinha não pode ficar onde está, se uma tora a leva à borda ou depois de 3 s. A janela **What it read** (tecla I) mostra o último pedido ao modelo e quantos passos do controlador vieram depois |
 | Painel | Ação, tags **cached/controller**, barras com as `probabilities` **reais** quando fornecidas, histórico das últimas 14 jogadas em uma faixa e seis métricas em grade 3×2. **Details**, inicialmente fechado, mostra a nota completa e `confidence` rotulado como não documentado. O botão **What it read (I)** continua disponível durante passos do controlador se o histórico contém um pedido ao modelo |
 | Informações ⓘ | Botão ao lado do jogador: título completo do jogo, descrição do jogador selecionado, custo estimado, cache, participação do controlador e atalhos. É um popover nativo, aberto por clique, Enter ou Espaço; Esc, clique externo e o botão × fecham. O aviso de gasto continua visível junto ao seletor |
+| Cloudflare | Em **Setup → Cloudflare → Configure**, informar Account ID e API token e escolher **Save credentials**. O backend salva no `.env` local; o formulário abre vazio e exibe apenas se há configuração. O jogo pausa ao abrir e continua pausado ao salvar. O orçamento muda para a conta atual; salvar não chama a API. Cancel ou Esc descartam o que foi digitado |
 | Orçamento | Fica na base, junto ao som e FPS: medidor de neurons do dia (UTC), gasto/limite e custo da partida, com aviso aberto quando o teto é atingido. O custo estimado por decisão nova fica no ⓘ; uma decisão do cache aparece como "cached" e custa 0 |
 | Fim de partida | Cartão com a causa da morte, linhas cruzadas e melhor do dia; repetir a mesma seed ou mapa novo. **"Preso"**: um jogador de IA que passa 40 decisões sem uma linha nova (a regra do benchmark) encerra a partida, para de perguntar e de gastar, e o cartão diz "Stuck: no new row in 40 decisions" |
 | Som | Sons do original, ligados por padrão após o primeiro gesto do usuário (política dos navegadores) |
@@ -85,6 +86,17 @@ as verificações anteriores no WebView2 estão registradas abaixo.
 | Orçamento | Esgotado e indisponível permanecem explícitos na base |
 | Viewports equivalentes a zoom | 125% (784×528) e 150% (653×440), com base visível, ajustes alcançáveis pela rolagem e popover dentro da viewport |
 
+## Verificação da configuração pela UI (2026-10-15)
+
+- Backend Rust: persistência e releitura, prioridade do arquivo, preservação de outros campos e CRLF,
+  validação, retorno somente de status e manutenção do par anterior em falhas de escrita.
+- Ponte Vite: persistência, bloqueio de outra origem, mensagens sem valores sensíveis, troca de conta
+  sem zerar o ledger e resposta em andamento debitada à conta original; transporte simulado, sem API real.
+- Interface Chromium em 980×660, 1180×800 e 653×440: formulário password, validação e erro sem eco do
+  valor digitado, salvar/reabrir/recarregar sem preencher segredos, limpeza ao fechar, retorno de foco,
+  jogo pausado e atualização do orçamento. Credenciais fictícias e `.env` em diretório temporário isolado.
+  Capturas em `reports/credentials/` (gerado, fora do git).
+
 ## Arquitetura do app
 
 ```
@@ -105,7 +117,9 @@ apps/desktop/
                              # logging.rs (CCR_LOG, stdout e runs/logs/play.log; erros de escrita ignorados)
 ```
 
-O webview **nunca** tem o token: ele chama `clef_run`, e o Rust injeta as credenciais, aplica o teto do dia (constante) e grava o ledger.
+As credenciais **salvas nunca voltam ao webview**: o formulário só envia novos valores para `save_credentials`;
+`credential_status` devolve `{ configured }`. Para jogar, a UI chama `clef_run`, e o Rust injeta as credenciais,
+aplica o teto do dia (constante) e grava o ledger. A ponte Vite oferece o mesmo fluxo no desenvolvimento.
 O log do terminal passa pelo comando `console_log`, que só imprime texto (o token não passa por ele) e é limitado em tamanho.
 O `ClefClient` roda no webview com um `Transport` que atravessa a ponte, mais cache e orçamento também atrás de IPC.
 O Rust só aceita `clef`, `clef-flash` e `clef-omni`, sem URL arbitrária.

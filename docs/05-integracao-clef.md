@@ -1,6 +1,6 @@
 # 05 · Integração com o Clef (Workers AI, REST)
 
-> **Status:** contrato verificado por execução real · **Verificado em:** 2026-10-14 · **Fontes:** [references.md](references.md)
+> **Status:** contrato verificado por execução real; configuração local testada sem API · **Verificado em:** 2026-10-15 · **Fontes:** [references.md](references.md)
 > Legenda de evidência: **[doc]** documentação oficial · **[ind]** teste independente, amostra pequena · **[obs]** observado neste projeto em 2026-10-14.
 
 ## Endpoint
@@ -13,6 +13,22 @@ Content-Type: application/json
 
 Modelos disponíveis: `@cf/cloudflare/clef-flash` (9B), `@cf/cloudflare/clef` (27B), `@cf/cloudflare/clef-omni`
 (texto, imagem, áudio, vídeo). Não há Worker nem deploy: só esta chamada REST ([ADR-0002](adr/0002-workers-ai-rest-sem-deploy.md)).
+
+## Configurar pela interface
+
+No app desktop ou no navegador de desenvolvimento: **Setup → Cloudflare → Configure**.
+Informe **Account ID** (`CF_ACCOUNT_ID`, 32 caracteres hexadecimais) e **API token** (`CF_API_TOKEN`,
+com permissão Workers AI), depois **Save credentials**. O formulário aceita novas credenciais;
+os valores já salvos nunca são preenchidos de volta. O status confirma a configuração local;
+a autenticação é conferida na próxima decisão que precisar da API.
+
+O backend grava o `.env` da raiz e aplica a nova conta sem reiniciar o app. A partida fica pausada;
+um pedido pendente ou uma tentativa que parou com erro é descartado/reiniciado na mesma seed.
+O usuário retoma com Resume. Salvar não gasta neurons e não altera o ledger.
+Outros processos já abertos precisam ser reiniciados para ler as novas credenciais.
+
+Referências: [encontrar o Account ID](https://developers.cloudflare.com/fundamentals/account/find-account-and-zone-ids/)
+e [configurar um token para Workers AI](https://developers.cloudflare.com/workers-ai/get-started/rest-api/).
 
 ## Request
 

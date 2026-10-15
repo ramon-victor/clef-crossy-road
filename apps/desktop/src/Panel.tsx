@@ -1,5 +1,5 @@
 import { isBudgetRefusal } from "@ccr/clef";
-import type { BudgetStatus } from "./bridge/types.ts";
+import type { BudgetStatus, CredentialStatus } from "./bridge/types.ts";
 import { BudgetCard } from "./panel/BudgetCard.tsx";
 import { ControlsCard } from "./panel/ControlsCard.tsx";
 import { DecisionCard } from "./panel/DecisionCard.tsx";
@@ -15,6 +15,8 @@ export interface PanelProps {
   choices: PolicyChoice[];
   selectedId: string;
   budget: BudgetStatus | null;
+  credentials: CredentialStatus | null;
+  onConfigure(): void;
   fps: number;
   soundOn: boolean;
   autoRestart: boolean;
@@ -71,6 +73,8 @@ export function Panel(props: PanelProps) {
         <SetupCard
           state={state}
           autoRestart={props.autoRestart}
+          credentials={props.credentials}
+          onConfigure={props.onConfigure}
           onTiming={props.onTiming}
           onSpeed={props.onSpeed}
           onSeed={props.onSeed}
