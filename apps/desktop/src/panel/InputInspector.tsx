@@ -144,6 +144,7 @@ export function InputInspector({ history, policyId, onClose }: InputInspectorPro
               <code>{facts.id}</code>
               <br />
               sees {facts.sees}; question: {facts.style}
+              {facts.executor && "; the model picks the manoeuvre, a controller picks the moment"}
             </div>
           )}
         </div>

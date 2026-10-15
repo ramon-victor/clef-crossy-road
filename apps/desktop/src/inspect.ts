@@ -5,12 +5,15 @@ const STYLE_TEXT: Readonly<Record<ManualId, string>> = {
   full: "long rules, and options that say what each move does",
   minimal: "short rules, and options that say what each move does",
   routing: "short rules, and options that say when each move applies",
+  rules: "short rules, and options that name the fields of the state and the words they hold",
 };
 
 const LEVEL_TEXT: Readonly<Record<PerceptionLevel, string>> = {
   now: "the world as it is now",
   memory: "the world now, and its own last moves",
   forecast: "the world now, where things will be in 0.2 s, and its own last moves",
+  words:
+    "what fills the cells it could land on (worked out by the code, told in words), where things will be in 0.2 s, and its own last moves",
 };
 
 export interface PolicyFacts {
@@ -22,6 +25,8 @@ export interface PolicyFacts {
   sees: string;
   /** How the question and the options are written. */
   style: string;
+  /** Set when a controller times the hops: the model only picks the manoeuvre. */
+  executor: boolean;
 }
 
 /** The facts about a model player that the inspector shows next to what it read; null for anyone else. */
@@ -36,6 +41,7 @@ export function policyFacts(policyId: string | null): PolicyFacts | null {
     level,
     sees: LEVEL_TEXT[level],
     style: STYLE_TEXT[config.manual],
+    executor: config.strategy === "maneuver",
   };
 }
 
