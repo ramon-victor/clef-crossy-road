@@ -1,6 +1,6 @@
 # 09 · Roadmap
 
-> **Status:** Fases 0 a 3 concluídas; Fase 4 concluída na parte que não gasta API · **Verificado em:** 2026-10-14
+> **Status:** Fases 0 a 3 concluídas; Fase 4 concluída na parte que não gasta API; **uma 13ª condição (palavras, regras, perguntas pequenas e executor) supera `always-forward` em 40 seeds, e o portão de 100 seeds é o próximo passo** · **Verificado em:** 2026-10-15
 
 A ordem é guiada pelo risco: primeiro descobrir se o modelo consegue jogar, depois investir em visual.
 
@@ -14,6 +14,8 @@ A ordem é guiada pelo risco: primeiro descobrir se o modelo consegue jogar, dep
 | 5 | Opcional: trajetórias para RL fine-tuning; Jev | — | **Parte offline concluída**: `pnpm bench export` gera trajetórias (observação, ação, recompensa, fim) a partir das partidas gravadas, só com fatos físicos na observação (10.625 passos do look-ahead com ≥ 20 ruas, 17 MB). O treino em si depende do programa de RL da Cloudflare ou de hospedar os pesos; o Jev não foi avaliado |
 
 ## Próximos passos
+
+0. **Completar o portão de 100 seeds** da condição `clef:clef-flash:moves:graph-maneuver:ordered` ([07](07-experimentos.md)): faltam as seeds 41 a 100 (~7.000 neurons, então dois dias com duas contas, `bench plan` antes de cada passo). Se o limite inferior do IC pareado ficar acima de zero, o app pode trocar o Clef padrão. Também: a variante com o 27B só se couber, e as ideias abertas (laço da manobra recusada, `back_off` com água atrás) em [07](07-experimentos.md).
 
 O experimento zero-shot está respondido: **nenhum modelo testado supera "sempre em frente"** ([07](07-experimentos.md)). O que sobra é escolher o que fazer com esse resultado:
 

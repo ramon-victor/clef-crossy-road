@@ -1,6 +1,6 @@
 # 07 · Experimentos e benchmark
 
-> **Status:** gate da Fase 2 avaliado (reprovado com os prompts testados) · **Verificado em:** 2026-10-15 · **Código:** `apps/bench`, `packages/agent`
+> **Status:** gate da Fase 2 avaliado (reprovado com os prompts testados; uma condição nova, com palavras e executor, passa com 40 seeds e espera as 100) · **Verificado em:** 2026-10-15 · **Código:** `apps/bench`, `packages/agent`
 
 ## Princípios
 
@@ -62,6 +62,8 @@ Resultados em `runs/<nome>/episodes.ndjson` (retomável) e `reports/`. As açõe
 - Os modelos separam **tipo de terreno**, não **cinemática** ([06](06-observacao-e-prompts.md)).
 
 Limitações: um único texto de prompt por condição (mais a variante de manual mínimo); 100 seeds (40 no Clef 27B); o `clef-omni` não foi testado.
+
+**Atualização de 2026-10-15:** uma 13ª condição, já com palavras no lugar de números, opções que citam os campos, duas perguntas pequenas e um executor (`moves`, `graph-maneuver`, ver o fim desta seção), faz **10,05 ruas em 40 seeds**, com o intervalo da diferença pareada contra `always-forward` todo acima de zero. O portão formal (≥ 100 seeds) segue pendente.
 
 ### Plano B executado (conta nova, 2026-10-14)
 
@@ -186,26 +188,61 @@ Nas 220 decisões escolheu `stay` 143 vezes, `hop_left` 67 e `hop_forward` 10; n
 com as novas ele se **protege** (a escolha fatal na água mortal cai de 96% para 13–33%), mas também deixa de avançar quando dá (água aberta: 33–42% de boa jogada), espera, anda de lado e bate em árvore. A decisão é puxada pelo **significado das palavras das opções**, não pela coluna da plataforma. Isso explica por que nenhuma vista ajudou.
 A regra de parada da sonda (melhoria na água de ≥ 25 pontos com IC sem zero) também não foi atendida (Δ +11 e +19, ICs com zero), e a partida completa confirmou. Custo: 944 neurons na sonda e 1.062 nas partidas, **2.006 na conta `f173…`** (a `df5a…` não gastou nada no dia 2026-10-15 UTC).
 
-### O que os 13 jogos do Jev sugerem: palavras, regras e executor (2026-10-15)
+### Palavras, regras e executor, a partir dos 13 jogos do Jev (2026-10-15)
 
-Depois de ler os 13 repositórios ([11](11-licoes-dos-jogos-do-jev.md), [ADR-0010](adr/0010-palavras-regras-e-executor-de-manobras.md)) a vista e as opções foram reescritas
-em três níveis novos: `lanes` (o código compara, o modelo recebe a palavra do que ocupa cada casa), `rules` (as opções citam os campos e as palavras) e `maneuver` (o modelo escolhe a manobra, o código escolhe o instante).
-**Primeiro, de graça: a informação basta?** Cem seeds, sem rede, os mesmos mapas de `always-forward`:
+Depois de ler os 13 repositórios ([11](11-licoes-dos-jogos-do-jev.md), [ADR-0010](adr/0010-palavras-regras-e-executor-de-manobras.md)) a vista e as opções foram reescritas: o código compara e entrega **palavras** (`lanes`, depois `moves`), as opções viram **regras curtas sobre essas palavras**, a decisão vira **duas perguntas pequenas** (`graph`) e um **executor** dá o salto (`maneuver`, `graph-maneuver`). Tudo rotulado em "Sees" nos relatórios.
+
+**1. De graça: a informação basta?** Cem seeds, sem rede, mesmos mapas (`bench run --run refs-final`):
 
 | Política | O que lê | Ruas [IC 95%] | Δ vs `always-forward` [IC 95%] | Mortes (água / carro / borda) | Estagnou |
 |---|---|---|---|---|---|
 | `always-forward` | nada | 3,78 [3,39, 4,24] | — | 97% / 3% / 0% | 0% |
-| `rule-view-fx` | o mapa agora + 0,2 s (roteirizado) | 18,63 [15,43, 22,04] | +14,85 [11,65, 18,20] | 0% / 51% / 17% | 32% |
-| `rule-lanes` | só as **palavras** de `lanes` (roteirizado, um salto por decisão) | **19,44** [16,02, 23,12] | +15,66 [12,23, 19,29] | 8% / 20% / 17% | 55% |
-| `exec-cross` | palavras, sempre "atravessar" com o executor | 6,08 [4,95, 7,31] | +2,30 [1,17, 3,53] | 0% / 40% / 8% | 46% |
-| `exec-rules` | palavras + escolha roteirizada das manobras + executor | 15,92 [13,15, 18,92] | +12,14 [9,37, 15,14] | 0% / 47% / 12% | 38% |
+| `exec-cross` | palavras, sempre "atravessar", com o executor (**o executor sozinho**) | 6,08 [4,95, 7,31] | +2,30 [1,17, 3,53] | 0% / 40% / 8% | 46% |
+| `rule-moves` | as palavras de `moves`, regras na ordem (roteirizado, um salto por decisão) | 17,45 [14,52, 20,52] | +13,67 [10,72, 16,74] | 5% / 27% / 16% | 52% |
+| `exec-rules` | palavras + escolha roteirizada das manobras + executor | 18,83 [15,60, 22,26] | +15,05 [11,81, 18,49] | 0% / 32% / 19% | 47% |
+| `rule-lanes` | as palavras de `lanes` (roteirizado) | 19,71 [16,33, 23,28] | +15,93 [12,55, 19,43] | 9% / 18% / 17% | 56% |
 
-- As **palavras bastam**: um leitor que só vê o vocabulário de `lanes` joga tão bem quanto o que lia o mapa e as velocidades (19,4 contra 18,6 ruas). A concordância da palavra de cada casa com o simulador (a casa onde um salto pousa é pisável ou não) foi de mais de 97% em água, grama e estrada, nas 150 seeds jogadas; no trilho a palavra é conservadora de propósito (`train_coming` com a luz acesa; o simulador deixa atravessar se o trem ainda não chegou).
-- O **executor sozinho** (`exec-cross`) vale +2,3 ruas: sem escolher o caminho, ele atravessa estrada, trilho e água quando abre, mas fica parado diante de árvore e de água sem plataforma. É o piso contra o qual o Clef com executor será comparado.
-- O teto com o executor é `exec-rules` (15,9). Ele não passa do leitor por salto: o executor serve para tirar chamadas e suportar atraso, não para jogar melhor. `stallLimit` e `maxDecisions` contam também os passos de espera.
-- Os tokens por decisão de `lanes`+`rules` ficam em ~1.260 (estimativa pelo tamanho do pedido, 4.051 caracteres contra os 4.579 do `json-fx` que deram 1.425 tokens): o manual e as opções pesam mais que o estado.
+As **palavras bastam**: um leitor que só vê o vocabulário joga tão bem quanto o `rule-view-fx` de antes (18,6). A concordância da palavra de cada casa com o simulador foi de mais de 97% em água, grama e estrada (no trilho a palavra é conservadora de propósito: `train_coming` com a luz acesa). O executor sozinho já vale +2,3 ruas; é o piso do Clef com executor.
 
-Nada disto toca a API. As sondas e as partidas do Clef com estas vistas vêm depois, cada uma só depois de `bench plan`.
+**2. Sondas** (Clef-flash, 90 estados rotulados, ~230 a 540 neurons cada; "escolha fatal na água mortal" é a fração dos 24 estados em que a jogada escolhida afoga; "boa" é a jogada que o look-ahead dá como a melhor, com margem de uma linha):
+
+| Condição (o que muda) | Água mortal: fatal | Boa na água (36) | AUC água / rua | Concorda com o leitor ideal |
+|---|---|---|---|---|
+| `json` · `full` (controle) | 96% | 36% | 0,61 / 0,63 | — |
+| `json-fx` · `full` (o Clef do app até então) | 96% | 36% | 0,66 / 0,85 | — |
+| `lanes` · `full` (palavras, texto antigo das opções) | 42% | 53% | 0,73 / 0,67 | 37% |
+| `lanes` · `rules` (palavras + opções que citam os campos) | **8%** | 67% | 0,89 / 0,91 | 52% |
+| `moves` · `ordered` · primeira redação (nome da linha no estado) | 8% | 56% | **1,00** / 0,96 | 48% |
+| `moves` · `exclusive` (cada opção exclui as outras) | 8% (50% na água aberta) | 47% | 0,92 / 0,92 | 40% |
+| `moves` · `graph` · primeira redação | 0% | 61% | 0,99 / 0,98 | 58% |
+| `moves` · `ordered` (sem o nome da linha) | **0%** | **78%** | 1,00 / 0,95 | 57% |
+| `moves` · `graph` (sem o nome da linha) | **0%** | 72% | 1,00 / 0,98 | 60% |
+| Clef 27B · `moves` · `ordered` | 0% | 86% | 1,00 / 0,85 | 66% (1.407 neurons) |
+
+- **O que mais ajudou:** (1) dar palavras em vez de números (96% → 42%); (2) opções que nomeiam os campos e as palavras (→ 8%); (3) alinhar o estado às opções (uma entrada por jogada, com o nome dela); (4) **tirar do estado a palavra `water` do campo `row`**: ao lado de `lands_on: log` ela puxava o modelo para "não" em 11 de 12 estados com plataforma embaixo; sem ela a água mortal ficou sem nenhuma escolha fatal.
+- **O que não ajudou:** escrever "só se as anteriores forem falsas" (o modelo escolhe a última opção verdadeira: `hop_left` quando tudo está livre, `hop_back` no lugar de `stay`), tornar as opções mutuamente exclusivas por texto (`exclusive`, pior na água aberta) e regra de limiar sobre as probabilidades (calculada de graça sobre as respostas gravadas: não passou do argmax).
+- O **27B** quase não melhora sobre o Flash nessa vista (+3 pontos [−8, 14] de boas jogadas no total) e custa 6,3×; as partidas seguintes são do Flash.
+- A concordância com o leitor ideal ficou em 40 a 66%: o modelo **não obedece às regras como um programa**. O que ele faz bem é separar estados abertos de mortais pela probabilidade (AUC ≈ 1).
+
+**3. Partidas** (Clef-flash, mesmos mapas do benchmark; ledger do dia lido ao final):
+
+| Condição | Seeds | Ruas [IC 95%] | Mortes (água / carro / borda) · estagnou | Neurons |
+|---|---|---|---|---|
+| `lanes` · `rules`, uma decisão por salto | 5 | 3,80 [2,00, 6,60] | 100% água | 185 |
+| `lanes` · `maneuver` · `rules` (executor) | 5 | 3,40 [1,40, 5,40] | 0% / 0% / 40% · 60% | 319 |
+| `moves` · `ordered` (sem o nome da linha), um salto por decisão | 10 | 4,00 [2,60, 5,70] | 50% / 40% / 10% · 0% | 575 |
+| `moves` · `graph`, um salto por decisão | 10 | 6,10 [3,70, 8,60] | 20% / 50% / 0% · 30% | 1.033 |
+| **`moves` · `graph-maneuver` · `ordered`** (o Clef novo do app) | **40** | **10,05 [7,20, 13,32]** | **0% / 25% (+3% trem) / 15% · 58%** | 4.758 |
+
+Sobre as mesmas 40 seeds, o Clef novo faz **+6,75 ruas [3,92, 9,93] sobre `always-forward`** e **+4,80 [2,45, 7,47] sobre o executor sozinho**; não afoga nunca. É a primeira condição do projeto com o intervalo todo acima de zero. As partidas são muito desiguais (mediana 7; uma chegou a 45 ruas, 58% terminam estagnadas). Os leitores roteirizados da mesma vista fazem 17 a 20: o modelo chega a pouco mais da metade do teto das suas próprias regras.
+
+- Os 40 mapas (seeds 1 a 40) ficam no cache para esta condição, então **o app os repete de graça**.
+- O que ainda mata: carro (o modelo escolhe sair de lado ou esperar em plena estrada, ou `back_off` com a casa de trás na água) e o laço "escolher de novo a manobra recusada" (`sidestep_right` com árvore à direita 40 vezes seguidas: o modelo ouve em `memory.last_maneuver` que foi recusada e repete).
+- Duas correções feitas no meio, vistas nos próprios registros: o que há embaixo da galinha parada passou a olhar 0,4 s à frente (um carro que chega logo depois ainda a acerta antes de ela se mexer), e a regra de manobra passou a mandar sair de onde ela não aguenta antes de "esperar uma brecha". As 10 primeiras partidas (6,40 ruas) foram feitas antes dessas correções e refeitas depois (8,60 nas mesmas 10; a amostra de 40 usa o texto final).
+
+**Limites.** 40 seeds, não 100: o portão da Fase 2 (limite inferior do IC pareado > 0 com ≥ 100 seeds) segue **pendente**; o limite inferior já é positivo com 40 e 25 seeds, mas o portão exige 100, e faltam ~7.000 neurons, mais do que restava no dia. As condições anteriores a `moves` sem o nome da linha foram medidas com redações intermediárias (descritas acima, não reproduzíveis pelo código atual). Gasto de 2026-10-15 (UTC): conta `df5a…` 5.964 (o app incluído) e conta `f173…` 8.171, nenhuma acima de 10.000.
+
+Nada disto muda o que vale para o Clef do app antes: o `json-fx` segue igual a `always-forward`. O jogador novo é uma **condição rotulada** ("palavras, regras no texto e controlador"), não uma prova de que o modelo joga: as regras e o instante do salto são nossos.
 
 ## Atraso: a pergunta do modo tempo real
 

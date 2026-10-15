@@ -17,14 +17,15 @@ Language: code, identifiers, commits and this file in English. `docs/` is in Bra
 
 ## Status
 
-Phases 0-4 are built (428 TS tests + 26 Rust tests). **The gate was NOT passed, in 12 conditions**: Clef-flash (JSON, grid,
+Phases 0-4 are built (499 TS tests + 26 Rust tests). **The gate was NOT passed, in the first 12 conditions**: Clef-flash (JSON, grid,
 critic-go, minimal manual, relative columns, and the player's view with the whole screen, motion and memory) plays like "always forward" (~3.7 rows),
 image input is significantly worse, and Clef 27B chose "forward" every time (`docs/07-experimentos.md`). Diagnosis: 72-96% of hops into water are
 fatal and the model puts its top probability on "forward" even when the platform is written right in front of it. Scripted readers of the same views make
 13-19 rows, so the information is in the view and the model does not use it. Clef 27B is the only one that moves in the probes (71% fatal choices into
 deadly water against 96%) and it costs ~30 neurons per decision. `clef-omni` with a picture did not change anything. Writing the options as "when each move applies" (`manual: routing`, how the service's docs use `criteria`) flipped the
 model from "forward" to "mostly wait or left" without making it read the state (AUC 0.56-0.63; worse than always-forward over 7 games): the option text decides, not the column.
-The app offers **two** Clef players with the same player's view, choice and full manual: Clef-flash (`DEFAULT_CLEF`, id `clef-flash`) and Clef 27B (`clef-27b`, ~6x the cost, cached for seeds 1-8). Other views, strategies and styles are benchmark axes; the app opens any of them only as a `Custom` player from `CCR_PLAYER=clef:<model>:<encoder>:<strategy>[:<manual>]`.
+**A 13th condition does move the model (ADR-0010, `docs/07`, `docs/11`)**, after reading the 13 Jev-controlled games of other projects: the code compares and tells the model in words what fills each cell (`moves` view, no digits, no verdicts), the options are short rules about those words (`ordered`), two small questions replace five options (`graph`), and an executor times the hops (`graph-maneuver`; it never swaps the model's manoeuvre). Clef-flash makes **10.05 rows over 40 games** (+6.75 [3.92, 9.93] over always-forward, +4.80 [2.45, 7.47] over the executor alone; it never drowns) against 3.7 for every earlier condition; scripted readers of the same words make 17-20, so it reaches a little over half of its own rules. That is the whole stack (our words, our rules, our routing, our executor) and is labelled so in reports (`helpLabel`); **the 100-seed gate is still pending** (about 7,000 neurons). Measured by `bench probe-*` (which now also reports agreement with the ideal follower of the words) and `bench run`; the free scripted references are `rule-lanes`, `rule-moves`, `exec-cross` (the executor alone: 6.08) and `exec-rules`.
+The app offers **three** model players: Clef-flash and Clef 27B with the same player's view, choice and full manual: (`DEFAULT_CLEF`, id `clef-flash`; `clef-27b`, ~6x the cost, cached for seeds 1-8) with the player's view, choice and full manual, plus `clef-words` (Clef-flash with the 13th condition, cached for seeds 1-40). Other views, strategies and styles are benchmark axes; the app opens any of them only as a `Custom` player from `CCR_PLAYER=clef:<model>:<encoder>:<strategy>[:<manual>]`.
 The owner authorized commits on 2026-10-14 (history is on `main`, Conventional Commits, one logical change each, with the
 `Co-Authored-By` trailer). Pushing still needs their say-so. `.env` holds a working `CF_API_TOKEN` and `CF_ACCOUNT_ID`; `.env.second` (gitignored) holds a second account's.
 Installed: Node 24, pnpm 10, git, MSVC, WebView2, Rust 1.99 (rustup, user-level). Git checks out LF (`.gitattributes`), except
@@ -56,7 +57,7 @@ Installed: Node 24, pnpm 10, git, MSVC, WebView2, Rust 1.99 (rustup, user-level)
 - `packages/core`: pure deterministic game simulation, zero dependencies. Own `AGENTS.md`.
 - `packages/clef`: Workers AI client (schema, retry, cache, **spend budget**) with a `Transport` interface. Own `AGENTS.md`.
 - `packages/agent`: `Policy` types, baselines (random, always-forward, lookahead, latency-compensated lookahead), scripted readers
-  (`rule-view`, `rule-view-fx`: references, not models), `Memory`, `worldAfter` (the 0.2 s forecast), encoders (`json`, `json-rel`, `grid`, `image`,
+  (`rule-view`, `rule-view-fx`, `rule-lanes`, `rule-moves`, `exec-cross`, `exec-rules`: references, not models), the words views (`lanes.ts`) and the executor (`executor.ts`), `Memory`, `worldAfter` (the 0.2 s forecast), encoders (`json`, `json-rel`, `grid`, `image`,
   `view`, `view-fx`, `json-fx`, each with a perception level), `DEFAULT_CLEF`, versioned prompts, `ClefPolicy`, episode runner with latency injection.
 - `packages/render`: Three.js scene built from a read-only `Snapshot`, using Evan's models.
 - `apps/bench`: Node CLI (`run`, `report`, `plan`, `diagnose`, `export`, `probe-*`). `apps/desktop`: Tauri v2 app (Preact UI + Rust commands). Own `AGENTS.md`.
@@ -142,4 +143,4 @@ Typecheck, lint and tests pass; determinism test passes if `core` changed; docs 
 
 `docs/README.md` (index) · `00-viabilidade` · `02-arquitetura` · `04-game-core` · `05-integracao-clef` ·
 `06-observacao-e-prompts` · `07-experimentos` (results) · `08-ui-desktop` · `09-roadmap` (next steps) ·
-`10-seguranca-e-licencas` · `adr/` · `references.md`
+`10-seguranca-e-licencas` · `11-licoes-dos-jogos-do-jev` · `adr/` · `references.md`

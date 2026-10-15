@@ -5,15 +5,15 @@ Experimento: o modelo **Clef-flash** da Cloudflare (Workers AI) joga uma versão
 Um app desktop (Tauri) mostra a galinha cruzando as ruas com um painel da IA: a ação escolhida, a probabilidade de cada ação, a latência
 e quantas ruas ele atravessou. Um benchmark em CLI compara modelos nas mesmas seeds. Nada é publicado na Cloudflare: só se chama a API REST do Workers AI.
 
-## Onde estamos (2026-10-14)
+## Onde estamos (2026-10-15)
 
 - **Construído e testado:** núcleo determinístico, cliente do Clef com orçamento por conta, agentes, benchmark com IC de 95% e diagnóstico, app desktop a 180 fps.
-- **Resultado:** **nenhum modelo testado supera "sempre em frente"** (~3,8 ruas; o teto de referência exato faz ~45). Clef-flash em JSON, grade, colunas relativas à galinha, manual mínimo
+- **Resultado:** as **12 primeiras condições não superam "sempre em frente"** (~3,8 ruas; o teto de referência exato faz ~45); **a 13ª sim**: depois de estudar os 13 jogos controlados pelo Jev de outros projetos ([docs/11](docs/11-licoes-dos-jogos-do-jev.md), [ADR-0010](docs/adr/0010-palavras-regras-e-executor-de-manobras.md)), o código passou a comparar e a dar **palavras** em vez de números, as opções viram **regras curtas** sobre elas, duas perguntas pequenas substituem cinco opções e um **controlador** dá o salto na hora certa. O Clef-flash faz **10,05 ruas em 40 partidas** (+6,75 [3,92, 9,93] sobre "sempre em frente", nunca afoga). É o conjunto todo (palavras, regras, roteamento e controlador são nossos), rotulado nos relatórios; o portão de 100 seeds ainda está pendente. As 12 primeiras: Clef-flash em JSON, grade, colunas relativas à galinha, manual mínimo
   ou com **a vista de um jogador** (a tela inteira, onde as coisas estarão em 0,2 s e a memória das últimas jogadas) empata; com imagem é pior; o Clef 27B escolheu avançar em todas as partidas.
   A causa medida: 72% a 96% dos saltos para a água são fatais e o modelo põe a maior probabilidade em avançar mesmo com a plataforma escrita na frente dele. Jogadores roteirizados que leem
   as mesmas vistas fazem 13 a 19 ruas: a informação está lá, o modelo não a usa. Leia [docs/07-experimentos.md](docs/07-experimentos.md).
 - **Para ver o que o modelo recebe:** no app, a tecla **I** abre uma janela com o estado, a pergunta, as opções e a resposta de cada decisão; na linha de comando, `pnpm bench show-input --seed 4 --actions hop_forward`. A revisão mostrou que os dados estão certos e que o texto das opções é o que mais move a escolha do modelo ([docs/06](docs/06-observacao-e-prompts.md), [docs/07](docs/07-experimentos.md)).
-- **O app tem dois tamanhos de Clef** (Clef-flash e Clef 27B, com a mesma vista de jogador) e aceita qualquer outra combinação por `CCR_PLAYER`. Um jogador de IA que passa 40 decisões sem uma linha nova (por exemplo, batendo numa árvore) encerra a partida com o cartão "Preso" e para de gastar.
+- **O app tem três jogadores de modelo**: Clef-flash e Clef 27B (com a mesma vista de jogador) e o **Clef-flash + palavras e controlador** (`clef-words`), que faz **10,05 ruas em 40 partidas** contra 3,7 de todas as condições anteriores, nunca afoga e ainda espera o portão de 100 seeds; qualquer outra combinação abre por `CCR_PLAYER`. Um jogador de IA que passa 40 decisões sem uma linha nova (por exemplo, batendo numa árvore) encerra a partida com o cartão "Preso" e para de gastar.
 - **Regra do projeto:** ficar no free tier (10.000 neurons por dia UTC, por conta). O código recusa chamadas além disso ([ADR-0008](docs/adr/0008-orcamento-diario-no-free-tier.md)).
 
 ## Ver o jogo rodando

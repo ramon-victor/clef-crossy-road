@@ -1,6 +1,6 @@
 # 11 · Lições dos 13 jogos controlados pelo Jev
 
-> **Status:** estudo concluído, aplicado em [ADR-0010](adr/0010-palavras-regras-e-executor-de-manobras.md) · **Verificado em:** 2026-10-15 · **Método:** leitura dos READMEs e do código de cada repositório pela API do GitHub; nenhum código foi copiado nem executado, nenhuma chamada de modelo foi feita
+> **Status:** estudo concluído, aplicado em [ADR-0010](adr/0010-palavras-regras-e-executor-de-manobras.md); resultado medido em [07](07-experimentos.md) (10,05 ruas em 40 partidas) · **Verificado em:** 2026-10-15 · **Método:** leitura dos READMEs e do código de cada repositório pela API do GitHub; nenhum código foi copiado nem executado, nenhuma chamada de modelo foi feita
 
 O Jev é o modelo "System One" da TypeSafe AI (o Clef é o mesmo tipo de modelo, e a API é a mesma: `state` + perguntas `choice`, `noul` e `score`, com probabilidades). Os 13 repositórios que o dono indicou
 resolvem o mesmo problema que nós: fazer um modelo de decisão jogar. Eles são estudos de terceiros, de qualidade desigual, e poucos medem contra um jogador roteirizado (o Doom de `jev-plays-doom` e o Pong de `pong-jev` medem); o que vale aqui é o padrão que se repete.
@@ -39,9 +39,9 @@ resolvem o mesmo problema que nós: fazer um modelo de decisão jogar. Eles são
 |---|---|
 | Palavras em vez de números | Aplicado: encoder `lanes` |
 | Regra com fronteira nas opções | Aplicado: manual `rules` |
-| Manobra + executor | Aplicado: estratégia `maneuver`, com `exec-cross` como piso |
+| Manobra + executor | Aplicado: estratégias `maneuver` e `graph-maneuver`, com `exec-cross` (6,08 ruas) como piso |
 | Resposta velha / atraso | O executor lê o mundo ao vivo; o modo tempo real do app usa o mesmo caminho |
-| Várias perguntas pequenas | Fica para depois, só se a sonda de `rules` não bastar |
+| Várias perguntas pequenas | Aplicado: estratégia `graph` (duas perguntas exclusivas na mesma chamada). Foi o que fez a decisão virar um passo seguro: a pergunta única de cinco opções escolhia a última opção "verdadeira" |
 | Abstenção por confiança | Fica como métrica e como ablação nos registros já gravados (sem chamar a API) |
 | **Só jogadas legais, cada uma com a consequência** (Snake, Tetris, Pokémon) | **Não levamos**: é julgamento por jogada, que a [ADR-0009](adr/0009-percepcao-memoria-e-julgamento.md) proíbe. Seria um nível "assistido" próprio, só se o dono quiser |
 | Estrategista LLM raro (Minecraft) | Fora de escopo: o jogo é decisão a decisão e o experimento é sobre o Clef |
