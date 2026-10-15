@@ -21,6 +21,27 @@ describe("parseSeeds", () => {
   });
 });
 
+describe("parsePolicy: the scripted players of the words view", () => {
+  it("builds rule-lanes, exec-cross and exec-rules without a client", () => {
+    for (const id of ["rule-lanes", "exec-cross", "exec-rules"]) {
+      expect(parsePolicy(id, noClient).id).toBe(id);
+      expect(isClefPolicy(id)).toBe(false);
+    }
+  });
+
+  it("reads the model conditions of the words view and refuses the ones that mean nothing", () => {
+    const transport: Transport = { post: async () => ({ status: 200, json: {} }) };
+    const client = () => new ClefClient({ transport });
+    expect(parsePolicy("clef:clef-flash:lanes:choice:rules", client).id).toBe(
+      "clef:clef-flash:lanes:choice:rules",
+    );
+    expect(parsePolicy("clef:clef-flash:lanes:maneuver:rules", client).id).toBe(
+      "clef:clef-flash:lanes:maneuver:rules",
+    );
+    expect(() => parsePolicy("clef:clef-flash:json:maneuver:rules", client)).toThrow();
+  });
+});
+
 describe("parsePolicy", () => {
   it("builds baselines without ever asking for a client", () => {
     for (const id of [

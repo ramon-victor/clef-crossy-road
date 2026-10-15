@@ -23,6 +23,9 @@ export interface Estimate {
  * Critic episodes are shorter because the critic is more cautious near danger.
  */
 function observedDecisionsPerEpisode({ encoder, strategy }: ClefPolicyConfig): number {
+  // Not measured yet: a model that reads the words well lives much longer than one that always hops
+  // forward, so the plan assumes long games (model calls per game) rather than short ones.
+  if (encoder === "lanes") return strategy === "maneuver" ? 30 : 45;
   if (encoder === "image") return 5;
   if (strategy !== "choice") return 3.4;
   return encoder === "grid" ? 5 : 4.2;

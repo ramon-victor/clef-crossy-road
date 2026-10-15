@@ -1,4 +1,4 @@
-import { ENCODER_LEVEL, type EpisodeResult, parseClefPolicyId } from "@ccr/agent";
+import { type EpisodeResult, helpLabel, parseClefPolicyId } from "@ccr/agent";
 import { code, fixed, markdownTable, percent } from "./format.ts";
 import { bootstrapMean, bootstrapPairedDiff, mean, median, percentile } from "./stats.ts";
 
@@ -118,9 +118,12 @@ function groupByPolicy(episodes: readonly EpisodeResult[]): Map<string, EpisodeR
  */
 export function perceptionOf(policyLabel: string): string {
   const id = policyLabel.replace(/@.*$/, ""); // a latency condition adds a suffix such as @lat300
-  if (id === "clef" || id.startsWith("clef:")) return ENCODER_LEVEL[parseClefPolicyId(id).encoder];
+  if (id === "clef" || id.startsWith("clef:")) return helpLabel(parseClefPolicyId(id));
   if (id === "rule-view") return "now (scripted)";
   if (id === "rule-view-fx") return "forecast (scripted)";
+  if (id === "rule-lanes") return "words (scripted)";
+  if (id === "exec-cross") return "words + executor (scripted, always cross)";
+  if (id === "exec-rules") return "words + rules + executor (scripted)";
   if (id.startsWith("lookahead")) return "simulator";
   return "none";
 }

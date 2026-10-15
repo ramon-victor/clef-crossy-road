@@ -65,6 +65,19 @@ describe("summarize", () => {
   });
 });
 
+describe("perceptionOf: the help each condition gets", () => {
+  it("says words, rules and executor, and what the scripted players read", () => {
+    expect(perceptionOf("clef:clef-flash:lanes:choice:full")).toBe("words");
+    expect(perceptionOf("clef:clef-flash:lanes:choice:rules")).toBe("words + rules");
+    expect(perceptionOf("clef:clef-flash:lanes:maneuver:rules@latp350")).toBe(
+      "words + rules + executor",
+    );
+    expect(perceptionOf("rule-lanes")).toBe("words (scripted)");
+    expect(perceptionOf("exec-cross")).toContain("executor");
+    expect(perceptionOf("exec-rules")).toContain("rules + executor");
+  });
+});
+
 describe("perceptionOf", () => {
   it("says what each kind of policy gets to know, also under a latency suffix", () => {
     expect(perceptionOf("clef:clef-flash:json:choice:full")).toBe("now");

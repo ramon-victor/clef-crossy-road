@@ -3,6 +3,23 @@ import { estimatePolicy, formatSeeds, planRun, renderPlan } from "./plan.ts";
 
 const seeds = (n: number) => Array.from({ length: n }, (_, i) => i + 1);
 
+describe("estimatePolicy: the words view", () => {
+  it("is an estimate until a probe reads the real tokens, and assumes long games", () => {
+    const rules = estimatePolicy("clef:clef-flash:lanes:choice:rules");
+    expect(rules).toMatchObject({ measured: false, tokensPerDecision: 1260 });
+    expect(rules.decisionsPerEpisode).toBeGreaterThanOrEqual(30);
+    const maneuver = estimatePolicy("clef:clef-flash:lanes:maneuver:rules");
+    expect(maneuver.tokensPerDecision).toBe(rules.tokensPerDecision);
+    expect(maneuver.decisionsPerEpisode).toBeLessThan(rules.decisionsPerEpisode);
+  });
+
+  it("the scripted references cost nothing", () => {
+    for (const id of ["rule-lanes", "exec-cross", "exec-rules"]) {
+      expect(estimatePolicy(id).usesApi).toBe(false);
+    }
+  });
+});
+
 describe("estimatePolicy", () => {
   it("baselines cost nothing", () => {
     const e = estimatePolicy("always-forward");
