@@ -7,6 +7,7 @@ export const USAGE = `Usage:
   pnpm bench plan   --policies <ids> --seeds <1..100> [--assume-decisions n]   (estimates neurons, no API call)
   pnpm bench diagnose --run <name>[,<name>...]            (does P(hop_forward) predict safety? reads files, no API call)
   pnpm bench export   --run <name>[,<name>...] [--policy <id>] [--min-score n]   (RL trajectories as NDJSON, no API call)
+  pnpm bench show-input   --seed <n> [--actions hop_forward,hop_left] [--policy <id>]   (the exact request a model would get for a state; sends nothing)
   pnpm bench probe-sample [--seeds 1..300] [--out file]    (pick ~90 labelled decision points from free games, no API call)
   pnpm bench probe-run    --run <name> --policies <ids> [--states file] [run options]   (one call per policy and state)
   pnpm bench probe-report --run <name>[,<name>...] [--ref <control id>]   (score the answers against the labels, no API call)
@@ -50,6 +51,8 @@ const stringOptions = [
   "daily-neurons",
   "root",
   "states",
+  "seed",
+  "actions",
   "ref",
   "out",
   "note",

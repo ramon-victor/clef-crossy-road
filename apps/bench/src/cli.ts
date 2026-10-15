@@ -8,6 +8,7 @@ import {
   probeSampleCommand,
   reportCommand,
   runCommand,
+  showInputCommand,
 } from "./commands.ts";
 import { type CliValues, parseCli, USAGE } from "./options.ts";
 
@@ -22,6 +23,7 @@ const COMMANDS: Readonly<
   "probe-sample": probeSampleCommand,
   "probe-run": probeRunCommand,
   "probe-report": probeReportCommand,
+  "show-input": showInputCommand,
 };
 
 async function main(): Promise<void> {

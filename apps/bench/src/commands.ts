@@ -1,5 +1,10 @@
 import { join, resolve } from "node:path";
-import { DEFAULT_MAX_DECISIONS, DEFAULT_STALL_LIMIT, PROMPT_VERSION } from "@ccr/agent";
+import {
+  DEFAULT_CLEF_ID,
+  DEFAULT_MAX_DECISIONS,
+  DEFAULT_STALL_LIMIT,
+  PROMPT_VERSION,
+} from "@ccr/agent";
 import { ClefClient, FREE_NEURONS_PER_DAY } from "@ccr/clef";
 import {
   CACHE_FILE,
@@ -26,6 +31,7 @@ import { PROBE_STATES_FILE, readProbeResults, runProbe } from "./probe-run.ts";
 import { isClefPolicy, parsePolicy, parseSeeds } from "./registry.ts";
 import { renderReport } from "./report.ts";
 import { type RunMeta, runEpisodes } from "./run.ts";
+import { parseActions, renderShownInput, showInput } from "./show-input.ts";
 import { loadEpisodes, openBudget, runDir, writeOutput } from "./workspace.ts";
 
 /** Exit codes of `run`, so a script can tell why it stopped. */
@@ -275,4 +281,18 @@ export function probeReportCommand(root: string, v: CliValues): void {
     v.ref ?? "clef:clef-flash:json:choice:full",
   );
   publish(root, v.out ?? join("reports", `probe-${names.join("+")}.md`), text);
+}
+
+/** Prints the exact request a policy would send for a state. Nothing is sent, so no key is needed. */
+export function showInputCommand(_root: string, v: CliValues): void {
+  const offline = new ClefClient({
+    transport: {
+      post: async () => {
+        throw new Error("show-input never sends anything");
+      },
+    },
+  });
+  const factory = parsePolicy(v.policy ?? DEFAULT_CLEF_ID, () => offline);
+  const shown = showInput(factory, intOption("seed", v.seed, 1), parseActions(v.actions));
+  console.log(renderShownInput(shown));
 }
