@@ -89,6 +89,8 @@ as verificações anteriores no WebView2 estão registradas abaixo.
 ## Verificação da configuração pela UI (2026-10-15)
 
 - Backend Rust: persistência e releitura, prioridade do arquivo, preservação de outros campos e CRLF,
+  valores multilinha preservados como blocos, substituição das credenciais na posição original para
+  manter a ordem de interpolação, recusa de arquivo com aspas não fechadas sem alterá-lo,
   validação, retorno somente de status e manutenção do par anterior em falhas de escrita.
 - Ponte Vite: persistência, bloqueio de outra origem, mensagens sem valores sensíveis, troca de conta
   sem zerar o ledger e resposta em andamento debitada à conta original; transporte simulado, sem API real.

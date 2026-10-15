@@ -8,6 +8,53 @@ export class CredentialValidationError extends Error {}
 
 type CredentialSnapshot = { accountId: string | undefined; apiToken: string | undefined };
 
+/** Keep complete dotenv assignments together, including quoted multiline values. */
+function updateEnv(original: string, accountId: string, apiToken: string): string {
+  const newline = original.includes("\r\n") ? "\r\n" : "\n";
+  const replacements = new Map([
+    ["CF_ACCOUNT_ID", accountId],
+    ["CF_API_TOKEN", apiToken],
+  ]);
+  const written = new Set<string>();
+  const lines = original.split(/\r?\n/);
+  const output: string[] = [];
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i] ?? "";
+    const assignment = /^\uFEFF?\s*(?:export\s+)?([\w]+)\s*=(.*)$/.exec(line);
+    const key = assignment?.[1] ?? "";
+    const value = (assignment?.[2] ?? "").trimStart();
+    const block = [line];
+    const quote = value[0];
+    if (quote && "\"'`".includes(quote)) {
+      let tail = value.slice(1);
+      while (true) {
+        let closed = false;
+        for (let j = 0; j < tail.length; j++) {
+          if (tail[j] === quote) {
+            closed = true;
+            break;
+          }
+        }
+        if (closed) break;
+        if (++i >= lines.length) throw new Error("Unclosed dotenv value");
+        tail = lines[i] ?? "";
+        block.push(tail);
+      }
+    }
+    const replacement = replacements.get(key);
+    if (replacement === undefined) output.push(...block);
+    else if (!written.has(key)) {
+      output.push(`${key}=${replacement}`);
+      written.add(key);
+    }
+  }
+  while (output.at(-1) === "") output.pop();
+  for (const [key, value] of replacements) {
+    if (!written.has(key)) output.push(`${key}=${value}`);
+  }
+  return output.join(newline) + newline;
+}
+
 /** Backend only. Saved values are never returned by the status endpoint. */
 export class CredentialsStore {
   private readonly path: string;
@@ -48,15 +95,10 @@ export class CredentialsStore {
       throw new CredentialValidationError("Enter the API token itself, without Bearer or spaces.");
     }
     const original = existsSync(this.path) ? readFileSync(this.path, "utf8") : "";
-    const newline = original.includes("\r\n") ? "\r\n" : "\n";
-    const lines = original
-      .split(/\r?\n/)
-      .filter((line) => !/^\uFEFF?\s*(?:export\s+)?CF_(?:ACCOUNT_ID|API_TOKEN)\s*=/.test(line));
-    while (lines.at(-1) === "") lines.pop();
-    lines.push(`CF_ACCOUNT_ID=${accountId}`, `CF_API_TOKEN=${apiToken}`);
+    const contents = updateEnv(original, accountId, apiToken);
     const temporary = `${this.path}.ccr-${randomUUID()}.tmp`;
     try {
-      writeFileSync(temporary, lines.join(newline) + newline, { flag: "wx", mode: 0o600 });
+      writeFileSync(temporary, contents, { flag: "wx", mode: 0o600 });
       renameSync(temporary, this.path);
     } finally {
       if (existsSync(temporary)) unlinkSync(temporary);

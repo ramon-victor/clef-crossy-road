@@ -104,16 +104,77 @@ fn validated(input: CredentialInput) -> CommandResult<Credentials> {
     })
 }
 
-fn managed(line: &str) -> bool {
+fn assignment(line: &str) -> Option<(&str, &str)> {
     let line = line
         .trim_start()
         .trim_start_matches('\u{feff}')
         .trim_start();
-    let line = line.strip_prefix("export ").unwrap_or(line).trim_start();
-    matches!(
-        line.split_once('=').map(|(key, _)| key.trim()),
-        Some("CF_ACCOUNT_ID" | "CF_API_TOKEN")
-    )
+    let line = line
+        .strip_prefix("export")
+        .filter(|tail| tail.starts_with(char::is_whitespace))
+        .unwrap_or(line)
+        .trim_start();
+    let (key, value) = line.split_once('=')?;
+    let key = key.trim();
+    if key.is_empty() || !key.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_') {
+        return None;
+    }
+    Some((key, value.trim_start()))
+}
+
+/// Replace complete assignments in place, preserving unrelated multiline values and interpolation order.
+fn update_env(original: &str, credentials: &Credentials) -> io::Result<String> {
+    let newline = if original.contains("\r\n") {
+        "\r\n"
+    } else {
+        "\n"
+    };
+    let replacements = [
+        (
+            "CF_ACCOUNT_ID",
+            credentials.account_id.as_deref().unwrap_or_default(),
+        ),
+        (
+            "CF_API_TOKEN",
+            credentials.api_token.as_deref().unwrap_or_default(),
+        ),
+    ];
+    let mut written = [false; 2];
+    let mut output = Vec::new();
+    let mut lines = original.lines();
+    while let Some(line) = lines.next() {
+        let (key, _) = assignment(line).unwrap_or(("", ""));
+        let mut block = vec![line];
+        if !key.is_empty() {
+            // Use the same parser as loading, including escaped quotes and concatenated values.
+            let mut record = line.to_owned();
+            while dotenvy::from_read_iter(record.as_bytes()).any(|entry| entry.is_err()) {
+                let tail = lines.next().ok_or_else(|| {
+                    io::Error::new(io::ErrorKind::InvalidData, "Unclosed dotenv value")
+                })?;
+                record.push('\n');
+                record.push_str(tail);
+                block.push(tail);
+            }
+        }
+        if let Some(index) = replacements.iter().position(|(name, _)| *name == key) {
+            if !written[index] {
+                output.push(format!("{key}={}", replacements[index].1));
+                written[index] = true;
+            }
+        } else {
+            output.extend(block.into_iter().map(str::to_owned));
+        }
+    }
+    while output.last().is_some_and(String::is_empty) {
+        output.pop();
+    }
+    for (index, (key, value)) in replacements.into_iter().enumerate() {
+        if !written[index] {
+            output.push(format!("{key}={value}"));
+        }
+    }
+    Ok(output.join(newline) + newline)
 }
 
 fn persist(root: &Path, credentials: &Credentials) -> io::Result<()> {
@@ -123,24 +184,7 @@ fn persist(root: &Path, credentials: &Credentials) -> io::Result<()> {
         Err(error) if error.kind() == io::ErrorKind::NotFound => String::new(),
         Err(error) => return Err(error),
     };
-    let newline = if original.contains("\r\n") {
-        "\r\n"
-    } else {
-        "\n"
-    };
-    let mut lines: Vec<&str> = original.lines().filter(|line| !managed(line)).collect();
-    while lines.last() == Some(&"") {
-        lines.pop();
-    }
-    let mut contents = lines.join(newline);
-    if !contents.is_empty() {
-        contents.push_str(newline);
-    }
-    contents.push_str(&format!(
-        "CF_ACCOUNT_ID={}{newline}CF_API_TOKEN={}{newline}",
-        credentials.account_id.as_deref().unwrap_or_default(),
-        credentials.api_token.as_deref().unwrap_or_default()
-    ));
+    let contents = update_env(&original, credentials)?;
     let nonce = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap_or_default()
@@ -231,6 +275,36 @@ mod tests {
             assert!(!message.contains(TOKEN));
             assert!(!root.0.join(".env").exists());
         }
+    }
+
+    #[test]
+    fn preserves_multiline_settings_and_replaces_credentials_before_interpolation() {
+        let root = TempRoot::new("credential-multiline");
+        fs::create_dir_all(&root.0).unwrap();
+        let notes = "NOTES=\"keep\nCF_API_TOKEN=example\nlast line\"\nFOLDER='C:\\path\\\\'\n";
+        fs::write(root.0.join(".env"), format!("{notes}CF_ACCOUNT_ID=old\nCOPY=${{CF_ACCOUNT_ID}}\nCF_API_TOKEN=\"old\ncontinued\"\nOTHER=keep\n")).unwrap();
+        load_with(&root.0, None, None)
+            .save(&root.0, input(ACCOUNT, TOKEN))
+            .unwrap();
+        assert_eq!(fs::read_to_string(root.0.join(".env")).unwrap(), format!("{notes}CF_ACCOUNT_ID={ACCOUNT}\nCOPY=${{CF_ACCOUNT_ID}}\nCF_API_TOKEN={TOKEN}\nOTHER=keep\n"));
+        let saved: HashMap<String, String> = dotenvy::from_path_iter(root.0.join(".env"))
+            .unwrap()
+            .map(Result::unwrap)
+            .collect();
+        assert_eq!(saved.get("COPY").unwrap(), ACCOUNT);
+        assert_eq!(saved.get("CF_API_TOKEN").unwrap(), TOKEN);
+    }
+
+    #[test]
+    fn refuses_unterminated_multiline_files_without_changing_them() {
+        let root = TempRoot::new("credential-unclosed");
+        fs::create_dir_all(&root.0).unwrap();
+        let original = "NOTES=\"unfinished\nOTHER=keep\n";
+        fs::write(root.0.join(".env"), original).unwrap();
+        assert!(load_with(&root.0, None, None)
+            .save(&root.0, input(ACCOUNT, TOKEN))
+            .is_err());
+        assert_eq!(fs::read_to_string(root.0.join(".env")).unwrap(), original);
     }
 
     #[test]

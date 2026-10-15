@@ -106,6 +106,32 @@ describe("local credential storage", () => {
     }
   });
 
+  it("preserves quoted multiline settings and replaces complete credential assignments in place", () => {
+    const root = temporary();
+    const notes = "NOTES=\"keep\nCF_API_TOKEN=example\nlast line\"\nFOLDER='C:\\path\\'\n";
+    writeFileSync(
+      join(root, ".env"),
+      `${notes}CF_ACCOUNT_ID=old\nCOPY=\${CF_ACCOUNT_ID}\nCF_API_TOKEN="old\ncontinued"\nOTHER=keep\n`,
+    );
+    new CredentialsStore(root, {}).save({ accountId: ACCOUNT_A, apiToken: TOKEN_A });
+    expect(readFileSync(join(root, ".env"), "utf8")).toBe(
+      `${notes}CF_ACCOUNT_ID=${ACCOUNT_A}\nCOPY=\${CF_ACCOUNT_ID}\nCF_API_TOKEN=${TOKEN_A}\nOTHER=keep\n`,
+    );
+    expect(new CredentialsStore(root, {}).current()).toEqual({
+      accountId: ACCOUNT_A,
+      apiToken: TOKEN_A,
+    });
+  });
+
+  it("leaves an unterminated multiline file untouched instead of appending inside its value", () => {
+    const root = temporary();
+    const original = 'NOTES="unfinished\nOTHER=keep\n';
+    writeFileSync(join(root, ".env"), original);
+    const store = new CredentialsStore(root, {});
+    expect(() => store.save({ accountId: ACCOUNT_A, apiToken: TOKEN_A })).toThrow();
+    expect(readFileSync(join(root, ".env"), "utf8")).toBe(original);
+  });
+
   it("only activates a new pair after persistence succeeds and keeps old snapshots independent", () => {
     const root = temporary();
     const store = new CredentialsStore(root, { CF_ACCOUNT_ID: ACCOUNT_A, CF_API_TOKEN: TOKEN_A });
