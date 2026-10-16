@@ -65,10 +65,27 @@ const AROUND_EXAMPLES = [
   "left two_away but recently_failed yes, right none -> wait_here.",
 ].join(" ");
 
+/**
+ * The fourth question, asked only while the chicken stands on a platform (ADR-0011, addendum). The rule of the
+ * game it needs is written here and not in `LOOKUP_GAME`, so that every request made off a platform stays as it was.
+ */
+const RIDE_NOTE =
+  "A log or a lily pad carries the chicken along while it stands on it, and the chicken is gone once it is carried past the edge of the world. The state has an entry chicken: edge_in says how soon the platform under the chicken carries it past that edge (a_moment, soon, later, or not_carried when the platform stands still or carries it away from the edge).";
+
+const RIDE_EXAMPLES = [
+  "Examples:",
+  "chicken.edge_in a_moment -> leaving.",
+  "chicken.edge_in soon -> staying.",
+  "chicken.edge_in later -> staying.",
+  "chicken.edge_in not_carried -> staying.",
+].join(" ");
+
 export const ROUTE_QUESTION_IDS = ["cell", "moving", "around"] as const;
+export const RIDE_QUESTION_ID = "ride";
 export const CELL_OPTIONS = ["stand", "no_stand"] as const;
 export const MOVING_OPTIONS = ["moving", "still"] as const;
 export const AROUND_OPTIONS = ["detour_left", "detour_right", "wait_here"] as const;
+export const RIDE_OPTIONS = ["leaving", "staying"] as const;
 
 export const CELL_CRITERIA: Readonly<Record<(typeof CELL_OPTIONS)[number], string>> = {
   stand: `cross_ahead.lands_on is ${STANDABLE_WORDS}.`,
@@ -89,12 +106,27 @@ export const AROUND_CRITERIA: Readonly<Record<(typeof AROUND_OPTIONS)[number], s
     "Neither side has an opening: both opening_ahead are none, or the side that has one has recently_failed yes.",
 };
 
+export const RIDE_CRITERIA: Readonly<Record<(typeof RIDE_OPTIONS)[number], string>> = {
+  leaving: "chicken.edge_in is a_moment.",
+  staying: "chicken.edge_in is soon, later or not_carried.",
+};
+
 /**
- * The three questions of the `route` strategy. `cell` and `moving` read the row straight ahead; `around`
- * only matters when the way straight ahead is closed (the cell cannot be stood on and nothing moves).
+ * The three questions of the `route` strategy, and a fourth while the chicken stands on a platform. `cell` and
+ * `moving` read the row straight ahead; `around` only matters when the way straight ahead is closed (the cell
+ * cannot be stood on and nothing moves); `ride` reads the clock of the platform under the chicken.
  */
-export function routeQuestions(): Record<string, Question> {
+export function routeQuestions(riding = false): Record<string, Question> {
   const ahead = `${LOOKUP_GAME} ${AHEAD_NOTE}`;
+  const ride: Record<string, Question> = riding
+    ? {
+        [RIDE_QUESTION_ID]: {
+          type: "choice",
+          instructions: `${LOOKUP_GAME} ${RIDE_NOTE} Is the platform under the chicken about to carry it past the edge of the world? Read only chicken.edge_in. ${RIDE_EXAMPLES}`,
+          criteria: { ...RIDE_CRITERIA },
+        },
+      }
+    : {};
   return {
     cell: {
       type: "choice",
@@ -111,5 +143,6 @@ export function routeQuestions(): Record<string, Question> {
       instructions: `${LOOKUP_GAME} ${SCENE_NOTE} Suppose the way straight ahead is closed. Which manoeuvre does the chicken start? Compare the two sides, nearer is better: adjacent, then two_away, then three_or_more. ${AROUND_EXAMPLES}`,
       criteria: { ...AROUND_CRITERIA },
     },
+    ...ride,
   };
 }

@@ -1,7 +1,16 @@
-import { type Action, MAX_ABS_X, type Observation, type ObsRow } from "@ccr/core";
-import { columnAfter, HOP_SECONDS } from "./forecast.ts";
-import { canStand, cellWindow, isPermanent, lanesState } from "./lanes.ts";
+import { type Action, MAX_ABS_X, type Observation } from "@ccr/core";
+import { HOP_SECONDS } from "./forecast.ts";
+import { canStand, cellWindow, hopWindow, isPermanent, lanesState } from "./lanes.ts";
 import { emptyMemory, type Memory } from "./memory.ts";
+import {
+  driftingOff,
+  EDGE_MARGIN,
+  EDGE_SOON,
+  platformSpeed,
+  ridingSpeed,
+  secondsToEdge,
+  secondsToLimit,
+} from "./platform.ts";
 import type { Decision, ObservationPolicy, PolicyFactory } from "./policy.ts";
 import { type SceneState, type SideName, sceneState } from "./scene.ts";
 
@@ -12,11 +21,23 @@ import { type SceneState, type SideName, sceneState } from "./scene.ts";
  * every hop, the way the Doom, Tetris and Minecraft projects leave the path to code. It never swaps the
  * side the model chose, and gives the decision back, with the reason, when it cannot go on.
  */
-export const ROUTE_IDS = ["cross_ahead", "detour_left", "detour_right", "wait_here"] as const;
+export const ROUTE_IDS = [
+  "cross_ahead",
+  "detour_left",
+  "detour_right",
+  "wait_here",
+  "leave_platform",
+] as const;
 export type RouteManeuver = (typeof ROUTE_IDS)[number];
 
-/** Each manoeuvre is reported on the move it is made of, so the panel keeps its five bars. */
-export const ROUTE_ACTION: Readonly<Record<RouteManeuver, Action>> = {
+/** The manoeuvre the model gets for a platform that is carrying the chicken to the edge of the world. */
+export const LEAVE: RouteManeuver = "leave_platform";
+
+/**
+ * Each manoeuvre is reported on the move it is made of, so the panel keeps its five bars. `leave_platform` has none
+ * of its own: it is made of whichever hop gets the chicken off, which the controller finds when it starts.
+ */
+export const ROUTE_ACTION: Readonly<Record<Exclude<RouteManeuver, "leave_platform">, Action>> = {
   cross_ahead: "hop_forward",
   detour_left: "hop_left",
   detour_right: "hop_right",
@@ -29,6 +50,8 @@ export const MAX_DETOUR_STEPS = 12;
 export const ROUTE_DEPTH = 8;
 /** Steps a crossing waits for the cell ahead to clear: three seconds of game time. */
 export const MAX_CROSS_WAIT = 15;
+/** Hops a way off a platform may take before it gives the decision back. */
+export const MAX_LEAVE_STEPS = 8;
 
 const T = HOP_SECONDS;
 
@@ -77,6 +100,8 @@ interface WalkNode {
   c: number;
   /** Speed of the platform under the chicken (columns per second). */
   v: number;
+  /** The hop it is reached on, counting from 1: it lands `d` hops (0.2 s each) from now. */
+  d: number;
 }
 
 /** The shortest way to any cell the goal accepts, one hop of 0.2 s per level. */
@@ -97,13 +122,18 @@ function walk(obs: Observation, depth: number, isGoal: (node: WalkNode) => boole
           move === "stay" ? node.c + node.v * T : ddz === 0 ? node.c + dc : Math.round(node.c);
         if (Math.abs(c) > MAX_ABS_X - EDGE_MARGIN || dz < -3 || dz > 8) continue;
         const row = rowOf(obs, dz);
-        if (!canStand(cellWindow(row, c, d * T, (d + 0.5) * T, move === "stay"))) continue;
+        // A hop forward or back leaves a platform from a fractional column, so it is checked on the way to the whole one.
+        const cell =
+          ddz === 0
+            ? cellWindow(row, c, d * T, (d + 0.5) * T, move === "stay")
+            : hopWindow(row, node.c, d * T, (d + 0.5) * T);
+        if (!canStand(cell)) continue;
         const key = `${dz},${Math.round(c * 2)},${d}`;
         if (seen.has(key)) continue;
         seen.add(key);
         const path = [...node.path, move];
         const landed = { dz, c, v: platformSpeed(row, c, d * T) };
-        if (isGoal(landed)) return { first: path[0] as Action, path };
+        if (isGoal({ ...landed, d })) return { first: path[0] as Action, path };
         next.push({ ...landed, path });
       }
     }
@@ -117,48 +147,46 @@ export function searchEscape(obs: Observation): Route | null {
   return walk(obs, 4, (node) => Math.abs(node.c + node.v) <= MAX_ABS_X - EDGE_MARGIN);
 }
 
-/** How close to the edge of the world a route may bring the chicken: the game ends past 5 columns. */
-const EDGE_MARGIN = 0.3;
-
-/** The speed of the platform that would carry a chicken standing on `col` of `row` at `seconds` from now (0 if none). */
-function platformSpeed(row: ObsRow | undefined, col: number, seconds: number): number {
-  if (row?.kind !== "water") return 0;
-  const platform = [...row.platforms]
-    .reverse()
-    .find((p) => Math.abs(col - columnAfter(p, seconds)) < p.half_extent);
-  return platform?.speed_cols_per_s ?? 0;
-}
-
-/** The speed of the platform the chicken is riding now (0 when it is not on one). */
-function ridingSpeed(obs: Observation): number {
-  return obs.player.riding ? platformSpeed(rowOf(obs, 0), obs.player.col, 0) : 0;
-}
-
 /**
- * Which way a platform will carry the chicken past the edge of the world within a second if it stays on it,
- * or "no". A player sees the log drifting towards the end of the screen; waiting for a gap on it is how the
- * chicken is lost.
+ * The shortest way off a platform that carries the chicken to the edge: to a cell it can stay on for another
+ * half second where nothing carries it to the edge within `EDGE_SOON` seconds (the next row, a platform that
+ * stands still or goes the other way). A way on, to a row ahead of the one it stands on, is looked for first,
+ * and only then a way back: leaving by the way it came made it board the same log again and leave it again,
+ * over and over (measured on the free reference, 2026-10-15: 48.7 rows fell to 42.1).
  */
-export function driftingOff(obs: Observation): "left" | "right" | "no" {
-  const future = obs.player.col + ridingSpeed(obs) * 1;
-  if (future > MAX_ABS_X - EDGE_MARGIN) return "right";
-  if (future < -(MAX_ABS_X - EDGE_MARGIN)) return "left";
-  return "no";
+export function searchExit(obs: Observation): Route | null {
+  const settled = (node: WalkNode): boolean =>
+    secondsToLimit(node.c, node.v, MAX_ABS_X - EDGE_MARGIN) >= EDGE_SOON &&
+    canStand(cellWindow(rowOf(obs, node.dz), node.c, node.d * T, (node.d + 1) * T, true));
+  // On, to a row ahead of the one the chicken stands on, if there is a way; only then back to where it came from.
+  return (
+    walk(obs, ROUTE_DEPTH, (node) => node.dz >= 1 && settled(node)) ??
+    walk(obs, ROUTE_DEPTH, settled)
+  );
 }
 
 /**
  * What a step of the controller is, for whoever shows it: the sentence in `note` is for reading, this is for
  * telling the steps apart without parsing it.
  *  - `hop`:  the crossing the model chose, made now.
- *  - `wait`: standing until the cell ahead clears (`n` of at most `of` steps; `cell` is what is there).
+ *  - `wait`: standing until the cell ahead clears (`n` of at most `of` steps; `cell` is what is there). `why` is
+ *    `gap` when the cell itself is not clear, `no_rest` when it is clear but a vehicle or train would reach it
+ *    before the chicken could go on.
  *  - `walk`: one hop of a detour (`n` hops so far, `left` still to go).
+ *  - `leave`: one hop of the way off a platform that carries the chicken to the edge (`n`, `left` as in `walk`).
  *  - `hold`: the manoeuvre was refused, so the chicken waits where it is safe or steps off a cell it cannot stay on.
+ *    `why` says what stopped it: `refused` (the manoeuvre cannot begin, the chicken stays where it is safe),
+ *    `unsafe_here` (it steps off a cell a vehicle or train is about to reach), `edge` (a platform is carrying it
+ *    to the edge of the world, so it steps off) or `no_way` (there is nowhere safe to step).
  */
+export type HoldWhy = "refused" | "unsafe_here" | "edge" | "no_way";
+
 export type RouteStep =
   | { kind: "hop" }
-  | { kind: "wait"; n: number; of: number; cell: string }
+  | { kind: "wait"; n: number; of: number; cell: string; why: "gap" | "no_rest" }
   | { kind: "walk"; n: number; left: number }
-  | { kind: "hold" };
+  | { kind: "leave"; n: number; left: number }
+  | { kind: "hold"; why: HoldWhy };
 
 /** One step the controller takes: the move to make now, in a sentence what it is doing, and what kind of step it is. */
 export interface RouteAct {
@@ -180,6 +208,11 @@ interface CrossPlan {
   waited: number;
 }
 
+interface LeavePlan {
+  kind: "leave";
+  steps: number;
+}
+
 /**
  * A hop that gets the chicken off a cell it cannot stay on, the safest one: forward, then to the side away
  * from the nearer edge, then the other side, then back. Only used when a manoeuvre is refused, so that a
@@ -188,17 +221,26 @@ interface CrossPlan {
 function safeHold(obs: Observation, memory: Memory): RouteAct {
   const off = driftingOff(obs);
   if (off === "no" && canStand(lanesState(obs, memory).chicken.stays_on)) {
-    return { action: "stay", note: "waiting where it is safe", step: { kind: "hold" } };
+    return {
+      action: "stay",
+      note: "waiting where it is safe",
+      step: { kind: "hold", why: "refused" },
+    };
   }
-  const away = searchEscape(obs);
+  const why = off === "no" ? "unsafe_here" : "edge";
+  const away = (off === "no" ? null : searchExit(obs)) ?? searchEscape(obs);
   if (away) {
     return {
       action: away.first,
       note: `stepping off a cell it cannot stay on: ${away.first.replace("hop_", "")} (${away.path.length} to go)`,
-      step: { kind: "hold" },
+      step: { kind: "hold", why },
     };
   }
-  return { action: "stay", note: "nowhere safe to step, waiting", step: { kind: "hold" } };
+  return {
+    action: "stay",
+    note: "nowhere safe to step, waiting",
+    step: { kind: "hold", why: "no_way" },
+  };
 }
 
 /**
@@ -206,10 +248,10 @@ function safeHold(obs: Observation, memory: Memory): RouteAct {
  * or go on to the row after: stepping onto a road or a rail track that it then has to wait on, with a vehicle
  * or a train about to arrive, is how the first games were lost. A player waits on the bank until both are clear.
  */
-function canSettle(obs: Observation, col: number): boolean {
+function canSettle(obs: Observation): boolean {
   const ahead = rowOf(obs, 1);
-  if (canStand(cellWindow(ahead, col, T, 1.9, true))) return true;
-  return canStand(cellWindow(rowOf(obs, 2), col, 2 * T, 2.5 * T));
+  if (canStand(hopWindow(ahead, obs.player.col, T, 1.9, true))) return true;
+  return canStand(cellWindow(rowOf(obs, 2), Math.round(obs.player.col), 2 * T, 2.5 * T));
 }
 
 /**
@@ -217,7 +259,7 @@ function canSettle(obs: Observation, col: number): boolean {
  * Crossing waits for the cell ahead to clear and hops; a detour walks the route above; waiting is one step.
  */
 export class RouteExecutor {
-  private plan: CrossPlan | DetourPlan | null = null;
+  private plan: CrossPlan | DetourPlan | LeavePlan | null = null;
   private last: string | undefined;
   private readonly failed: Record<SideName, boolean> = { left: false, right: false };
   private failedAtScore = 0;
@@ -240,9 +282,9 @@ export class RouteExecutor {
   next(obs: Observation, memory: Memory): RouteAct | null {
     const plan = this.plan;
     if (!plan) return null;
-    return plan.kind === "detour"
-      ? this.detourStep(plan, obs, memory, false)
-      : this.crossStep(plan, obs, memory, false);
+    if (plan.kind === "detour") return this.detourStep(plan, obs, memory, false);
+    if (plan.kind === "leave") return this.leaveStep(plan, obs, false);
+    return this.crossStep(plan, obs, memory, false);
   }
 
   /** Starts the manoeuvre the model chose. One that cannot begin makes the chicken hold a step and the model hears why. */
@@ -256,6 +298,11 @@ export class RouteExecutor {
       const plan: CrossPlan = { kind: "cross", waited: 0 };
       this.plan = plan;
       return this.crossStep(plan, obs, memory, true) ?? this.hold(obs, memory);
+    }
+    if (maneuver === "leave_platform") {
+      const plan: LeavePlan = { kind: "leave", steps: 0 };
+      this.plan = plan;
+      return this.leaveStep(plan, obs, true) ?? this.hold(obs, memory);
     }
     const plan: DetourPlan = {
       kind: "detour",
@@ -286,10 +333,11 @@ export class RouteExecutor {
     memory: Memory,
     starting: boolean,
   ): RouteAct | null {
-    const col = Math.round(obs.player.col);
-    const landing = cellWindow(rowOf(obs, 1), col, T, 1.5 * T);
-    // A cell that is clear for the hop is not enough: the chicken may have to wait there for the row after it.
-    const cell = canStand(landing) && !canSettle(obs, col) ? "vehicle" : landing;
+    const landing = hopWindow(rowOf(obs, 1), obs.player.col, T, 1.5 * T);
+    // A cell that is clear for the hop is not enough: the chicken may have to wait there for the row after it,
+    // and what stops it there is the vehicle or the train that would reach the cell, so that is what is named.
+    const noRest = canStand(landing) && !canSettle(obs);
+    const cell = noRest ? (rowOf(obs, 1)?.kind === "rail" ? "train" : "vehicle") : landing;
     const chicken = lanesState(obs, memory).chicken;
     if (canStand(cell)) {
       const after = plan.waited === 0 ? "" : ` after waiting ${plan.waited} step(s)`;
@@ -322,7 +370,40 @@ export class RouteExecutor {
     return {
       action: "stay",
       note: `cross_ahead: waiting for the cell (${cell}) to clear, ${plan.waited}/${MAX_CROSS_WAIT}`,
-      step: { kind: "wait", n: plan.waited, of: MAX_CROSS_WAIT, cell },
+      step: {
+        kind: "wait",
+        n: plan.waited,
+        of: MAX_CROSS_WAIT,
+        cell,
+        why: noRest ? "no_rest" : "gap",
+      },
+    };
+  }
+
+  /** One hop of the way off a platform that carries the chicken to the edge of the world. */
+  private leaveStep(plan: LeavePlan, obs: Observation, starting: boolean): RouteAct | null {
+    if (secondsToEdge(obs) >= EDGE_SOON) {
+      if (starting) {
+        const why = "the chicken is not being carried towards the edge";
+        return this.giveBack(true, "leave_platform", why);
+      }
+      this.last = `leave_platform: off the platform's way after ${plan.steps} hop(s)`;
+      this.plan = null;
+      return null;
+    }
+    if (plan.steps >= MAX_LEAVE_STEPS) {
+      const why = `more than ${MAX_LEAVE_STEPS} hops and still carried`;
+      return this.giveBack(starting, "leave_platform", why);
+    }
+    const route = searchExit(obs);
+    if (!route) {
+      return this.giveBack(starting, "leave_platform", `no way off within ${ROUTE_DEPTH} hops`);
+    }
+    plan.steps++;
+    return {
+      action: route.first,
+      note: `leave_platform: hop ${plan.steps}, ${route.first.replace("hop_", "")} (${route.path.length} to go)`,
+      step: { kind: "leave", n: plan.steps, left: route.path.length },
     };
   }
 
@@ -375,6 +456,8 @@ const RANK: Readonly<Record<string, number>> = {
  * The ideal follower of those options, never a model.
  */
 export function routeChoice(scene: SceneState): RouteManeuver {
+  const clock = scene.chicken.edge_in;
+  if (clock === "a_moment") return "leave_platform";
   const ahead = scene.cross_ahead;
   if (canStand(ahead.lands_on)) return "cross_ahead";
   if (!isPermanent(ahead.lands_on) && ahead.things_move !== "still") return "cross_ahead";

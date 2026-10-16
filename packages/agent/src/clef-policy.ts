@@ -191,7 +191,7 @@ export function helpLabel(config: ClefPolicyConfig): string {
   ) {
     parts.push("graph");
   }
-  if (config.strategy === "route") parts.push("route executor");
+  if (config.strategy === "route") parts.push("platform clock", "route executor");
   if (config.strategy === "maneuver" || config.strategy === "graph-maneuver")
     parts.push("executor");
   return parts.join(" + ");

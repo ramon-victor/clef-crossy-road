@@ -124,7 +124,7 @@ export function perceptionOf(policyLabel: string): string {
   if (id === "rule-lanes" || id === "rule-moves") return "words (scripted)";
   if (id === "exec-cross") return "words + executor (scripted, always cross)";
   if (id === "exec-rules") return "words + rules + executor (scripted)";
-  if (id === "exec-route") return "scene + rules + route executor (scripted)";
+  if (id === "exec-route") return "scene + rules + platform clock + route executor (scripted)";
   if (id.startsWith("lookahead")) return "simulator";
   return "none";
 }

@@ -11,18 +11,20 @@ import {
 } from "./clef-policy.ts";
 import { decisionCost } from "./cost.ts";
 import { ENCODER_LEVEL, encodeRequest } from "./encode.ts";
-import { cellWindow } from "./lanes.ts";
+import { cellWindow, hopWindow } from "./lanes.ts";
 import { emptyMemory, type Memory, remember } from "./memory.ts";
+import { driftingOff } from "./platform.ts";
 import type { ModelInput } from "./policy.ts";
 import {
-  driftingOff,
   execRoute,
   MAX_CROSS_WAIT,
   MAX_DETOUR_STEPS,
+  MAX_LEAVE_STEPS,
   ROUTE_IDS,
   RouteExecutor,
   routeChoice,
   searchEscape,
+  searchExit,
   searchRoute,
 } from "./route.ts";
 import { fromRoute } from "./route-policy.ts";
@@ -31,6 +33,7 @@ import {
   AROUND_OPTIONS,
   CELL_CRITERIA,
   MOVING_CRITERIA,
+  RIDE_CRITERIA,
   routeQuestions,
 } from "./route-prompts.ts";
 import { playEpisode } from "./runner.ts";
@@ -152,6 +155,17 @@ describe("the scene view: where the openings are, in words", () => {
     expect(failed.detour_right.recently_failed).toBe("no");
   });
 
+  it("says how soon the platform under the chicken reaches the edge, and only while it stands on one", () => {
+    expect(scene(boxedIn()).chicken).not.toHaveProperty("edge_in");
+    const log = (col: number, speed: number) =>
+      world([grass([], -1), water([{ col, speed, type: "log", half: 2.2 }], 0)], col, true);
+    expect(scene(log(3, 3)).chicken.edge_in).toBe("a_moment"); // 2 columns at 3 per second
+    expect(scene(log(2, 1.5)).chicken.edge_in).toBe("soon"); // 3 columns at 1.5 per second: 2 seconds
+    expect(scene(log(0, 1)).chicken.edge_in).toBe("later");
+    expect(scene(log(0, 0)).chicken.edge_in).toBe("not_carried");
+    expect(JSON.stringify(scene(log(3, 3)))).not.toMatch(/\d/);
+  });
+
   it("is a new level of knowledge, not more of it: its level is `words`", () => {
     expect(ENCODER_LEVEL.scene).toBe("words");
     expect(encodeRequest("scene", boxedIn(), emptyMemory()).state).toEqual(scene(boxedIn()));
@@ -164,6 +178,34 @@ describe("the hop window: a vehicle counts from three ticks into the hop that br
     // chicken that landed in the cell at 0.05 s.
     const row = road([{ col: 2.65, speed: -1.2 }]);
     expect(cellWindow(row, 3, 0.2, 0.3)).toBe("vehicle");
+  });
+
+  it("counts a vehicle over the column a chicken on a platform leaves, not only the whole column it lands on", () => {
+    // Seed 58 of the free reference died three ticks into a hop off a log from column 0.7 whose window was judged
+    // at column 1: the vehicle covers 0.7 at 0.05 s and never covers 1.
+    const row = road([{ col: 0.1, speed: -2.78 }]);
+    expect(cellWindow(row, 1, 0.2, 0.3)).toBe("empty");
+    expect(hopWindow(row, 0.7, 0.2, 0.3)).toBe("vehicle");
+    expect(hopWindow(row, 1, 0.2, 0.3)).toBe("empty"); // on a whole column nothing changes
+    expect(hopWindow(row, 1.02, 0.2, 0.3)).toBe("empty"); // nor within a few hundredths of one
+  });
+
+  it("looks only where the hop ends for water, rail and trees", () => {
+    const logs = water([{ col: 1, type: "log", half: 0.4 }]);
+    expect(hopWindow(logs, 0.7, 0.2, 0.3)).toBe("log"); // lands on the log at column 1
+    expect(hopWindow(grass([0]), 0.7, 0.2, 0.3)).toBe("empty"); // the tree is at column 0, not at the landing
+  });
+
+  it("makes a crossing from a platform wait for a vehicle that only covers the column it leaves", () => {
+    const executor = new RouteExecutor();
+    const rows = [
+      water([{ col: 0.7, speed: 1, type: "log", half: 2 }], 0),
+      road([{ col: 0.1, speed: -2.78 }], 1),
+      grass([], 2),
+    ];
+    const act = executor.start("cross_ahead", world(rows, 0.7, true), emptyMemory());
+    expect(act.action).toBe("stay");
+    expect(act.step).toMatchObject({ kind: "wait", cell: "vehicle" });
   });
 });
 
@@ -205,6 +247,91 @@ describe("searchRoute: the way round, over the words alone", () => {
   });
 });
 
+describe("searchExit: the way off a platform that carries the chicken to the edge", () => {
+  const drifting = (rowsAhead: ObsRow[], half = 1.6): Observation =>
+    world(
+      [grass([], -1), water([{ col: 3, speed: 3, type: "log", half }], 0), ...rowsAhead],
+      3,
+      true,
+    );
+
+  it("goes on to the row ahead when it can be stood on", () => {
+    expect(searchExit(drifting([grass([], 1)]))?.first).toBe("hop_forward");
+  });
+
+  it("goes on rather than back, even when going back is a shorter way", () => {
+    // Forward is two hops away (a step along the log, then onto the still log ahead); back is one hop onto the bank.
+    const ahead = water([{ col: 2, type: "log", half: 0.4 }], 1);
+    const route = searchExit(drifting([ahead], 2.2));
+    expect(route?.path).toEqual(["hop_left", "hop_forward"]);
+  });
+
+  it("goes back to the bank when there is no way on", () => {
+    expect(searchExit(drifting([water([], 1)]))?.first).toBe("hop_back");
+  });
+
+  it("finds no way when nothing is standable round the platform", () => {
+    const alone = world([water([{ col: 4.2, speed: 3, type: "log", half: 1.5 }], 0)], 4.2, true);
+    expect(searchExit(alone)).toBeNull();
+  });
+});
+
+describe("RouteExecutor: leave_platform", () => {
+  const carried = (): Observation =>
+    world(
+      [grass([], -1), water([{ col: 3, speed: 3, type: "log", half: 1.6 }], 0), grass([], 1)],
+      3,
+      true,
+    );
+
+  it("hops off the platform, numbers the hops, and reports them as a leave", () => {
+    const executor = new RouteExecutor();
+    const act = executor.start("leave_platform", carried(), emptyMemory());
+    expect(act.action).toBe("hop_forward");
+    expect(act.step).toEqual({ kind: "leave", n: 1, left: 1 });
+    expect(act.note).toContain("leave_platform: hop 1, forward");
+  });
+
+  it("is over once the chicken is no longer carried to the edge", () => {
+    const executor = new RouteExecutor();
+    executor.start("leave_platform", carried(), emptyMemory());
+    const onGrass = world([grass([], 0), grass([], 1)], 3);
+    expect(executor.next(onGrass, emptyMemory())).toBeNull();
+    expect(executor.lastResult).toBe("leave_platform: off the platform's way after 1 hop(s)");
+  });
+
+  it("is refused, and the chicken holds where it is safe, when the platform is not carrying it to the edge", () => {
+    const executor = new RouteExecutor();
+    const still = world(
+      [grass([], -1), water([{ col: 0, speed: 0.5, type: "log", half: 2 }], 0)],
+      0,
+      true,
+    );
+    const act = executor.start("leave_platform", still, emptyMemory());
+    expect(executor.lastResult).toMatch(
+      /^leave_platform: refused, the chicken is not being carried/,
+    );
+    expect(act.step).toMatchObject({ kind: "hold" });
+  });
+
+  it("is refused with the reason when there is no way off", () => {
+    const executor = new RouteExecutor();
+    const alone = world([water([{ col: 4.2, speed: 3, type: "log", half: 1.5 }], 0)], 4.2, true);
+    executor.start("leave_platform", alone, emptyMemory());
+    expect(executor.lastResult).toMatch(/^leave_platform: refused, no way off within 8 hops/);
+  });
+
+  it("gives the decision back after too many hops", () => {
+    const executor = new RouteExecutor();
+    const stuck = carried();
+    executor.start("leave_platform", stuck, emptyMemory());
+    for (let i = 0; i < MAX_LEAVE_STEPS + 2 && executor.next(stuck, emptyMemory()); i++) {
+      // the world does not change here, so the chicken never gets off
+    }
+    expect(executor.lastResult).toMatch(/more than 8 hops and still carried/);
+  });
+});
+
 describe("RouteExecutor: what each step is, without reading its sentence", () => {
   it("calls the crossing a hop when the cell is clear", () => {
     const executor = new RouteExecutor();
@@ -216,9 +343,21 @@ describe("RouteExecutor: what each step is, without reading its sentence", () =>
     const executor = new RouteExecutor();
     const obs = world([grass([], 0), water([{ col: 4, speed: -1, type: "log" }], 1)]);
     const first = executor.start("cross_ahead", obs, emptyMemory());
-    expect(first.step).toEqual({ kind: "wait", n: 1, of: MAX_CROSS_WAIT, cell: "water" });
+    expect(first.step).toEqual({
+      kind: "wait",
+      n: 1,
+      of: MAX_CROSS_WAIT,
+      cell: "water",
+      why: "gap",
+    });
     const second = executor.next(obs, emptyMemory());
-    expect(second?.step).toEqual({ kind: "wait", n: 2, of: MAX_CROSS_WAIT, cell: "water" });
+    expect(second?.step).toEqual({
+      kind: "wait",
+      n: 2,
+      of: MAX_CROSS_WAIT,
+      cell: "water",
+      why: "gap",
+    });
   });
 
   it("calls a refused crossing a hold, however the chicken holds", () => {
@@ -226,8 +365,61 @@ describe("RouteExecutor: what each step is, without reading its sentence", () =>
     const obs = world([grass([], 0), grass([0], 1)]);
     const act = executor.start("cross_ahead", obs, emptyMemory());
     expect(act.action).toBe("stay");
-    expect(act.step).toEqual({ kind: "hold" });
-    expect(executor.start("wait_here", obs, emptyMemory()).step).toEqual({ kind: "hold" });
+    expect(act.step).toEqual({ kind: "hold", why: "refused" });
+    expect(executor.start("wait_here", obs, emptyMemory()).step).toEqual({
+      kind: "hold",
+      why: "refused",
+    });
+  });
+
+  it("names the vehicle or the train that would reach a cell that is clear for the hop, and says it is not the cell that blocks", () => {
+    const executor = new RouteExecutor();
+    // The cell ahead is clear for the hop, but a vehicle reaches it half a second later and water follows.
+    const roadAhead = world([grass([], 0), road([{ col: 2.6, speed: -3 }], 1), water([], 2)]);
+    expect(executor.start("cross_ahead", roadAhead, emptyMemory()).step).toEqual({
+      kind: "wait",
+      n: 1,
+      of: MAX_CROSS_WAIT,
+      cell: "vehicle",
+      why: "no_rest",
+    });
+    const railAhead = world([
+      grass([], 0),
+      {
+        dz: 1,
+        kind: "rail",
+        warning_light: "off",
+        train: { col: 3, half_extent: 1.5, speed_cols_per_s: -3 },
+      },
+      water([], 2),
+    ]);
+    expect(new RouteExecutor().start("cross_ahead", railAhead, emptyMemory()).step).toMatchObject({
+      kind: "wait",
+      cell: "train",
+      why: "no_rest",
+    });
+  });
+
+  it("says why a refused manoeuvre holds: a cell it cannot stay on, a platform to the edge, or nowhere to step", () => {
+    const vehicle = world([grass([], -1), road([{ col: 2.5, speed: -6 }], 0), grass([0], 1)]);
+    expect(new RouteExecutor().start("cross_ahead", vehicle, emptyMemory()).step).toEqual({
+      kind: "hold",
+      why: "unsafe_here",
+    });
+    const log = world(
+      [grass([], -1), water([{ col: 3, speed: 3, type: "log", half: 1.6 }], 0), water([], 1)],
+      3,
+      true,
+    );
+    expect(new RouteExecutor().start("wait_here", log, emptyMemory()).step).toMatchObject({
+      kind: "hold",
+      why: "edge",
+    });
+    const alone = world([water([{ col: 4.2, speed: 3, type: "log", half: 1.5 }], 0)], 4.2, true);
+    expect(new RouteExecutor().start("wait_here", alone, emptyMemory()).step).toEqual({
+      kind: "hold",
+      why: "no_way",
+    });
   });
 
   it("numbers the hops of a detour and says how many are left", () => {
@@ -368,6 +560,17 @@ describe("routeChoice: the lookups the options describe", () => {
     expect(routeChoice(equal("left"))).toBe("detour_right");
   });
 
+  it("leaves a platform that is a moment from the edge, whatever is ahead, and not one that is only soon", () => {
+    const on = (word: "a_moment" | "soon" | "later" | "not_carried"): SceneState => ({
+      ...with_({ cross_ahead: { lands_on: "lily_pad", things_move: "still" } }),
+      chicken: { ...base().chicken, edge_in: word },
+    });
+    expect(routeChoice(on("a_moment"))).toBe("leave_platform");
+    for (const word of ["soon", "later", "not_carried"] as const) {
+      expect(routeChoice(on(word))).toBe("cross_ahead");
+    }
+  });
+
   it("waits when neither side has an opening, or the one it has was already tried", () => {
     const none = (): SceneState["detour_left"] => ({
       opening_ahead: "none",
@@ -422,6 +625,38 @@ describe("the lookup questions", () => {
     expect(text).not.toMatch(/\bsafe\b|\bunsafe\b|danger|you should|best move/i);
   });
 
+  it("add a fourth, that reads only the clock of the platform, when the chicken stands on one", () => {
+    const riding = routeQuestions(true);
+    expect(Object.keys(riding).sort()).toEqual(["around", "cell", "moving", "ride"]);
+    expect(riding.ride?.instructions).toContain("Read only chicken.edge_in");
+    expect(riding.ride?.instructions).toContain("chicken.edge_in a_moment -> leaving");
+    expect(riding.ride?.instructions).toContain("chicken.edge_in soon -> staying");
+    expect(Object.keys(RIDE_CRITERIA).sort()).toEqual(["leaving", "staying"]);
+    // The three questions made off a platform are exactly what they were: nothing is added to their words.
+    expect(riding.cell).toEqual(routeQuestions().cell);
+    expect(riding.around).toEqual(routeQuestions().around);
+  });
+
+  it("only name fields the state has once the chicken stands on a platform, and say nothing of what to do", () => {
+    const onLog = scene(
+      world([grass([], -1), water([{ col: 3, speed: 3, type: "log", half: 1.6 }], 0)], 3, true),
+    ) as unknown as Record<string, Record<string, unknown>>;
+    const text = Object.values(routeQuestions(true))
+      .map((q) =>
+        q.type === "choice"
+          ? `${q.instructions} ${Object.values(q.criteria).join(" ")}`
+          : q.instructions,
+      )
+      .join(" ");
+    for (const [, entry, field] of text.matchAll(
+      /\b(cross_ahead|detour_left|detour_right|wait_here|chicken|memory)\.([a-z_]+)/g,
+    )) {
+      expect(Object.keys(onLog[entry ?? ""] ?? {}), `${entry}.${field}`).toContain(field);
+    }
+    expect(text).not.toMatch(/\bsafe\b|\bunsafe\b|danger|you should|best move/i);
+    expect(text).not.toMatch(/\d/);
+  });
+
   it("carry solved examples for each question", () => {
     expect(questions.cell?.instructions).toContain("lands_on lily_pad -> stand");
     expect(questions.cell?.instructions).toContain("lands_on water -> no_stand");
@@ -433,7 +668,13 @@ describe("the lookup questions", () => {
 describe("the route strategy through the Clef policy", () => {
   const id = "clef:clef-flash:scene:route:lookup";
 
-  function clientAnswering(cell: string, moving: string, around: string, pStand = 0.8) {
+  function clientAnswering(
+    cell: string,
+    moving: string,
+    around: string,
+    pStand = 0.8,
+    ride?: { choice: string; pLeaving: number },
+  ) {
     const requests: ClefRequest[] = [];
     const transport: Transport = {
       async post(req) {
@@ -461,6 +702,16 @@ describe("the route strategy through the Clef policy", () => {
                   probabilities: { detour_left: 0.2, detour_right: 0.6, wait_here: 0.2 },
                   confidence: 0.4,
                 },
+                ...(ride === undefined
+                  ? {}
+                  : {
+                      ride: {
+                        type: "choice",
+                        choice: ride.choice,
+                        probabilities: { leaving: ride.pLeaving, staying: 1 - ride.pLeaving },
+                        confidence: 0.5,
+                      },
+                    }),
               },
               usage: { input_tokens: 1500, output_tokens: 0 },
             },
@@ -496,7 +747,9 @@ describe("the route strategy through the Clef policy", () => {
   });
 
   it("labels the help, so a result is never read without it", () => {
-    expect(helpLabel(parseClefPolicyId(id))).toBe("words + rules + graph + route executor");
+    expect(helpLabel(parseClefPolicyId(id))).toBe(
+      "words + rules + graph + platform clock + route executor",
+    );
   });
 
   it("is an estimate of the cost until a probe reads the tokens", () => {
@@ -626,6 +879,102 @@ describe("the route strategy through the Clef policy", () => {
     expect(factory.create(1)).not.toBe(factory.create(1));
   });
 
+  describe("on a platform", () => {
+    const logAtEdge = (): Observation =>
+      world(
+        [grass([], -1), water([{ col: 3, speed: 3, type: "log", half: 1.6 }], 0), grass([], 1)],
+        3,
+        true,
+      );
+
+    it("asks a fourth question, only while the chicken stands on a platform", async () => {
+      const { client, requests } = clientAnswering("stand", "still", "wait_here", 0.8, {
+        choice: "staying",
+        pLeaving: 0.1,
+      });
+      const policy = policyOf(client);
+      await policy.decide(logAtEdge());
+      expect(Object.keys(requests[0]?.questions ?? {}).sort()).toEqual([
+        "around",
+        "cell",
+        "moving",
+        "ride",
+      ]);
+      await policy.decide(observe(new Game({ seed: 4 })));
+      expect(Object.keys(requests[1]?.questions ?? {}).sort()).toEqual([
+        "around",
+        "cell",
+        "moving",
+      ]);
+    });
+
+    it("sends the clock of the platform in the state, and the same words as before off a platform", async () => {
+      const { client, requests } = clientAnswering("stand", "still", "wait_here", 0.8, {
+        choice: "staying",
+        pLeaving: 0.1,
+      });
+      const policy = policyOf(client);
+      await policy.decide(logAtEdge());
+      const state = requests[0]?.state as { chicken: Record<string, unknown> };
+      expect(state.chicken.edge_in).toBe("a_moment");
+      await policy.decide(observe(new Game({ seed: 4 })));
+      const offPlatform = requests[1]?.state as { chicken: Record<string, unknown> };
+      expect(offPlatform.chicken).not.toHaveProperty("edge_in");
+    });
+
+    it("leaves the platform when the model says it is leaving, whatever it said of the row ahead", async () => {
+      const { client } = clientAnswering("stand", "still", "wait_here", 0.9, {
+        choice: "leaving",
+        pLeaving: 0.8,
+      });
+      const decision = await policyOf(client).decide(logAtEdge());
+      expect(decision.extra).toMatchObject({
+        maneuver: "leave_platform",
+        ahead: "open",
+        ride: "leaving",
+        controller: { kind: "leave", n: 1 },
+      });
+      expect(decision.action).toBe("hop_forward");
+      expect(decision.answers?.ride?.choice).toBe("leaving");
+    });
+
+    it("keeps the other manoeuvres when the model says it is staying, and the five bars add up to one", async () => {
+      const { client } = clientAnswering("stand", "still", "wait_here", 0.9, {
+        choice: "staying",
+        pLeaving: 0.2,
+      });
+      const decision = await policyOf(client).decide(logAtEdge());
+      expect(decision.extra).toMatchObject({ maneuver: "cross_ahead", ride: "staying" });
+      const total = Object.values(decision.probabilities ?? {}).reduce((a, b) => a + b, 0);
+      expect(total).toBeCloseTo(1, 5);
+    });
+
+    it("puts the platform's share on the hop that gets the chicken off it", async () => {
+      const { client } = clientAnswering("stand", "still", "wait_here", 0.9, {
+        choice: "leaving",
+        pLeaving: 0.8,
+      });
+      const decision = await policyOf(client).decide(logAtEdge());
+      // the exit is the hop forward onto the grass: its bar holds the 0.8 of leaving
+      expect(decision.probabilities?.hop_forward).toBeGreaterThan(0.8);
+    });
+
+    it("tells the leaving of a platform that is not carrying the chicken to the edge from a refusal", async () => {
+      const { client } = clientAnswering("stand", "still", "wait_here", 0.9, {
+        choice: "leaving",
+        pLeaving: 0.7,
+      });
+      const slow = world(
+        [grass([], -1), water([{ col: 0, speed: 0.5, type: "log", half: 2 }], 0), grass([], 1)],
+        0,
+        true,
+      );
+      const decision = await policyOf(client).decide(slow);
+      expect(decision.note).toContain("leave_platform: refused");
+      expect(decision.extra).toMatchObject({ controller: { kind: "hold" } });
+    });
+  });
+
   it("fromRoute rejects an option it does not know", () => {
     expect(() =>
       fromRoute({
@@ -660,6 +1009,12 @@ describe("exec-route: the controller with an ideal chooser, a free reference", (
   });
 
   it("knows every manoeuvre of the strategy", () => {
-    expect(ROUTE_IDS).toEqual(["cross_ahead", "detour_left", "detour_right", "wait_here"]);
+    expect(ROUTE_IDS).toEqual([
+      "cross_ahead",
+      "detour_left",
+      "detour_right",
+      "wait_here",
+      "leave_platform",
+    ]);
   });
 });

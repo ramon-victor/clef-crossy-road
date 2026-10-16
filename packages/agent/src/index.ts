@@ -84,6 +84,13 @@ export {
   type RememberedMove,
   remember,
 } from "./memory.ts";
+export {
+  EDGE_A_MOMENT,
+  EDGE_SOON,
+  type EdgeIn,
+  edgeWord,
+  secondsToEdge,
+} from "./platform.ts";
 export type {
   DecideHooks,
   Decision,
@@ -112,7 +119,10 @@ export {
 } from "./prompts.ts";
 export {
   execRoute,
+  type HoldWhy,
+  LEAVE,
   MAX_DETOUR_STEPS,
+  MAX_LEAVE_STEPS,
   ROUTE_ACTION,
   ROUTE_DEPTH,
   ROUTE_IDS,
@@ -123,12 +133,15 @@ export {
   type RouteRequest,
   type RouteStep,
   routeChoice,
+  searchExit,
   searchRoute,
 } from "./route.ts";
 export {
   AROUND_OPTIONS,
   CELL_OPTIONS,
   MOVING_OPTIONS,
+  RIDE_OPTIONS,
+  RIDE_QUESTION_ID,
   ROUTE_QUESTION_IDS,
 } from "./route-prompts.ts";
 export { readLanes, readOrdered, ruleLanes, ruleMoves, ruleView, ruleViewFx } from "./rule.ts";

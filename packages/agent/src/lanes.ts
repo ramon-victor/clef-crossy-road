@@ -76,6 +76,30 @@ export function cellWindow(
   return cellOver(row, col, times, landing, waiting);
 }
 
+/** How far from a whole column a chicken has to stand for a hop to its nearest whole column to cross another column on the way. */
+const OFF_COLUMN = 0.05;
+
+/**
+ * `cellWindow` for a hop forward or back from `col`, which lands on the nearest whole column. A chicken that stands
+ * on a platform is carried to a fractional column and enters a road row on its way to the whole one, so a vehicle
+ * counts if it covers either column (a vehicle is wider than the distance between them). Water, rail and trees are
+ * only looked at where the hop ends. Found by replaying a death: seed 58 of the free reference was hit three ticks
+ * into a hop off a log from column 0.7 that the old check judged at column 1 (2026-10-15).
+ */
+export function hopWindow(
+  row: ObsRow | undefined,
+  col: number,
+  landing: number,
+  until: number,
+  waiting = false,
+): Cell {
+  const target = Math.round(col);
+  const there = cellWindow(row, target, landing, until, waiting);
+  if (row?.kind !== "road" || !canStand(there) || Math.abs(col - target) < OFF_COLUMN) return there;
+  const along = cellWindow(row, col, landing, until, waiting);
+  return canStand(along) ? there : along;
+}
+
 /**
  * What fills the cell over the given moments. A chicken in a hop is hit by a vehicle at any of them; a
  * train only hits it at rest, so for a hop only the last moment counts, and while it stays (`resting`)

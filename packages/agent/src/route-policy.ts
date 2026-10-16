@@ -11,11 +11,13 @@ import type {
   PolicyFactory,
 } from "./policy.ts";
 import { PROMPT_VERSION } from "./prompts.ts";
-import { ROUTE_ACTION, RouteExecutor, type RouteManeuver } from "./route.ts";
+import { ROUTE_ACTION, RouteExecutor, type RouteManeuver, searchExit } from "./route.ts";
 import {
   AROUND_OPTIONS,
   CELL_OPTIONS,
   MOVING_OPTIONS,
+  RIDE_OPTIONS,
+  RIDE_QUESTION_ID,
   ROUTE_QUESTION_IDS,
   routeQuestions,
 } from "./route-prompts.ts";
@@ -24,9 +26,11 @@ import { sceneState } from "./scene.ts";
 /**
  * The `route` strategy (ADR-0011): three small lookups in one request. `cell` says whether the chicken can
  * stand on the cell straight ahead, `moving` whether the things of that row move, and `around` which way to go
- * if the way ahead is closed (left, right, wait). The only rule of ours on the answers is the routing: a cell
- * to stand on, or things that keep moving, mean `cross_ahead`; otherwise the way is closed and `around`
- * decides. A controller (route.ts) then does the hopping, and steps it takes are not model calls.
+ * if the way ahead is closed (left, right, wait). While the chicken stands on a platform a fourth, `ride`, says
+ * whether that platform is about to carry it past the edge of the world. The only rule of ours on the answers is
+ * the routing: a platform about to leave the world means `leave_platform`; otherwise a cell to stand on, or things
+ * that keep moving, mean `cross_ahead`; otherwise the way is closed and `around` decides. A controller (route.ts)
+ * then does the hopping, and steps it takes are not model calls.
  */
 export function routePolicy(
   client: ClefClient,
@@ -34,6 +38,7 @@ export function routePolicy(
   id: string,
 ): PolicyFactory {
   const questions = routeQuestions();
+  const questionsOnAPlatform = routeQuestions(true);
   const cacheTag = `${PROMPT_VERSION}|${config.encoder}|${config.strategy}|${config.manual}`;
 
   /** The one place a request is put together, so what is shown is what is sent. */
@@ -43,7 +48,7 @@ export function routePolicy(
       lastManeuver: executor.lastResult,
       failed: executor.failedSides(memory),
     }),
-    questions,
+    questions: obs.player.riding ? questionsOnAPlatform : questions,
     cacheTag,
   });
 
@@ -74,6 +79,15 @@ export function routePolicy(
         const first = executor.start(chosen.maneuver, obs, memory);
         return {
           ...chosen.decision,
+          ...(chosen.pLeaving === undefined
+            ? {}
+            : {
+                probabilities: withLeaving(
+                  chosen.decision.probabilities,
+                  chosen.pLeaving,
+                  searchExit(obs)?.first ?? "stay",
+                ),
+              }),
           action: first.action,
           source: "model",
           note: `model chose ${chosen.maneuver}; ${first.note}`,
@@ -110,26 +124,43 @@ function choiceOf<T extends string>(
  * of crossing is P(stand) + P(no_stand) * P(moving), and what is left (the way is closed) is split by the
  * third answer.
  */
-export function fromRoute(result: ClefResult): { maneuver: RouteManeuver; decision: Decision } {
+export function fromRoute(result: ClefResult): {
+  maneuver: RouteManeuver;
+  decision: Decision;
+  /** What the model gave to leaving the platform, when it was asked (the chicken stood on one). */
+  pLeaving?: number;
+} {
   const cell = choiceOf(result.answers[ROUTE_QUESTION_IDS[0]], CELL_OPTIONS, "cell");
   const moving = choiceOf(result.answers[ROUTE_QUESTION_IDS[1]], MOVING_OPTIONS, "moving");
   const around = choiceOf(result.answers[ROUTE_QUESTION_IDS[2]], AROUND_OPTIONS, "around");
+  const ride =
+    result.answers[RIDE_QUESTION_ID] === undefined
+      ? null
+      : choiceOf(result.answers[RIDE_QUESTION_ID], RIDE_OPTIONS, "ride");
   const pStand = cell.probabilities.stand;
   const pMoving = moving.probabilities.moving;
+  const pLeaving = ride?.probabilities.leaving;
   const pCross = pStand + (1 - pStand) * pMoving;
   const pClosed = 1 - pCross;
   const ahead =
     cell.choice === "stand" ? "open" : moving.choice === "moving" ? "passing" : "closed";
-  const maneuver: RouteManeuver = ahead === "closed" ? around.choice : "cross_ahead";
-  const probabilities: Partial<Record<Action, number>> = { hop_forward: pCross };
+  const maneuver: RouteManeuver =
+    ride?.choice === "leaving"
+      ? "leave_platform"
+      : ahead === "closed"
+        ? around.choice
+        : "cross_ahead";
+  // What is left for the other manoeuvres once the platform has had its share.
+  const rest = 1 - (pLeaving ?? 0);
+  const probabilities: Partial<Record<Action, number>> = { hop_forward: pCross * rest };
   for (const option of AROUND_OPTIONS) {
-    probabilities[ROUTE_ACTION[option]] = pClosed * around.probabilities[option];
+    probabilities[ROUTE_ACTION[option]] = pClosed * around.probabilities[option] * rest;
   }
   for (const action of ACTIONS) probabilities[action] ??= 0;
   return {
     maneuver,
     decision: {
-      action: ROUTE_ACTION[maneuver],
+      action: maneuver === "leave_platform" ? "stay" : ROUTE_ACTION[maneuver],
       probabilities,
       ...(cell.confidence !== undefined ? { confidence: cell.confidence } : {}),
       extra: {
@@ -140,6 +171,7 @@ export function fromRoute(result: ClefResult): { maneuver: RouteManeuver; decisi
         pMoving,
         pClosed,
         around: around.choice,
+        ...(ride === null ? {} : { ride: ride.choice, pLeaving }),
       },
       latencyMs: result.latencyMs,
       inputTokens: result.usage.inputTokens,
@@ -147,5 +179,18 @@ export function fromRoute(result: ClefResult): { maneuver: RouteManeuver; decisi
       cached: result.cached,
       ...choiceAnswers(result),
     },
+    ...(pLeaving === undefined ? {} : { pLeaving }),
   };
+}
+
+/**
+ * The joint probabilities with the platform's share put on the hop that gets the chicken off it, so that the five
+ * bars still add up to one. The share is the model's own answer to `ride`, whichever way it went.
+ */
+function withLeaving(
+  probabilities: Partial<Record<Action, number>> | undefined,
+  pLeaving: number,
+  exit: Action,
+): Partial<Record<Action, number>> {
+  return { ...probabilities, [exit]: (probabilities?.[exit] ?? 0) + pLeaving };
 }
