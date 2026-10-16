@@ -21,6 +21,16 @@ import {
 import { randomSeed } from "./seed.ts";
 import { runSelfTest } from "./selftest.ts";
 import { Session, type SessionState, type Timing } from "./session.ts";
+import {
+  openByDefault,
+  PACE_MS,
+  type Pace,
+  readFlag,
+  readPace,
+  writeFlag,
+  writePace,
+} from "./theater/preference.ts";
+import { Theater } from "./theater/Theater.tsx";
 
 const DEFAULT_PLAYER = "clef-flash";
 /** Pause before an attract-mode game starts the next map, long enough to read the result card. */
@@ -59,6 +69,10 @@ export function App() {
   const [soundOn, setSoundOn] = useState(true);
   const [autoRestart, setAutoRestart] = useState(true);
   const [inspecting, setInspecting] = useState(false);
+  // What the person chose for the Theater, or null if they never did (then a model player opens it).
+  const [theaterChoice, setTheaterChoice] = useState<boolean | null>(() => readFlag("theater"));
+  const [compassChoice, setCompassChoice] = useState<boolean | null>(() => readFlag("compass"));
+  const [pace, setPaceState] = useState<Pace>(() => readPace());
   const viewRef = useRef<GameView | null>(null);
 
   const refreshBudget = useCallback(() => {
@@ -163,6 +177,26 @@ export function App() {
   const selected = byId.get(selectedId);
   const mayAutoRestart = autoRestart && selected !== undefined && !selected.usesApi && !state.human;
   const over = !state.alive || state.stalled;
+  const showTheater = openByDefault(theaterChoice, selected?.kind);
+  const setTheater = useCallback((on: boolean) => {
+    setTheaterChoice(on);
+    writeFlag("theater", on);
+  }, []);
+  const showCompass = openByDefault(compassChoice, selected?.kind);
+  const setCompass = useCallback((on: boolean) => {
+    setCompassChoice(on);
+    writeFlag("compass", on);
+  }, []);
+  // `persist: false` changes the pace for this run only: the self-test must not leave its own choice behind.
+  const setPace = useCallback((next: Pace, persist = true) => {
+    setPaceState(next);
+    if (persist) writePace(next);
+  }, []);
+  // Only someone watching a model gets the wait that leaves time to read an answer; everyone else plays at full speed.
+  const watching = (showTheater || showCompass) && selected?.kind === "model";
+  useEffect(() => {
+    session.setLinger(watching ? PACE_MS[pace] : 0);
+  }, [session, watching, pace]);
   useEffect(() => {
     if (!over || !mayAutoRestart) return;
     const timer = setTimeout(newMap, RESTART_DELAY_MS);
@@ -203,6 +237,12 @@ export function App() {
         case "inspect":
           setInspecting((open) => !open);
           break;
+        case "theater":
+          setTheater(!showTheater);
+          break;
+        case "compass":
+          setCompass(!showCompass);
+          break;
       }
     };
     window.addEventListener("keydown", onKey);
@@ -211,14 +251,14 @@ export function App() {
       window.removeEventListener("keydown", onKey);
       window.removeEventListener("pointerdown", unlockSound);
     };
-  }, [session, sounds, retry, newMap]);
+  }, [session, sounds, retry, newMap, setTheater, showTheater, setCompass, showCompass]);
 
   const onReady = useCallback(
     (view: GameView) => {
       viewRef.current = view;
-      void runSelfTest({ session, view, bridge, choices, select });
+      void runSelfTest({ session, view, bridge, choices, select, setPace });
     },
-    [session, bridge, choices, select],
+    [session, bridge, choices, select, setPace],
   );
 
   return (
@@ -231,7 +271,22 @@ export function App() {
         onFps={setFps}
         onRetry={retry}
         onNewMap={newMap}
+        compass={{
+          on: showCompass && selected?.kind === "model",
+          conversationOpen: showTheater,
+          onConversation: () => setTheater(true),
+        }}
       />
+      {showTheater && (
+        <Theater
+          state={state}
+          kind={selected?.kind}
+          compassOn={showCompass}
+          onCompass={() => setCompass(!showCompass)}
+          onClose={() => setTheater(false)}
+          onInspect={() => setInspecting(true)}
+        />
+      )}
       <Panel
         state={state}
         choices={choices}
@@ -257,6 +312,10 @@ export function App() {
         onRetry={retry}
         onNewMap={newMap}
         onInspect={() => setInspecting(true)}
+        theaterOpen={showTheater}
+        onTheater={() => setTheater(true)}
+        pace={selected?.kind === "model" ? pace : null}
+        onPace={setPace}
         onSeed={(seed) => {
           noteSeed(selectedId, seed);
           session.start(seed);

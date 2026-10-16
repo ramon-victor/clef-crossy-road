@@ -2,6 +2,7 @@ import { useState } from "preact/hooks";
 import type { CredentialStatus } from "../bridge/types.ts";
 import { parseSeedText } from "../seed.ts";
 import type { SessionState, Timing } from "../session.ts";
+import { PACES, type Pace } from "../theater/preference.ts";
 
 const SPEEDS = [0.5, 1, 2, 4];
 const TIMINGS: readonly { value: Timing; label: string; title: string }[] = [
@@ -9,12 +10,21 @@ const TIMINGS: readonly { value: Timing; label: string; title: string }[] = [
   { value: "realtime", label: "Real-time", title: "Cars keep moving while the model thinks" },
 ];
 
+const PACE_LABEL: Readonly<Record<Pace, string>> = {
+  live: "Live",
+  relaxed: "Relaxed",
+  slow: "Slow",
+};
+
 export interface SetupCardProps {
   state: SessionState;
   autoRestart: boolean;
   credentials: CredentialStatus | null;
   onConfigure(): void;
   onTiming(timing: Timing): void;
+  /** How long a model's answer stands before the chicken moves; null for a player that asks no model. */
+  pace: Pace | null;
+  onPace(pace: Pace): void;
   onSpeed(speed: number): void;
   onSeed(seed: number): void;
   onAutoRestart(on: boolean): void;
@@ -26,6 +36,8 @@ export function SetupCard({
   credentials,
   onConfigure,
   onTiming,
+  pace,
+  onPace,
   onSpeed,
   onSeed,
   onAutoRestart,
@@ -57,6 +69,30 @@ export function SetupCard({
               </button>
             ))}
           </fieldset>
+        )}
+        {pace !== null && (
+          <fieldset class="segmented" aria-describedby="pace-help">
+            <legend>Pace</legend>
+            {PACES.map((option) => (
+              <button
+                type="button"
+                key={option}
+                class={pace === option ? "on" : ""}
+                aria-pressed={pace === option}
+                disabled={state.timing !== "step"}
+                onClick={() => onPace(option)}
+              >
+                {PACE_LABEL[option]}
+              </button>
+            ))}
+          </fieldset>
+        )}
+        {pace !== null && (
+          <p id="pace-help" class="hint">
+            {state.timing === "step"
+              ? "How long each answer of the model stays on screen before the chicken moves. The game plays out the same."
+              : "Only while the world waits for the model (Step timing)."}
+          </p>
         )}
         <fieldset class="speeds">
           <legend>Speed</legend>
