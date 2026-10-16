@@ -1,8 +1,15 @@
 import type { Answer, ClefClient, ClefRequest, ClefResult } from "@ccr/clef";
 import { ACTIONS, type Action, type Observation } from "@ccr/core";
+import { choiceAnswers } from "./answers.ts";
 import type { ClefPolicyConfig } from "./clef-policy.ts";
 import { emptyMemory, type Memory } from "./memory.ts";
-import type { Decision, ModelInput, ObservationPolicy, PolicyFactory } from "./policy.ts";
+import type {
+  DecideHooks,
+  Decision,
+  ModelInput,
+  ObservationPolicy,
+  PolicyFactory,
+} from "./policy.ts";
 import { PROMPT_VERSION } from "./prompts.ts";
 import { ROUTE_ACTION, RouteExecutor, type RouteManeuver } from "./route.ts";
 import {
@@ -46,10 +53,23 @@ export function routePolicy(
       kind: "observation",
       id,
       describe: (obs, memory = emptyMemory()) => inputOf(requestFor(obs, memory, executor)),
-      async decide(obs: Observation, memory: Memory = emptyMemory()): Promise<Decision> {
+      async decide(
+        obs: Observation,
+        memory: Memory = emptyMemory(),
+        hooks?: DecideHooks,
+      ): Promise<Decision> {
         const step = executor.next(obs, memory);
-        if (step) return { action: step.action, source: "executor", note: step.note };
+        if (step) {
+          return {
+            action: step.action,
+            source: "executor",
+            note: step.note,
+            extra: { controller: step.step },
+          };
+        }
         const request = requestFor(obs, memory, executor);
+        const sent = inputOf(request);
+        hooks?.onAsk?.(sent);
         const chosen = fromRoute(await client.run(request));
         const first = executor.start(chosen.maneuver, obs, memory);
         return {
@@ -57,8 +77,8 @@ export function routePolicy(
           action: first.action,
           source: "model",
           note: `model chose ${chosen.maneuver}; ${first.note}`,
-          extra: { ...chosen.decision.extra, maneuver: chosen.maneuver },
-          sent: inputOf(request),
+          extra: { ...chosen.decision.extra, maneuver: chosen.maneuver, controller: first.step },
+          sent,
         };
       },
     };
@@ -125,6 +145,7 @@ export function fromRoute(result: ClefResult): { maneuver: RouteManeuver; decisi
       inputTokens: result.usage.inputTokens,
       neurons: result.neurons,
       cached: result.cached,
+      ...choiceAnswers(result),
     },
   };
 }

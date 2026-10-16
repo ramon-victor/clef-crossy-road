@@ -85,12 +85,14 @@ export {
   remember,
 } from "./memory.ts";
 export type {
+  DecideHooks,
   Decision,
   ModelInput,
   ObservationPolicy,
   OraclePolicy,
   Policy,
   PolicyFactory,
+  QuestionAnswer,
 } from "./policy.ts";
 export {
   ACTION_CRITERIA,
@@ -119,9 +121,16 @@ export {
   RouteExecutor,
   type RouteManeuver,
   type RouteRequest,
+  type RouteStep,
   routeChoice,
   searchRoute,
 } from "./route.ts";
+export {
+  AROUND_OPTIONS,
+  CELL_OPTIONS,
+  MOVING_OPTIONS,
+  ROUTE_QUESTION_IDS,
+} from "./route-prompts.ts";
 export { readLanes, readOrdered, ruleLanes, ruleMoves, ruleView, ruleViewFx } from "./rule.ts";
 export {
   type ApplyOptions,
@@ -134,6 +143,7 @@ export {
   isPipelined,
   type LatencyModel,
   playEpisode,
+  recordableExtra,
 } from "./runner.ts";
 export {
   type BehindFrontier,

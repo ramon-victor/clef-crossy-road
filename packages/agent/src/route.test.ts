@@ -13,9 +13,11 @@ import { decisionCost } from "./cost.ts";
 import { ENCODER_LEVEL, encodeRequest } from "./encode.ts";
 import { cellWindow } from "./lanes.ts";
 import { emptyMemory, type Memory, remember } from "./memory.ts";
+import type { ModelInput } from "./policy.ts";
 import {
   driftingOff,
   execRoute,
+  MAX_CROSS_WAIT,
   MAX_DETOUR_STEPS,
   ROUTE_IDS,
   RouteExecutor,
@@ -200,6 +202,43 @@ describe("searchRoute: the way round, over the words alone", () => {
     expect(driftingOff(obs)).toBe("right");
     const away = searchEscape(obs);
     expect(away?.first).toBe("hop_forward");
+  });
+});
+
+describe("RouteExecutor: what each step is, without reading its sentence", () => {
+  it("calls the crossing a hop when the cell is clear", () => {
+    const executor = new RouteExecutor();
+    const obs = world([grass([], 0), grass([], 1)]);
+    expect(executor.start("cross_ahead", obs, emptyMemory()).step).toEqual({ kind: "hop" });
+  });
+
+  it("counts the steps spent waiting for a gap, and says what is in the way", () => {
+    const executor = new RouteExecutor();
+    const obs = world([grass([], 0), water([{ col: 4, speed: -1, type: "log" }], 1)]);
+    const first = executor.start("cross_ahead", obs, emptyMemory());
+    expect(first.step).toEqual({ kind: "wait", n: 1, of: MAX_CROSS_WAIT, cell: "water" });
+    const second = executor.next(obs, emptyMemory());
+    expect(second?.step).toEqual({ kind: "wait", n: 2, of: MAX_CROSS_WAIT, cell: "water" });
+  });
+
+  it("calls a refused crossing a hold, however the chicken holds", () => {
+    const executor = new RouteExecutor();
+    const obs = world([grass([], 0), grass([0], 1)]);
+    const act = executor.start("cross_ahead", obs, emptyMemory());
+    expect(act.action).toBe("stay");
+    expect(act.step).toEqual({ kind: "hold" });
+    expect(executor.start("wait_here", obs, emptyMemory()).step).toEqual({ kind: "hold" });
+  });
+
+  it("numbers the hops of a detour and says how many are left", () => {
+    const executor = new RouteExecutor();
+    const memory = emptyMemory();
+    const first = executor.start("detour_right", boxedIn(), memory);
+    expect(first.step).toMatchObject({ kind: "walk", n: 1 });
+    const second = executor.next(boxedIn(), memory);
+    expect(second?.step).toMatchObject({ kind: "walk", n: 2 });
+    const step = second?.step;
+    expect(step?.kind === "walk" && step.left >= 0).toBe(true);
   });
 });
 
@@ -504,6 +543,81 @@ describe("the route strategy through the Clef policy", () => {
     const second = await policy.decide(observe(new Game({ seed: 1 })));
     expect(second.source).toBe("model");
     expect(requests).toHaveLength(2);
+  });
+
+  it("tells the caller what it asks just before asking, and hands back each answer as the model gave it", async () => {
+    const { client, requests } = clientAnswering("no_stand", "still", "detour_right", 0.1);
+    const asked: Array<{ input: ModelInput; sentSoFar: number }> = [];
+    const decision = await policyOf(client).decide(observe(new Game({ seed: 4 })), emptyMemory(), {
+      onAsk: (input) => asked.push({ input, sentSoFar: requests.length }),
+    });
+    expect(asked).toHaveLength(1);
+    expect(asked[0]?.sentSoFar).toBe(0); // before the request left
+    expect(asked[0]?.input).toBe(decision.sent);
+    expect(Object.keys(decision.answers ?? {}).sort()).toEqual(["around", "cell", "moving"]);
+    expect(decision.answers?.cell).toEqual({
+      choice: "no_stand",
+      probabilities: { stand: 0.1, no_stand: 0.9 },
+    });
+    expect(decision.answers?.around?.choice).toBe("detour_right");
+  });
+
+  it("does not announce a step the controller takes by itself, which asks nothing", async () => {
+    const { client, requests } = clientAnswering("no_stand", "still", "detour_right", 0.1);
+    const policy = policyOf(client);
+    const asked: ModelInput[] = [];
+    const hooks = { onAsk: (input: ModelInput) => asked.push(input) };
+    const memory = emptyMemory();
+    const first = await policy.decide(boxedIn(), memory, hooks);
+    const second = await policy.decide(boxedIn(), memory, hooks);
+    expect(first.source).toBe("model");
+    expect(second.source).toBe("executor");
+    expect(second.answers).toBeUndefined();
+    expect(second.sent).toBeUndefined();
+    expect(asked).toHaveLength(1);
+    expect(requests).toHaveLength(1);
+  });
+
+  it("puts the kind of each step on the decision, the model's own and the controller's after it", async () => {
+    const { client } = clientAnswering("no_stand", "still", "detour_right", 0.1);
+    const policy = policyOf(client);
+    const memory = emptyMemory();
+    const first = await policy.decide(boxedIn(), memory);
+    const second = await policy.decide(boxedIn(), memory);
+    expect(first.source).toBe("model");
+    expect(first.extra).toMatchObject({
+      maneuver: "detour_right",
+      controller: { kind: "walk", n: 1 },
+    });
+    expect(second.source).toBe("executor");
+    expect(second.extra).toEqual({ controller: { kind: "walk", n: 2, left: expect.any(Number) } });
+  });
+
+  it("says a crossing waits for a gap, and that the way ahead is passing, not closed", async () => {
+    const { client } = clientAnswering("no_stand", "moving", "detour_left", 0.1);
+    const obs = world([grass([], 0), water([{ col: 4, speed: -1, type: "log" }], 1)]);
+    const decision = await policyOf(client).decide(obs);
+    expect(decision.action).toBe("stay");
+    expect(decision.extra).toMatchObject({
+      ahead: "passing",
+      maneuver: "cross_ahead",
+      controller: { kind: "wait", n: 1, of: MAX_CROSS_WAIT, cell: "water" },
+    });
+  });
+
+  it("keeps the kind of step out of the records of a game, which only the screen needs", async () => {
+    const { client } = clientAnswering("no_stand", "still", "detour_right", 0.1);
+    const episode = await playEpisode(clefPolicy(client, parseClefPolicyId(id)), 4, {
+      maxDecisions: 12,
+    });
+    expect(episode.records.some((record) => record.source === "executor")).toBe(true);
+    for (const record of episode.records) {
+      expect(record.extra ?? {}).not.toHaveProperty("controller");
+    }
+    // What a strategy reports for the benchmark is kept.
+    expect(episode.records.find((record) => record.extra?.maneuver)?.extra).toMatchObject({
+      maneuver: expect.any(String),
+    });
   });
 
   it("gives every episode its own controller", () => {

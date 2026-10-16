@@ -8,12 +8,19 @@ import {
   type Question,
 } from "@ccr/clef";
 import { ACTIONS, type Action, type Observation } from "@ccr/core";
+import { choiceAnswers } from "./answers.ts";
 import { ACTION_PREFERENCE } from "./baselines.ts";
 import { ENCODER_IDS, ENCODER_LEVEL, type EncoderId, encodeRequest } from "./encode.ts";
 import { Executor, MANEUVER_ACTION, MANEUVER_IDS, type Maneuver } from "./executor.ts";
 import { lanesState, MANEUVER_NAMES, movesState } from "./lanes.ts";
 import type { Memory } from "./memory.ts";
-import type { Decision, ModelInput, ObservationPolicy, PolicyFactory } from "./policy.ts";
+import type {
+  DecideHooks,
+  Decision,
+  ModelInput,
+  ObservationPolicy,
+  PolicyFactory,
+} from "./policy.ts";
 import {
   choiceInstructions,
   criteriaFor,
@@ -282,9 +289,11 @@ export function clefPolicy(client: ClefClient, config: ClefPolicyConfig): Policy
       kind: "observation",
       id,
       describe: (obs, memory) => inputOf(requestFor(obs, memory, executor.lastResult)),
-      async decide(obs: Observation, memory?: Memory): Promise<Decision> {
+      async decide(obs: Observation, memory?: Memory, hooks?: DecideHooks): Promise<Decision> {
         if (!maneuvers) {
           const request = requestFor(obs, memory);
+          const sent = inputOf(request);
+          hooks?.onAsk?.(sent);
           const result = await client.run(request);
           const decision =
             config.strategy === "choice"
@@ -295,12 +304,14 @@ export function clefPolicy(client: ClefClient, config: ClefPolicyConfig): Policy
                     result,
                     config.strategy === "critic-go" ? selectGoUnlessRisky : selectByRisk,
                   );
-          return { ...decision, sent: inputOf(request) };
+          return { ...decision, sent };
         }
         const state = lanesState(obs, memory);
         const step = executor.next(state);
         if (step) return { action: step.action, source: "executor", note: step.note };
         const request = requestFor(obs, memory, executor.lastResult);
+        const sent = inputOf(request);
+        hooks?.onAsk?.(sent);
         const answered = await client.run(request);
         const chosen = graphs ? fromGraphManeuver(answered) : fromManeuver(answered);
         const first = executor.start(chosen.maneuver, state);
@@ -310,7 +321,7 @@ export function clefPolicy(client: ClefClient, config: ClefPolicyConfig): Policy
           source: "model",
           note: `model chose ${chosen.maneuver}; ${first.note}`,
           extra: { ...chosen.decision.extra, maneuver: chosen.maneuver },
-          sent: inputOf(request),
+          sent,
         };
       },
     };
@@ -332,6 +343,7 @@ function meta(result: ClefResult) {
     inputTokens: result.usage.inputTokens,
     neurons: result.neurons,
     cached: result.cached,
+    ...choiceAnswers(result),
   };
 }
 

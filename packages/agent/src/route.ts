@@ -146,10 +146,25 @@ export function driftingOff(obs: Observation): "left" | "right" | "no" {
   return "no";
 }
 
-/** One step the controller takes: the move to make now and, in a sentence, what it is doing. */
+/**
+ * What a step of the controller is, for whoever shows it: the sentence in `note` is for reading, this is for
+ * telling the steps apart without parsing it.
+ *  - `hop`:  the crossing the model chose, made now.
+ *  - `wait`: standing until the cell ahead clears (`n` of at most `of` steps; `cell` is what is there).
+ *  - `walk`: one hop of a detour (`n` hops so far, `left` still to go).
+ *  - `hold`: the manoeuvre was refused, so the chicken waits where it is safe or steps off a cell it cannot stay on.
+ */
+export type RouteStep =
+  | { kind: "hop" }
+  | { kind: "wait"; n: number; of: number; cell: string }
+  | { kind: "walk"; n: number; left: number }
+  | { kind: "hold" };
+
+/** One step the controller takes: the move to make now, in a sentence what it is doing, and what kind of step it is. */
 export interface RouteAct {
   action: Action;
   note: string;
+  step: RouteStep;
 }
 
 interface DetourPlan {
@@ -173,16 +188,17 @@ interface CrossPlan {
 function safeHold(obs: Observation, memory: Memory): RouteAct {
   const off = driftingOff(obs);
   if (off === "no" && canStand(lanesState(obs, memory).chicken.stays_on)) {
-    return { action: "stay", note: "waiting where it is safe" };
+    return { action: "stay", note: "waiting where it is safe", step: { kind: "hold" } };
   }
   const away = searchEscape(obs);
   if (away) {
     return {
       action: away.first,
       note: `stepping off a cell it cannot stay on: ${away.first.replace("hop_", "")} (${away.path.length} to go)`,
+      step: { kind: "hold" },
     };
   }
-  return { action: "stay", note: "nowhere safe to step, waiting" };
+  return { action: "stay", note: "nowhere safe to step, waiting", step: { kind: "hold" } };
 }
 
 /**
@@ -255,7 +271,7 @@ export class RouteExecutor {
   /** A refused manoeuvre still costs the chicken a step: it waits, or steps off a cell that cannot hold it. */
   private hold(obs: Observation, memory: Memory): RouteAct {
     const held = safeHold(obs, memory);
-    return { action: held.action, note: `${this.last ?? "hold"}; ${held.note}` };
+    return { action: held.action, note: `${this.last ?? "hold"}; ${held.note}`, step: held.step };
   }
 
   private giveBack(starting: boolean, name: string, why: string): null {
@@ -279,7 +295,11 @@ export class RouteExecutor {
       const after = plan.waited === 0 ? "" : ` after waiting ${plan.waited} step(s)`;
       this.last = `cross_ahead: hopped${after}`;
       this.plan = null;
-      return { action: "hop_forward", note: "cross_ahead: the cell is clear, hopping" };
+      return {
+        action: "hop_forward",
+        note: "cross_ahead: the cell is clear, hopping",
+        step: { kind: "hop" },
+      };
     }
     if (isPermanent(cell))
       return this.giveBack(starting, "cross_ahead", `${cell} does not go away`);
@@ -302,6 +322,7 @@ export class RouteExecutor {
     return {
       action: "stay",
       note: `cross_ahead: waiting for the cell (${cell}) to clear, ${plan.waited}/${MAX_CROSS_WAIT}`,
+      step: { kind: "wait", n: plan.waited, of: MAX_CROSS_WAIT, cell },
     };
   }
 
@@ -335,6 +356,7 @@ export class RouteExecutor {
     return {
       action: route.first,
       note: `${name}: hop ${plan.steps}, ${route.first.replace("hop_", "")} (${route.path.length} to go)`,
+      step: { kind: "walk", n: plan.steps, left: route.path.length },
     };
   }
 }

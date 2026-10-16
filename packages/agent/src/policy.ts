@@ -13,6 +13,12 @@ export interface ModelInput {
   images?: number;
 }
 
+/** What the model answered to one choice question: its pick and the probability of every option. */
+export interface QuestionAnswer {
+  choice: string;
+  probabilities: Record<string, number>;
+}
+
 export interface Decision {
   action: Action;
   /** Per-action probabilities as returned by the model, when the strategy has them. */
@@ -37,6 +43,24 @@ export interface Decision {
    * records do not keep it.
    */
   sent?: ModelInput;
+  /**
+   * The answer to each choice question as the model gave it, by question id. `probabilities` above is the
+   * joint over the five moves the strategy implies; this is the raw material, so a person can see which
+   * answer led to which move. Like `sent`, the episode records do not keep it.
+   */
+  answers?: Record<string, QuestionAnswer>;
+}
+
+/**
+ * Callbacks a caller may hand to `decide` to follow a decision while it happens. They only observe: a
+ * policy behaves the same without them.
+ */
+export interface DecideHooks {
+  /**
+   * Called with the exact request just before it goes to the model, and not at all for a step the code
+   * takes by itself or an answer that needs no model. The answer follows in the returned `Decision`.
+   */
+  onAsk?(input: ModelInput): void;
 }
 
 /**
@@ -47,7 +71,7 @@ export interface Decision {
 export interface ObservationPolicy {
   readonly kind: "observation";
   readonly id: string;
-  decide(obs: Observation, memory?: Memory): Promise<Decision>;
+  decide(obs: Observation, memory?: Memory, hooks?: DecideHooks): Promise<Decision>;
   /** What `decide` would send for these inputs, without asking anything. */
   describe?(obs: Observation, memory?: Memory): ModelInput;
 }
