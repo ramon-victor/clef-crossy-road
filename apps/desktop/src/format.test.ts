@@ -1,3 +1,4 @@
+import { DEFAULT_STALL_LIMIT } from "@ccr/agent";
 import { describe, expect, it } from "vitest";
 import { endTitle, meterLevel, ms, percent } from "./format.ts";
 
@@ -20,7 +21,7 @@ describe("format", () => {
     expect(endTitle({ alive: false, stalled: false, deathCause: "water" })).toBe("Drowned");
     expect(endTitle({ alive: false, stalled: false, deathCause: null })).toBe("Game over");
     expect(endTitle({ alive: true, stalled: true, deathCause: null })).toBe(
-      "Stuck: no new row in 40 decisions",
+      `Stuck: no new row in ${DEFAULT_STALL_LIMIT} decisions`,
     );
   });
 });

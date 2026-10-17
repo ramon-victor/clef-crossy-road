@@ -137,6 +137,14 @@ describe("controllerSays", () => {
     expect(
       controllerSays(at({ kind: "hop" }, "cross_ahead: the cell is clear, hopping")),
     ).toBeNull();
+    expect(
+      controllerSays({
+        extra: { fallback: "detour_right", controller: { kind: "walk", n: 1, left: 3 } },
+        note: "model chose cross_ahead; cross_ahead: refused, nothing moves on that row, the water stays; detour_right: hop 1, right (3 to go)",
+      }),
+    ).toBe(
+      "refused, nothing moves on that row, the water stays; detour_right: hop 1, right (3 to go)",
+    );
     expect(controllerSays(at({ kind: "leave", n: 1, left: 2 }))).toBe(
       "getting off the platform: hop 1, 2 to go",
     );

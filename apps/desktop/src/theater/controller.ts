@@ -87,10 +87,11 @@ export function controllerNote(decision: Pick<Decision, "note">): string | null 
 
 /**
  * What the controller is doing at a step, in a sentence, or null when there is nothing to say (the crossing is
- * simply made). A wait, a detour and a way off a platform are told from what the step reports; a refusal from the
- * controller's own note.
+ * simply made). A wait, a detour and a way off a platform are told from what the step reports; a refusal, and a
+ * manoeuvre that began as another one, from the controller's own note.
  */
 export function controllerSays(decision: Pick<Decision, "extra" | "note">): string | null {
+  if (decision.extra?.fallback !== undefined) return controllerNote(decision);
   const step = controllerStep(decision);
   if (step?.kind === "wait") return waitingText(step);
   if (step?.kind === "walk") return walkText(step);
