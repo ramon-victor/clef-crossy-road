@@ -117,7 +117,6 @@ export {
   type HoldWhy,
   MAX_DETOUR_STEPS,
   ROUTE_ACTION,
-  ROUTE_DEPTH,
   ROUTE_IDS,
   type Route,
   type RouteAct,

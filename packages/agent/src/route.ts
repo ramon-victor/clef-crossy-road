@@ -48,11 +48,8 @@ export const ROUTE_ACTION: Readonly<Record<Exclude<RouteManeuver, "leave_platfor
 
 /** Hops a detour may take before it gives the decision back. */
 export const MAX_DETOUR_STEPS = 40;
-/** How many hops the search for a detour looks ahead: back some rows, along a row, forward again. */
 export const DETOUR_DEPTH = 24;
-/** How many hops the search for a way off a platform looks ahead: it is urgent, so it stays short. */
-export const ROUTE_DEPTH = 8;
-/** Decisions without a new row after which a side that failed is tried again: the world has moved on. */
+export const EXIT_DEPTH = 8;
 export const RETRY_AFTER = 4;
 /** Steps a crossing waits for the cell ahead to clear: three seconds of game time. */
 export const MAX_CROSS_WAIT = 15;
@@ -108,10 +105,7 @@ interface WalkNode {
   d: number;
 }
 
-/**
- * The shortest way to any cell the goal accepts, one hop of 0.2 s per level. A cell for which `isDead` holds is
- * reached but not walked on from: a detour that arrives on the wrong side of the new row is not that detour.
- */
+/** A cell for which `isDead` holds is reached but not walked on from (a detour that arrives on the wrong side is not that detour). */
 function walk(
   obs: Observation,
   depth: number,
@@ -169,8 +163,7 @@ export function searchExit(obs: Observation): Route | null {
     secondsToLimit(node.c, node.v, MAX_ABS_X - EDGE_MARGIN) >= EDGE_SOON &&
     canStand(cellWindow(rowAt(obs, node.dz), node.c, node.d * T, (node.d + 1) * T, true));
   return (
-    walk(obs, ROUTE_DEPTH, (node) => node.dz >= 1 && settled(node)) ??
-    walk(obs, ROUTE_DEPTH, settled)
+    walk(obs, EXIT_DEPTH, (node) => node.dz >= 1 && settled(node)) ?? walk(obs, EXIT_DEPTH, settled)
   );
 }
 
@@ -193,7 +186,6 @@ export interface RouteAct {
   action: Action;
   note: string;
   step: RouteStep;
-  /** The manoeuvre could not begin, so this step only holds the chicken. */
   refused?: boolean;
 }
 
@@ -283,7 +275,6 @@ export class RouteExecutor {
     return this.last;
   }
 
-  /** Sides whose detour was refused or given back less than `RETRY_AFTER` decisions ago, on this row. */
   failedSides(memory: Memory): Readonly<Record<SideName, boolean>> {
     if (memory.score > this.failedAtScore) {
       this.failedAt.left = null;
@@ -291,7 +282,7 @@ export class RouteExecutor {
     }
     const failed = (side: SideName): boolean => {
       const at = this.failedAt[side];
-      return at !== null && memory.sinceProgress - at < RETRY_AFTER;
+      return at !== null && at <= memory.sinceProgress && memory.sinceProgress - at < RETRY_AFTER;
     };
     return { left: failed("left"), right: failed("right") };
   }
@@ -418,7 +409,7 @@ export class RouteExecutor {
     }
     const route = searchExit(obs);
     if (!route) {
-      return this.giveBack(starting, "leave_platform", `no way off within ${ROUTE_DEPTH} hops`);
+      return this.giveBack(starting, "leave_platform", `no way off within ${EXIT_DEPTH} hops`);
     }
     return legAct("leave_platform", "leave", ++plan.steps, route);
   }

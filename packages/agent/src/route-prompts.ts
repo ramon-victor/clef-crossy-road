@@ -86,6 +86,7 @@ export const RIDE_QUESTION_ID = "ride";
 export const CELL_OPTIONS = ["stand", "no_stand"] as const;
 export const MOVING_OPTIONS = ["moving", "still"] as const;
 export const AROUND_OPTIONS = ["detour_left", "detour_right", "wait_here"] as const;
+export type AroundOption = (typeof AROUND_OPTIONS)[number];
 export const RIDE_OPTIONS = ["leaving", "staying"] as const;
 
 export const CELL_CRITERIA: Readonly<Record<(typeof CELL_OPTIONS)[number], string>> = {
@@ -98,7 +99,7 @@ export const MOVING_CRITERIA: Readonly<Record<(typeof MOVING_OPTIONS)[number], s
   still: "cross_ahead.things_move is still.",
 };
 
-export const AROUND_CRITERIA: Readonly<Record<(typeof AROUND_OPTIONS)[number], string>> = {
+export const AROUND_CRITERIA: Readonly<Record<AroundOption, string>> = {
   detour_left:
     "The left side has an opening (detour_left.opening_ahead is not none and detour_left.recently_failed is no) and the right side has none or a farther one; or both are equally near and chicken.place_in_world is middle, right or at_right_edge.",
   detour_right:

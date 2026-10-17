@@ -14,6 +14,7 @@ import { PROMPT_VERSION } from "./prompts.ts";
 import { ROUTE_ACTION, type RouteAct, RouteExecutor, type RouteManeuver } from "./route.ts";
 import {
   AROUND_OPTIONS,
+  type AroundOption,
   CELL_OPTIONS,
   MOVING_OPTIONS,
   RIDE_OPTIONS,
@@ -107,13 +108,10 @@ function inputOf({ model, state, questions }: ClefRequest): ModelInput {
   return { model, state, questions };
 }
 
-/**
- * Starts the manoeuvre the model chose. One that cannot begin (nothing to walk, water that never changes) passes to
- * the next of the model's own answers, in the order of its probabilities, without asking again.
- */
+/** A manoeuvre that cannot begin passes to the next of the model's own answers, without asking again. */
 function begin(
   executor: RouteExecutor,
-  chosen: { maneuver: RouteManeuver; fallbacks: readonly RouteManeuver[] },
+  chosen: Pick<RouteChoice, "maneuver" | "fallbacks">,
   obs: Observation,
   memory: Memory,
 ): { act: RouteAct; started: RouteManeuver; note: string } {
@@ -129,14 +127,15 @@ function begin(
   return { act, started, note: [...refusals, act.note].join("; ") };
 }
 
-/** What to try after `chosen` is refused: the answers to `around` by probability, all of them for "go straight", the others for a detour. */
+/** What to try after `chosen` is refused: the detours the model gave, by probability. Waiting is what a refusal already does. */
 export function refusalOrder(
   chosen: RouteManeuver,
-  around: Readonly<Record<(typeof AROUND_OPTIONS)[number], number>>,
+  around: Readonly<Record<AroundOption, number>>,
 ): RouteManeuver[] {
   if (chosen === "wait_here" || chosen === "leave_platform") return [];
-  const ranked = [...AROUND_OPTIONS].sort((a, b) => around[b] - around[a]);
-  return ranked.filter((option) => option !== chosen);
+  return AROUND_OPTIONS.filter((option) => option !== "wait_here" && option !== chosen).sort(
+    (a, b) => around[b] - around[a],
+  );
 }
 
 function choiceOf<T extends string>(
@@ -159,12 +158,14 @@ function choiceOf<T extends string>(
  * of crossing is P(stand) + P(no_stand) * P(moving), and what is left (the way is closed) is split by the
  * third answer.
  */
-export function fromRoute(result: ClefResult): {
+export interface RouteChoice {
   maneuver: RouteManeuver;
   decision: Decision;
   pLeaving?: number;
   fallbacks: RouteManeuver[];
-} {
+}
+
+export function fromRoute(result: ClefResult): RouteChoice {
   const cell = choiceOf(result.answers[ROUTE_QUESTION_IDS[0]], CELL_OPTIONS, "cell");
   const moving = choiceOf(result.answers[ROUTE_QUESTION_IDS[1]], MOVING_OPTIONS, "moving");
   const around = choiceOf(result.answers[ROUTE_QUESTION_IDS[2]], AROUND_OPTIONS, "around");
