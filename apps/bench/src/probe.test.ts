@@ -70,6 +70,7 @@ describe("sampleStates", () => {
     for (const [id, quota] of Object.entries(SMALL)) expect(counts(id)).toBeLessThanOrEqual(quota);
     expect(a.length).toBeGreaterThan(8);
     expect(new Set(a.map((s) => s.id)).size).toBe(a.length);
+    expect(new Set(a.map((s) => `${s.seed}|${s.actions.join(",")}`)).size).toBe(a.length);
   });
 
   it("labels agree with the simulator, and a good move is never one that dies when another is fine", async () => {
