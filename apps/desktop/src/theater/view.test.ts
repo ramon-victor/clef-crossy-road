@@ -77,7 +77,7 @@ describe("questionsOf: what the model was asked", () => {
     const questions = questionsOf(riding.decision.sent, riding);
     expect(questions.map((q) => q.id)).toEqual(["cell", "moving", "around", "ride"]);
     const ride = questions[3];
-    expect(ride?.title).toBe("Is its platform leaving the world?");
+    expect(ride?.title).toBe("Is the edge a moment away?");
     expect(ride?.options.map((o) => [o.short, o.p, o.chosen])).toEqual([
       ["Leave", 0.1, false],
       ["Stay", 0.9, true],

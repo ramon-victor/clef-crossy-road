@@ -46,10 +46,10 @@ export const ROUTE_LABELS: Readonly<Record<string, QuestionLabel>> = {
     },
   },
   ride: {
-    title: "Is its platform leaving the world?",
+    title: "Is the edge a moment away?",
     options: {
-      leaving: { glyph: "!", label: "Yes, the edge is a moment away", short: "Leave" },
-      staying: { glyph: "✓", label: "No, it can stay on it", short: "Stay" },
+      leaving: { glyph: "!", label: "Yes, time to get off", short: "Leave" },
+      staying: { glyph: "✓", label: "No, there is time", short: "Stay" },
     },
   },
 };

@@ -66,11 +66,14 @@ const AROUND_EXAMPLES = [
 ].join(" ");
 
 /**
- * The fourth question, asked only while the chicken stands on a platform (ADR-0011, addendum). The rule of the
- * game it needs is written here and not in `LOOKUP_GAME`, so that every request made off a platform stays as it was.
+ * The fourth question, asked only while the chicken stands on a platform (ADR-0011, addendum). Its note is written
+ * here and not in `LOOKUP_GAME`, so that every request made off a platform stays as it was. It asks for a plain
+ * match of one word, because that is what the model does well: asked in words ("is the platform about to carry the
+ * chicken past the edge?", with or without the reason and with the examples, 2026-10-17) it answered `leaving` in 3 of
+ * 12 states a moment from the edge and in none of the other 12, while "is edge_in a_moment?" got 12 of 12 and 0 of 12.
  */
 const RIDE_NOTE =
-  "A log or a lily pad carries the chicken along while it stands on it, and the chicken is gone once it is carried past the edge of the world. The state has an entry chicken: edge_in says how soon the platform under the chicken carries it past that edge (a_moment, soon, later, or not_carried when the platform stands still or carries it away from the edge).";
+  "The state has an entry chicken: edge_in is one of a_moment, soon, later or not_carried.";
 
 const RIDE_EXAMPLES = [
   "Examples:",
@@ -122,7 +125,7 @@ export function routeQuestions(riding = false): Record<string, Question> {
     ? {
         [RIDE_QUESTION_ID]: {
           type: "choice",
-          instructions: `${LOOKUP_GAME} ${RIDE_NOTE} Is the platform under the chicken about to carry it past the edge of the world? Read only chicken.edge_in. ${RIDE_EXAMPLES}`,
+          instructions: `${LOOKUP_GAME} ${RIDE_NOTE} Is chicken.edge_in a_moment? Read only chicken.edge_in. ${RIDE_EXAMPLES}`,
           criteria: { ...RIDE_CRITERIA },
         },
       }
