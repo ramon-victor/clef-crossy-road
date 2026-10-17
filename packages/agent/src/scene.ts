@@ -1,6 +1,6 @@
-import { MAX_ABS_X, type Observation, type ObsRow } from "@ccr/core";
+import { MAX_ABS_X, type Observation } from "@ccr/core";
 import { HOP_SECONDS } from "./forecast.ts";
-import { canStand, cellWindow, hopWindow, type LanesState, lanesState } from "./lanes.ts";
+import { canStand, cellWindow, hopWindow, type LanesState, lanesState, rowAt } from "./lanes.ts";
 import type { Memory } from "./memory.ts";
 import { type EdgeIn, edgeWord, secondsToEdge } from "./platform.ts";
 
@@ -22,9 +22,6 @@ export type SideName = "left" | "right";
 export const sign = (side: SideName): -1 | 1 => (side === "left" ? -1 : 1);
 
 const T = HOP_SECONDS;
-
-const rowAt = (obs: Observation, dz: number): ObsRow | undefined =>
-  obs.rows.find((row) => row.dz === dz);
 
 const distanceWord = (steps: number): Distance =>
   steps === 1 ? "adjacent" : steps === 2 ? "two_away" : "three_or_more";
@@ -81,10 +78,7 @@ export interface SceneState {
     place_in_world: LanesState["chicken"]["place_in_world"];
     carried_towards: LanesState["chicken"]["carried_towards"];
     behind_frontier: BehindFrontier;
-    /**
-     * How soon the platform under the chicken carries it past the edge of the world (ADR-0009, addendum). Only
-     * present while the chicken stands on a platform: elsewhere there is nothing to say, and the request stays as it was.
-     */
+    /** Only on a platform, so every other request stays as it was (ADR-0009, addendum). */
     edge_in?: EdgeIn;
   };
   memory: LanesState["memory"];

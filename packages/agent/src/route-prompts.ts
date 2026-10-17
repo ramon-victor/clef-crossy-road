@@ -66,11 +66,9 @@ const AROUND_EXAMPLES = [
 ].join(" ");
 
 /**
- * The fourth question, asked only while the chicken stands on a platform (ADR-0011, addendum). Its note is written
- * here and not in `LOOKUP_GAME`, so that every request made off a platform stays as it was. It asks for a plain
- * match of one word, because that is what the model does well: asked in words ("is the platform about to carry the
- * chicken past the edge?", with or without the reason and with the examples, 2026-10-17) it answered `leaving` in 3 of
- * 12 states a moment from the edge and in none of the other 12, while "is edge_in a_moment?" got 12 of 12 and 0 of 12.
+ * The fourth question, only on a platform. Its note lives here and not in `LOOKUP_GAME`, so that every other request
+ * stays as it was. It asks for a plain match of one word: asked in words the model said `leaving` in 3 of 12 states a
+ * moment from the edge, asked "is edge_in a_moment?" in 12 of 12 (docs/07).
  */
 const RIDE_NOTE =
   "The state has an entry chicken: edge_in is one of a_moment, soon, later or not_carried.";
@@ -115,9 +113,8 @@ export const RIDE_CRITERIA: Readonly<Record<(typeof RIDE_OPTIONS)[number], strin
 };
 
 /**
- * The three questions of the `route` strategy, and a fourth while the chicken stands on a platform. `cell` and
- * `moving` read the row straight ahead; `around` only matters when the way straight ahead is closed (the cell
- * cannot be stood on and nothing moves); `ride` reads the clock of the platform under the chicken.
+ * The three questions of the `route` strategy, and `ride` while the chicken stands on a platform. `cell` and
+ * `moving` read the row straight ahead; `around` only matters when the way straight ahead is closed.
  */
 export function routeQuestions(riding = false): Record<string, Question> {
   const ahead = `${LOOKUP_GAME} ${AHEAD_NOTE}`;

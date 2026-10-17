@@ -11,7 +11,7 @@ import type {
   PolicyFactory,
 } from "./policy.ts";
 import { PROMPT_VERSION } from "./prompts.ts";
-import { ROUTE_ACTION, RouteExecutor, type RouteManeuver, searchExit } from "./route.ts";
+import { ROUTE_ACTION, RouteExecutor, type RouteManeuver } from "./route.ts";
 import {
   AROUND_OPTIONS,
   CELL_OPTIONS,
@@ -24,13 +24,11 @@ import {
 import { sceneState } from "./scene.ts";
 
 /**
- * The `route` strategy (ADR-0011): three small lookups in one request. `cell` says whether the chicken can
- * stand on the cell straight ahead, `moving` whether the things of that row move, and `around` which way to go
- * if the way ahead is closed (left, right, wait). While the chicken stands on a platform a fourth, `ride`, says
- * whether that platform is about to carry it past the edge of the world. The only rule of ours on the answers is
- * the routing: a platform about to leave the world means `leave_platform`; otherwise a cell to stand on, or things
- * that keep moving, mean `cross_ahead`; otherwise the way is closed and `around` decides. A controller (route.ts)
- * then does the hopping, and steps it takes are not model calls.
+ * The `route` strategy (ADR-0011): three small lookups in one request (`cell`, `moving`, `around`), and a fourth,
+ * `ride`, while the chicken stands on a platform. The only rule of ours on the answers is the routing: a platform a
+ * moment from the edge means `leave_platform`; a cell to stand on, or things that keep moving, mean `cross_ahead`;
+ * otherwise the way is closed and `around` decides. A controller (route.ts) then does the hopping, and the steps it
+ * takes are not model calls.
  */
 export function routePolicy(
   client: ClefClient,
@@ -85,7 +83,7 @@ export function routePolicy(
                 probabilities: withLeaving(
                   chosen.decision.probabilities,
                   chosen.pLeaving,
-                  searchExit(obs)?.first ?? "stay",
+                  first.action,
                 ),
               }),
           action: first.action,
@@ -127,7 +125,6 @@ function choiceOf<T extends string>(
 export function fromRoute(result: ClefResult): {
   maneuver: RouteManeuver;
   decision: Decision;
-  /** What the model gave to leaving the platform, when it was asked (the chicken stood on one). */
   pLeaving?: number;
 } {
   const cell = choiceOf(result.answers[ROUTE_QUESTION_IDS[0]], CELL_OPTIONS, "cell");
@@ -150,7 +147,6 @@ export function fromRoute(result: ClefResult): {
       : ahead === "closed"
         ? around.choice
         : "cross_ahead";
-  // What is left for the other manoeuvres once the platform has had its share.
   const rest = 1 - (pLeaving ?? 0);
   const probabilities: Partial<Record<Action, number>> = { hop_forward: pCross * rest };
   for (const option of AROUND_OPTIONS) {
@@ -183,10 +179,7 @@ export function fromRoute(result: ClefResult): {
   };
 }
 
-/**
- * The joint probabilities with the platform's share put on the hop that gets the chicken off it, so that the five
- * bars still add up to one. The share is the model's own answer to `ride`, whichever way it went.
- */
+/** The platform's share goes on the hop made, so that the five bars still add up to one. */
 function withLeaving(
   probabilities: Partial<Record<Action, number>> | undefined,
   pLeaving: number,

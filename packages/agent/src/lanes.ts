@@ -76,15 +76,13 @@ export function cellWindow(
   return cellOver(row, col, times, landing, waiting);
 }
 
-/** How far from a whole column a chicken has to stand for a hop to its nearest whole column to cross another column on the way. */
 const OFF_COLUMN = 0.05;
 
 /**
- * `cellWindow` for a hop forward or back from `col`, which lands on the nearest whole column. A chicken that stands
- * on a platform is carried to a fractional column and enters a road row on its way to the whole one, so a vehicle
- * counts if it covers either column (a vehicle is wider than the distance between them). Water, rail and trees are
- * only looked at where the hop ends. Found by replaying a death: seed 58 of the free reference was hit three ticks
- * into a hop off a log from column 0.7 that the old check judged at column 1 (2026-10-15).
+ * `cellWindow` for a hop forward or back from `col`, which lands on the nearest whole column. A chicken carried by a
+ * platform stands on a fractional column and enters a road row before it reaches the whole one (seed 58 of the free
+ * reference was hit three ticks into a hop from column 0.7 that was judged at column 1), so a vehicle counts if it
+ * covers either column. Water, rail and trees are only looked at where the hop ends.
  */
 export function hopWindow(
   row: ObsRow | undefined,
@@ -96,8 +94,7 @@ export function hopWindow(
   const target = Math.round(col);
   const there = cellWindow(row, target, landing, until, waiting);
   if (row?.kind !== "road" || !canStand(there) || Math.abs(col - target) < OFF_COLUMN) return there;
-  const along = cellWindow(row, col, landing, until, waiting);
-  return canStand(along) ? there : along;
+  return canStand(cellWindow(row, col, landing, landing)) ? there : "vehicle";
 }
 
 /**
@@ -130,7 +127,7 @@ function cellOver(
   }
 }
 
-const rowAt = (obs: Observation, dz: number): ObsRow | undefined =>
+export const rowAt = (obs: Observation, dz: number): ObsRow | undefined =>
   obs.rows.find((row) => row.dz === dz);
 
 type Side = "left" | "right" | "no";

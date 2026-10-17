@@ -8,7 +8,6 @@ import {
   platformClock,
   ridingSpeed,
   secondsToEdge,
-  secondsToLimit,
 } from "./platform.ts";
 
 const log = (col: number, speed: number, half = 2): ObsRow => ({
@@ -28,35 +27,36 @@ const onGrass = (col: number): Observation => ({
 });
 
 describe("secondsToEdge: the clock of the platform under the chicken", () => {
-  it("is the distance to the edge it is carried towards over its speed", () => {
-    expect(secondsToEdge(riding(3, 2))).toBeCloseTo(1, 5); // 2 columns to go at 2 columns per second
-    expect(secondsToEdge(riding(-3, -4))).toBeCloseTo(0.5, 5);
-    expect(secondsToEdge(riding(0, 1))).toBeCloseTo(5, 5);
-  });
+  it.each([
+    [3, 2, 1],
+    [-3, -4, 0.5],
+    [0, 1, 5],
+    [-4, 2, 4.5],
+    [5.5, 1, 0],
+  ])(
+    "is the distance to the edge it is carried towards over its speed (column %s at %s: %s s)",
+    (col, speed, seconds) => {
+      expect(secondsToEdge(riding(col, speed))).toBeCloseTo(seconds, 5);
+    },
+  );
 
   it("is infinite when the platform stands still, or the chicken is not on one", () => {
     expect(secondsToEdge(riding(4, 0))).toBe(Number.POSITIVE_INFINITY);
     expect(secondsToEdge(onGrass(4))).toBe(Number.POSITIVE_INFINITY);
     expect(ridingSpeed(onGrass(4))).toBe(0);
   });
-
-  it("does not count the far edge: a platform carried away from the nearer edge goes the long way", () => {
-    expect(secondsToEdge(riding(-4, 2))).toBeCloseTo(4.5, 5);
-  });
-
-  it("is zero once the chicken is past the edge", () => {
-    expect(secondsToLimit(5.5, 1, 5)).toBe(0);
-  });
 });
 
 describe("edgeWord: the clock in a word", () => {
-  it("has four bands and no digits", () => {
-    expect(edgeWord(0)).toBe("a_moment");
-    expect(edgeWord(EDGE_A_MOMENT - 0.01)).toBe("a_moment");
-    expect(edgeWord(EDGE_A_MOMENT)).toBe("soon");
-    expect(edgeWord(EDGE_SOON - 0.01)).toBe("soon");
-    expect(edgeWord(EDGE_SOON)).toBe("later");
-    expect(edgeWord(Number.POSITIVE_INFINITY)).toBe("not_carried");
+  it.each([
+    [0, "a_moment"],
+    [EDGE_A_MOMENT - 0.01, "a_moment"],
+    [EDGE_A_MOMENT, "soon"],
+    [EDGE_SOON - 0.01, "soon"],
+    [EDGE_SOON, "later"],
+    [Number.POSITIVE_INFINITY, "not_carried"],
+  ])("puts %s seconds in %s", (seconds, word) => {
+    expect(edgeWord(seconds)).toBe(word);
   });
 });
 

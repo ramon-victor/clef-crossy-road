@@ -84,15 +84,7 @@ export {
   type RememberedMove,
   remember,
 } from "./memory.ts";
-export {
-  EDGE_A_MOMENT,
-  EDGE_SOON,
-  type EdgeIn,
-  edgeWord,
-  type PlatformClock,
-  platformClock,
-  secondsToEdge,
-} from "./platform.ts";
+export { type EdgeIn, type PlatformClock, platformClock } from "./platform.ts";
 export type {
   DecideHooks,
   Decision,
@@ -121,10 +113,9 @@ export {
 } from "./prompts.ts";
 export {
   execRoute,
+  HOLD_WHYS,
   type HoldWhy,
-  LEAVE,
   MAX_DETOUR_STEPS,
-  MAX_LEAVE_STEPS,
   ROUTE_ACTION,
   ROUTE_DEPTH,
   ROUTE_IDS,
@@ -135,8 +126,8 @@ export {
   type RouteRequest,
   type RouteStep,
   routeChoice,
-  searchExit,
   searchRoute,
+  type WaitWhy,
 } from "./route.ts";
 export {
   AROUND_OPTIONS,
