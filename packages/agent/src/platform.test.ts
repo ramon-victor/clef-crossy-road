@@ -5,6 +5,7 @@ import {
   EDGE_A_MOMENT,
   EDGE_SOON,
   edgeWord,
+  platformClock,
   ridingSpeed,
   secondsToEdge,
   secondsToLimit,
@@ -68,5 +69,17 @@ describe("driftingOff: the one second in which a platform still gives the chicke
 
   it("says nothing of a platform that stands still near the edge", () => {
     expect(driftingOff(riding(4.8, 0))).toBe("no");
+  });
+});
+
+describe("platformClock: for whoever shows the clock", () => {
+  it("says which way the platform goes, how soon, and the word for it", () => {
+    expect(platformClock(riding(3, 2))).toEqual({ toward: "right", seconds: 1, word: "soon" });
+    expect(platformClock(riding(-4, -4))).toMatchObject({ toward: "left", word: "a_moment" });
+  });
+
+  it("has nothing to say off a platform or on one that stands still", () => {
+    expect(platformClock(onGrass(0))).toBeNull();
+    expect(platformClock(riding(2, 0))).toBeNull();
   });
 });

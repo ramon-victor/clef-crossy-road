@@ -55,6 +55,21 @@ export function edgeWord(seconds: number): EdgeIn {
   return seconds < EDGE_A_MOMENT ? "a_moment" : seconds < EDGE_SOON ? "soon" : "later";
 }
 
+/** The clock of the platform the chicken rides, for whoever shows it: which way it is carried, how soon, and the word for it. */
+export interface PlatformClock {
+  toward: "left" | "right";
+  seconds: number;
+  word: EdgeIn;
+}
+
+/** The clock of the platform under the chicken, or null when it is not on one that moves. */
+export function platformClock(obs: Observation): PlatformClock | null {
+  const speed = ridingSpeed(obs);
+  if (speed === 0) return null;
+  const seconds = secondsToEdge(obs);
+  return { toward: speed > 0 ? "right" : "left", seconds, word: edgeWord(seconds) };
+}
+
 /**
  * Which way a platform will carry the chicken past the edge of the world within a second if it stays on it,
  * or "no". A player sees the log drifting towards the end of the screen; waiting for a gap on it is how the

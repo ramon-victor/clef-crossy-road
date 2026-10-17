@@ -89,6 +89,8 @@ export {
   EDGE_SOON,
   type EdgeIn,
   edgeWord,
+  type PlatformClock,
+  platformClock,
   secondsToEdge,
 } from "./platform.ts";
 export type {
@@ -143,6 +145,7 @@ export {
   RIDE_OPTIONS,
   RIDE_QUESTION_ID,
   ROUTE_QUESTION_IDS,
+  routeQuestions,
 } from "./route-prompts.ts";
 export { readLanes, readOrdered, ruleLanes, ruleMoves, ruleView, ruleViewFx } from "./rule.ts";
 export {
