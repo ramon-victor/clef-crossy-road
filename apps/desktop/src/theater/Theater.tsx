@@ -66,6 +66,13 @@ function Round({ turn }: { turn: TurnView }) {
                 <span key={gap}>{gap}</span>
               ))}
             </div>
+            {turn.scene.platform && (
+              <div class={`platform-line ${turn.scene.platform.urgency}`}>
+                {(turn.scene.platform.urgency === "now" ||
+                  turn.scene.platform.urgency === "soon") && <Glyph glyph="!" size={14} />}
+                <span>{turn.scene.platform.phrase}</span>
+              </div>
+            )}
           </>
         ) : (
           <div class="seerow muted">The screen, in words (press I to read it)</div>
@@ -112,6 +119,11 @@ function Round({ turn }: { turn: TurnView }) {
           </b>
           {turn.move.label}
         </div>
+      )}
+      {turn.said && (
+        <p class="said">
+          <span class="said-tag">controller</span> {turn.said}
+        </p>
       )}
       {turn.steps.length > 0 && (
         <ol class="walk" aria-label="What the controller did next">

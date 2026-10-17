@@ -121,24 +121,53 @@ describe("buildFeed: the waits, the way that opens when things pass, and one rou
     expect(turn?.steps[0]?.note).toContain("3/15"); // the latest of the run
   });
 
-  it("calls a crossing that waits for things to pass 'when clear', and an open one plain", async () => {
+  it("calls a crossing that waited for things to pass 'when clear', and one made at once plain", async () => {
     const s = await answeredSession(routeAnswers("stand", "still", "detour_left", 0.9), 1);
     const real = s.state();
     const first = real.turns[0];
     if (!first) throw new Error("expected a round");
     expect(buildFeed(real)[0]?.move?.label).toBe("Go straight");
-    const passing = {
+    const waited = (controller: unknown) => ({
       ...first,
       model: {
         ...first.model,
         decision: {
           ...first.model.decision,
-          extra: { ...first.model.decision.extra, ahead: "passing" },
+          extra: { ...first.model.decision.extra, ahead: "passing", controller },
+        },
+      },
+    });
+    // The answers allowed a wait, but the controller hopped at once: nothing to wait for.
+    expect(buildFeed({ ...real, turns: [waited({ kind: "hop" })] })[0]?.move?.label).toBe(
+      "Go straight",
+    );
+    expect(
+      buildFeed({
+        ...real,
+        turns: [waited({ kind: "wait", n: 1, of: 15, cell: "water", why: "gap" })],
+      })[0]?.move?.label,
+    ).toBe("Go straight · when clear");
+  });
+
+  it("says what the controller did with the answer when it was not simply the crossing", async () => {
+    const s = await answeredSession(routeAnswers("stand", "still", "detour_left", 0.9), 1);
+    const real = s.state();
+    const first = real.turns[0];
+    if (!first) throw new Error("expected a round");
+    expect(buildFeed(real)[0]?.said).toBeNull();
+    const refused = {
+      ...first,
+      model: {
+        ...first.model,
+        decision: {
+          ...first.model.decision,
+          note: "model chose cross_ahead; cross_ahead: refused, a platform is carrying it past the edge of the world; stepping off a cell it cannot stay on: back (1 to go)",
+          extra: { ...first.model.decision.extra, controller: { kind: "hold", why: "edge" } },
         },
       },
     };
-    expect(buildFeed({ ...real, turns: [passing] })[0]?.move?.label).toBe(
-      "Go straight · when clear",
+    expect(buildFeed({ ...real, turns: [refused] })[0]?.said).toBe(
+      "refused, a platform is carrying it past the edge of the world; stepping off a cell it cannot stay on: back (1 to go)",
     );
   });
 

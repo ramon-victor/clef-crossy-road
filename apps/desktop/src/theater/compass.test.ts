@@ -1,7 +1,8 @@
+import { routeQuestions } from "@ccr/agent";
 import type { Action } from "@ccr/core";
 import { describe, expect, it } from "vitest";
 import type { SessionState } from "../session.ts";
-import { buildCompass, STRIP_MOVES, stripOf, winnerOf } from "./compass.ts";
+import { barsOf, buildCompass, STRIP_MOVES, stripOf, winnerOf } from "./compass.ts";
 import { answeredSession, readingSession, routeAnswers } from "./test-support.ts";
 
 describe("buildCompass: the five moves around the chicken", () => {
@@ -23,17 +24,46 @@ describe("buildCompass: the five moves around the chicken", () => {
     expect(view.go).toBe(false);
   });
 
-  it("sizes each move by the joint probability the code folds from the three answers", async () => {
+  it("sizes the moves within the fork the routing took: a closed way shows the ways round and a block ahead", async () => {
     const s = await answeredSession(routeAnswers("no_stand", "still", "detour_right", 0.1));
     const view = buildCompass(s.state());
     const p = Object.fromEntries(view.moves.map((m) => [m.action, m.p]));
-    // pCross = 0.1 + 0.9 * 0.5 = 0.55; the way is closed only if the second answer says still, but the
-    // joint is the code's own arithmetic over the model's probabilities, so check it against the source.
-    const recorded = s.state().lastModel?.decision.probabilities;
-    expect(p).toEqual(
-      Object.fromEntries(Object.entries(recorded ?? {}).map(([action, v]) => [action, v])),
-    );
-    expect(Object.values(p).reduce((a, b) => (a ?? 0) + (b ?? 0), 0)).toBeCloseTo(1, 1);
+    expect(p).toEqual({ hop_forward: 0, hop_back: 0, hop_left: 0.2, hop_right: 0.6, stay: 0.2 });
+    expect(view.moves.find((m) => m.blocked)?.action).toBe("hop_forward");
+    expect(view.moves.filter((m) => m.blocked)).toHaveLength(1);
+    // The fork itself: no stand (0.9) and still (0.5) make the way ahead closed with 0.45.
+    expect(view.branch?.text).toBe("the way ahead is closed");
+    expect(view.branch?.p).toBeCloseTo(0.45, 5);
+  });
+
+  it("always lights the biggest bar, also where the joint probabilities put 'go straight' first", async () => {
+    // P(stand) 0.45 and P(moving) 0.5 make the joint chance of crossing 0.725, yet the two answers, taken
+    // one by one, say 'no' and 'still': the way is closed and the model picked the right. 22% of the answers
+    // recorded on seeds 6 to 8 looked like this, with the biggest bar on a move that was not made.
+    const s = await answeredSession(routeAnswers("no_stand", "still", "detour_right", 0.45));
+    const log = s.state().lastModel;
+    if (!log) throw new Error("expected the model to have answered");
+    const joint = log.decision.probabilities ?? {};
+    expect(joint.hop_forward).toBeGreaterThan(joint.hop_right ?? 0);
+    const view = buildCompass(s.state());
+    const biggest = [...view.moves].sort((a, b) => (b.p ?? 0) - (a.p ?? 0))[0];
+    expect(biggest?.winner).toBe(true);
+    expect(biggest?.action).toBe("hop_right");
+    expect(view.branch?.p).toBeCloseTo(0.275, 5);
+  });
+
+  it("sizes an open way by the chance of crossing, with the ways round as the rest", async () => {
+    const s = await answeredSession(routeAnswers("stand", "still", "detour_left", 0.9), 1);
+    const view = buildCompass(s.state());
+    expect(view.moves.find((m) => m.winner)).toMatchObject({ action: "hop_forward", p: 0.95 });
+    expect(view.moves.some((m) => m.blocked)).toBe(false);
+    expect(view.branch).toMatchObject({ text: "the way ahead is open" });
+    expect(view.branch?.p).toBeCloseTo(0.95, 5);
+  });
+
+  it("names the fork of things that pass", async () => {
+    const s = await answeredSession(routeAnswers("no_stand", "moving", "detour_left", 0.1), 4);
+    expect(buildCompass(s.state()).branch?.text).toBe("things pass on the way ahead");
   });
 
   it("lights the manoeuvre the model chose, not the move the controller starts with", async () => {
@@ -112,7 +142,7 @@ describe("buildCompass: the five moves around the chicken", () => {
     const s = await answeredSession(routeAnswers("stand", "still", "detour_left", 0.9), 1);
     const log = s.state().lastModel;
     if (!log) throw new Error("expected the model to have answered");
-    const { probabilities: _gone, ...bare } = log.decision;
+    const { probabilities: _gone, answers: _noAnswers, ...bare } = log.decision;
     const state = { ...s.state(), lastModel: { ...log, decision: bare } };
     expect(buildCompass(state).mode).toBe("hidden");
   });
@@ -227,6 +257,27 @@ describe("buildCompass: what the chicken is doing about the choice", () => {
     });
   });
 
+  it("shows the step the chicken is about to take while the move is still held for reading", async () => {
+    // The crossing will wait for a gap: that is known the moment the model answers, before the chicken moves.
+    const { state } = await withLatest((log) => ({
+      ...log,
+      decision: {
+        ...log.decision,
+        extra: {
+          ...log.decision.extra,
+          controller: { kind: "wait", n: 1, of: 15, cell: "vehicle", why: "gap" },
+        },
+        note: "model chose cross_ahead; cross_ahead: waiting for the cell (vehicle) to clear, 1/15",
+      },
+    }));
+    const held = buildCompass({ ...state, phase: "reading" });
+    expect(held).toMatchObject({ go: false, launch: false, waiting: false });
+    expect(held.doing).toBe("next: waiting for a vehicle to pass 1/15");
+    const going = buildCompass({ ...state, phase: "hopping" });
+    expect(going).toMatchObject({ go: true, waiting: true });
+    expect(going.doing).toBe("waiting for a vehicle to pass 1/15");
+  });
+
   it("does not take a step that is the choice itself for a divergence", async () => {
     // The model chose to go straight; the controller's step is that very hop: nothing to ring.
     const { state } = await withLatest((log) => stepOf(log, "hop_forward", { kind: "hop" }));
@@ -258,34 +309,95 @@ describe("buildCompass: what the chicken is doing about the choice", () => {
     expect(buildCompass(held.state())).toMatchObject({ go: true, launch: true, actual: null });
   });
 
-  it("calls a crossing 'when clear' when the way opens only as things pass, or when it had to wait", async () => {
+  it("calls a crossing 'when clear' only when the controller really waited for the gap", async () => {
     const plain = await withLatest((log) => log);
     expect(buildCompass(plain.state).verdict).toBe("Go straight");
 
+    // The answers say things pass on that row, but the crossing was made at once: it is just "Go straight".
     const passing = await withLatest((log) => log);
     const model = {
       ...passing.log,
       decision: {
         ...passing.log.decision,
-        extra: { ...passing.log.decision.extra, ahead: "passing" },
+        extra: { ...passing.log.decision.extra, ahead: "passing", controller: { kind: "hop" } },
       },
     };
-    const viaAnswers = buildCompass({
+    const atOnce = buildCompass({
       ...passing.state,
       lastModel: model,
       last: model,
       turns: [{ model, steps: [] }],
     });
-    expect(viaAnswers.verdict).toBe("Go straight · when clear");
+    expect(atOnce.verdict).toBe("Go straight");
 
-    // Open on the words, but the controller found a vehicle and waited: it is still "when clear".
-    const waited = stepOf(plain.log, "stay", { kind: "wait", n: 1, of: 15, cell: "vehicle" });
+    // Open on the words, but the controller found a vehicle and waited: it is "when clear".
+    const waited = stepOf(plain.log, "stay", {
+      kind: "wait",
+      n: 1,
+      of: 15,
+      cell: "vehicle",
+      why: "gap",
+    });
     const viaWait = buildCompass({
       ...plain.state,
       last: waited,
       turns: [{ model: plain.log, steps: [waited] }],
     });
     expect(viaWait.verdict).toBe("Go straight · when clear");
+  });
+});
+
+describe("buildCompass: getting off a platform", () => {
+  it("draws only the hop that gets the chicken off, as big as the model's answer, and lets it leave", async () => {
+    const { real, log } = await withLatest((l) => l);
+    if (!log.decision.sent) throw new Error("expected the request to be kept");
+    const leaving = {
+      ...log,
+      action: "hop_back" as const,
+      decision: {
+        ...log.decision,
+        sent: { ...log.decision.sent, questions: routeQuestions(true) },
+        answers: {
+          ...log.decision.answers,
+          ride: { choice: "leaving", probabilities: { leaving: 0.8, staying: 0.2 } },
+        },
+        extra: {
+          ...log.decision.extra,
+          maneuver: "leave_platform",
+          ride: "leaving",
+          controller: { kind: "leave", n: 1, left: 1 },
+        },
+      },
+    };
+    const state = { ...real, lastModel: leaving, last: leaving, turns: [] } as SessionState;
+    expect(winnerOf(leaving)).toBe("hop_back");
+    const view = buildCompass(state);
+    expect(view.moves.map((m) => [m.action, m.p, m.winner])).toEqual(
+      expect.arrayContaining([
+        ["hop_back", 0.8, true],
+        ["hop_forward", 0, false],
+      ]),
+    );
+    expect(view.branch).toEqual({ text: "its platform is leaving the world", p: 0.8 });
+    expect(view).toMatchObject({ launch: true, waiting: false });
+    expect(view.doing).toBe("getting off the platform: hop 1, 1 to go");
+    expect(view.verdict).toBe("Get off the platform");
+    expect(view.answers.map((a) => a.skipped)).toEqual([true, true, true, false]);
+  });
+});
+
+describe("barsOf: for a strategy with no routing", () => {
+  it("keeps the probabilities it reported", async () => {
+    const s = await answeredSession(routeAnswers("stand", "still", "detour_left", 0.9), 1);
+    const log = s.state().lastModel;
+    if (!log) throw new Error("expected the model to have answered");
+    const { answers: _a, extra: _e, ...bare } = log.decision;
+    const plain = { ...log, decision: { ...bare, probabilities: { hop_left: 0.7, stay: 0.3 } } };
+    expect(barsOf(plain)).toEqual({
+      p: { hop_forward: 0, hop_back: 0, hop_left: 0.7, hop_right: 0, stay: 0.3 },
+      blocked: new Set(),
+      branch: null,
+    });
   });
 });
 

@@ -1,4 +1,4 @@
-import { clefPolicy, DEFAULT_CLEF } from "@ccr/agent";
+import { clefPolicy, DEFAULT_CLEF, routeQuestions } from "@ccr/agent";
 import { describe, expect, it } from "vitest";
 import { Session } from "../session.ts";
 import {
@@ -55,6 +55,60 @@ describe("questionsOf: what the model was asked", () => {
     expect(byId.cell).toBeNull();
     expect(byId.moving).toMatch(/can stand there/);
     expect(byId.around).toMatch(/isn't closed/);
+  });
+
+  it("adds the platform question after the three, with its own words, when the chicken stood on one", async () => {
+    const s = await answeredSession(routeAnswers("stand", "still", "detour_left", 0.9), 1);
+    const log = s.state().lastModel;
+    const input = log?.decision.sent;
+    if (!log || !input) throw new Error("expected the model to have answered");
+    const riding = {
+      ...log,
+      decision: {
+        ...log.decision,
+        sent: { ...input, questions: routeQuestions(true) },
+        answers: {
+          ...log.decision.answers,
+          ride: { choice: "staying", probabilities: { leaving: 0.1, staying: 0.9 } },
+        },
+        extra: { ...log.decision.extra, ride: "staying" },
+      },
+    };
+    const questions = questionsOf(riding.decision.sent, riding);
+    expect(questions.map((q) => q.id)).toEqual(["cell", "moving", "around", "ride"]);
+    const ride = questions[3];
+    expect(ride?.title).toBe("Is its platform leaving the world?");
+    expect(ride?.options.map((o) => [o.short, o.p, o.chosen])).toEqual([
+      ["Leave", 0.1, false],
+      ["Stay", 0.9, true],
+    ]);
+    expect(ride?.skipped).toBeNull();
+  });
+
+  it("calls the other three not needed once the platform is leaving the world", async () => {
+    const s = await answeredSession(routeAnswers("stand", "still", "detour_left", 0.9), 1);
+    const log = s.state().lastModel;
+    const input = log?.decision.sent;
+    if (!log || !input) throw new Error("expected the model to have answered");
+    const leaving = {
+      ...log,
+      decision: {
+        ...log.decision,
+        sent: { ...input, questions: routeQuestions(true) },
+        answers: {
+          ...log.decision.answers,
+          ride: { choice: "leaving", probabilities: { leaving: 0.8, staying: 0.2 } },
+        },
+        extra: { ...log.decision.extra, ride: "leaving", maneuver: "leave_platform" },
+      },
+    };
+    const byId = Object.fromEntries(
+      questionsOf(leaving.decision.sent, leaving).map((q) => [q.id, q.skipped]),
+    );
+    expect(byId.cell).toMatch(/platform is leaving/);
+    expect(byId.moving).toMatch(/platform is leaving/);
+    expect(byId.around).toMatch(/platform is leaving/);
+    expect(byId.ride).toBeNull();
   });
 
   it("shows a plain choice over the five moves in the panel's order, with arrows", async () => {

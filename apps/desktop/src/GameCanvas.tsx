@@ -4,6 +4,7 @@ import type { Sounds } from "./audio.ts";
 import { ACTION_GLYPH, endTitle, percent } from "./format.ts";
 import type { Session, SessionState } from "./session.ts";
 import { Compass } from "./theater/Compass.tsx";
+import { barsOf, winnerOf } from "./theater/compass.ts";
 import { Glyph } from "./theater/Glyph.tsx";
 
 export interface GameCanvasProps {
@@ -114,7 +115,12 @@ export function GameCanvas(props: GameCanvasProps) {
   const last = state.last;
   const showBubble =
     status === "ready" && state.alive && !state.human && last !== null && !props.compass.on;
-  const chosenP = last?.decision.probabilities?.[last.action];
+  // The model's choice, not the first hop of the controller that carries it out, with its share of the answer.
+  const choice = last && last.decision.source !== "executor" ? winnerOf(last) : last?.action;
+  const chosenP =
+    last && choice && last.decision.source !== "executor"
+      ? (barsOf(last)?.p[choice] ?? last.decision.probabilities?.[choice])
+      : undefined;
 
   return (
     <div class="stage">
@@ -136,7 +142,7 @@ export function GameCanvas(props: GameCanvasProps) {
         {showBubble && last && (
           <div class="bubble" key={last.index}>
             <span class="bubble-arrow">
-              <Glyph glyph={ACTION_GLYPH[last.action]} size={22} />
+              <Glyph glyph={ACTION_GLYPH[choice ?? last.action]} size={22} />
             </span>
             {chosenP !== undefined && <span class="bubble-p">{percent(chosenP)}</span>}
           </div>
@@ -154,6 +160,7 @@ export function GameCanvas(props: GameCanvasProps) {
 
       {status === "ready" && props.compass.on && (
         <Compass
+          session={session}
           state={state}
           anchorRef={compassRef}
           conversationOpen={props.compass.conversationOpen}

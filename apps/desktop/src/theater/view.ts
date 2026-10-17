@@ -1,6 +1,6 @@
 import { optionsOf } from "@ccr/agent";
 import type { DecisionLog } from "../session.ts";
-import { optionLabel, orderOptions, ROUTE_LABELS, titleOf } from "./labels.ts";
+import { ALWAYS_ASKED, optionLabel, orderOptions, ROUTE_LABELS, titleOf } from "./labels.ts";
 
 /** What to draw: nothing yet, a question the model is reading, or the answer it gave. */
 export type FrameMode = "waiting" | "reading" | "answered";
@@ -37,6 +37,10 @@ function skippedBecause(
 ): string | null {
   const ahead = asText(extra?.ahead);
   if (ahead === undefined) return null;
+  // The platform is leaving the world, so the manoeuvre is to get off it and the row ahead is not asked about.
+  if (extra?.ride === "leaving" && (ALWAYS_ASKED as readonly string[]).includes(questionId)) {
+    return "not needed: its platform is leaving the world";
+  }
   if (questionId === "moving" && extra?.cell === "stand") return "not needed: it can stand there";
   if (questionId === "around" && ahead !== "closed")
     return "not needed: the way ahead isn't closed";
@@ -53,8 +57,10 @@ export function questionsOf(
 ): QuestionView[] {
   const answers = log?.decision.answers;
   const extra = log?.decision.extra;
-  const ids = Object.keys(ROUTE_LABELS).every((id) => id in input.questions)
-    ? Object.keys(ROUTE_LABELS)
+  // The route strategy's lookups, in the order a person reads them (and `ride` only when it was asked).
+  const isRoute = ALWAYS_ASKED.every((id) => id in input.questions);
+  const ids = isRoute
+    ? Object.keys(ROUTE_LABELS).filter((id) => id in input.questions)
     : Object.keys(input.questions);
   const views: QuestionView[] = [];
   for (const id of ids) {

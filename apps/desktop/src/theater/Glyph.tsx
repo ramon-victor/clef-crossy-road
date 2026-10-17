@@ -38,7 +38,7 @@ export function PixelIcon({ icon, size = 22, class: className }: PixelIconProps)
 }
 
 export interface GlyphProps {
-  /** A character the app writes a move or an answer with (↑ ← → ↓ • ✓ ✗ ↔ ▪), or any text. */
+  /** A character the app writes a move or an answer with (↑ ← → ↓ • ✓ ✗ ↔ ▪ !), or any text. */
   glyph: string;
   size?: number;
   class?: string;

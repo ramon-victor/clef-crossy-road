@@ -1,6 +1,7 @@
 import { ACTIONS } from "@ccr/core";
 import { ACTION_GLYPH, ACTION_LABEL, ACTION_ORDER, percent } from "../format.ts";
 import type { SessionState } from "../session.ts";
+import { barsOf, branchText, winnerOf } from "../theater/compass.ts";
 import { controllerSays, waitsForGap } from "../theater/controller.ts";
 import { Glyph } from "../theater/Glyph.tsx";
 import { decisionLabel } from "../theater/labels.ts";
@@ -15,7 +16,9 @@ export interface DecisionCardProps {
 export function DecisionCard({ state, theaterOpen, onInspect, onTheater }: DecisionCardProps) {
   const last = state.last;
   const decision = last?.decision;
-  const probabilities = decision?.probabilities;
+  // The bars are the model's answers within the fork the routing took, so the lit row is the move it chose.
+  const bars = last && decision?.source !== "executor" ? barsOf(last) : null;
+  const probabilities = bars ? bars.p : decision?.probabilities;
   const canInspect = state.history.some((entry) => entry.decision.sent);
   // What the model chose (a manoeuvre) is what the card names; the move the controller starts with, or the wait
   // it takes, can be another thing and is said on its own line.
@@ -27,6 +30,7 @@ export function DecisionCard({ state, theaterOpen, onInspect, onTheater }: Decis
   const turn = state.turns.at(-1);
   const waits = choice !== null && turn !== undefined && turn.model === last && waitsForGap(turn);
   const says = decision ? controllerSays(decision) : null;
+  const chosenMove = last && choice ? winnerOf(last) : last?.action;
   return (
     <section class="card decision">
       <header class="decision-head">
@@ -53,9 +57,10 @@ export function DecisionCard({ state, theaterOpen, onInspect, onTheater }: Decis
             <p class="hint">Controller step · {says ?? "no model call"}.</p>
           )}
           {decision?.source !== "executor" && says && <p class="hint">Controller: {says}.</p>}
+          {bars?.branch && <p class="hint">Routing: {branchText(bars.branch)}.</p>}
           <div class="bars" hidden={!probabilities}>
             {ACTION_ORDER.map((a) => (
-              <div class={`bar-row ${a === last.action ? "chosen-row" : ""}`} key={a}>
+              <div class={`bar-row ${a === chosenMove ? "chosen-row" : ""}`} key={a}>
                 <span class="bar-glyph" title={ACTION_LABEL[a]}>
                   <span class="sr-only">{ACTION_LABEL[a]}: </span>
                   <Glyph glyph={ACTION_GLYPH[a]} size={14} />
@@ -63,7 +68,9 @@ export function DecisionCard({ state, theaterOpen, onInspect, onTheater }: Decis
                 <div class="bar">
                   <div style={{ width: `${Math.round((probabilities?.[a] ?? 0) * 100)}%` }} />
                 </div>
-                <span class="bar-num">{percent(probabilities?.[a])}</span>
+                <span class="bar-num">
+                  {bars?.blocked.has(a) ? "blocked" : percent(probabilities?.[a])}
+                </span>
               </div>
             ))}
           </div>

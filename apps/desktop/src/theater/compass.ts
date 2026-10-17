@@ -1,6 +1,6 @@
 import { MANEUVER_ACTION, ROUTE_ACTION } from "@ccr/agent";
 import { ACTIONS, type Action } from "@ccr/core";
-import { ACTION_GLYPH } from "../format.ts";
+import { ACTION_GLYPH, percent } from "../format.ts";
 import type { DecisionLog, SessionState } from "../session.ts";
 import { controllerSays, controllerStep, waitsForGap } from "./controller.ts";
 import { pickMode } from "./frame.ts";
@@ -17,6 +17,14 @@ export interface CompassMove {
   p: number | null;
   /** The move the model chose. */
   winner: boolean;
+  /** The way ahead is closed, so this move is not on the table this time (drawn as a block, not as a bar). */
+  blocked: boolean;
+}
+
+/** What the model's answers came to before they were split among the moves: which fork the routing took, and how sure. */
+export interface BranchView {
+  text: string;
+  p: number;
 }
 
 export interface CompassAnswer {
@@ -57,6 +65,8 @@ export interface CompassView {
   answers: CompassAnswer[];
   /** What the answers come to ("Go straight · when clear"). */
   verdict: string | null;
+  /** The fork the routing took ("way ahead closed 58%"); null for a strategy with no routing. */
+  branch: BranchView | null;
   /** When the question went out, in the session's clock; set while the model reads. */
   since: number | null;
   /** The latest moves, the model's own big and the controller's small. */
@@ -74,6 +84,7 @@ const ASLEEP: Omit<CompassView, "strip"> = {
   doing: null,
   answers: [],
   verdict: null,
+  branch: null,
   since: null,
 };
 
@@ -87,8 +98,93 @@ const ACTION_OF: Readonly<Record<string, Action>> = { ...MANEUVER_ACTION, ...ROU
  */
 export function winnerOf(log: DecisionLog): Action {
   const maneuver = asText(log.decision.extra?.maneuver);
+  // Getting off a platform is made of whichever hop gets the chicken off it, which is the decision's own.
+  if (maneuver === "leave_platform") return log.action;
   return (maneuver ? ACTION_OF[maneuver] : undefined) ?? log.action;
 }
+
+export interface Bars {
+  /** How much the model wants each move, within the fork the routing took. */
+  p: Readonly<Record<Action, number>>;
+  /** Moves that are not on the table this time. */
+  blocked: ReadonlySet<Action>;
+  branch: BranchView | null;
+}
+
+const NONE: Record<Action, number> = {
+  hop_forward: 0,
+  hop_back: 0,
+  hop_left: 0,
+  hop_right: 0,
+  stay: 0,
+};
+
+const probabilityOf = (log: DecisionLog, question: string, option: string): number | undefined =>
+  log.decision.answers?.[question]?.probabilities[option];
+
+/**
+ * How much the model wants each move, said within the fork the routing took, so that the move that is lit is
+ * always the biggest one. The routing is a chain of forks (a platform that is leaving the world; else a cell to
+ * stand on or things that pass, which mean "go straight"; else the way is closed and the third answer picks a
+ * side), and the joint probabilities the benchmark records add the forks up in one row of bars: a closed way
+ * could then show "go straight" as the biggest bar (22% of the answers recorded on seeds 6 to 8). Here a closed
+ * way shows the three ways round and a block where "go straight" would be, and says how sure the fork was.
+ * A strategy with no routing keeps the probabilities it reported.
+ */
+export function barsOf(log: DecisionLog): Bars | null {
+  const { decision } = log;
+  const pStand = probabilityOf(log, "cell", "stand");
+  const pMoving = probabilityOf(log, "moving", "moving");
+  const maneuver = asText(decision.extra?.maneuver);
+  if (pStand === undefined || pMoving === undefined || maneuver === undefined) {
+    return decision.probabilities
+      ? {
+          p: { ...NONE, ...decision.probabilities },
+          blocked: new Set(),
+          branch: null,
+        }
+      : null;
+  }
+  const around = (option: string) => probabilityOf(log, "around", option) ?? 0;
+  const pCross = pStand + (1 - pStand) * pMoving;
+  const pClosed = 1 - pCross;
+  const pLeaving = probabilityOf(log, "ride", "leaving");
+  if (maneuver === "leave_platform") {
+    return {
+      p: { ...NONE, [log.action]: pLeaving ?? 1 },
+      blocked: new Set(),
+      branch: { text: "its platform is leaving the world", p: pLeaving ?? 1 },
+    };
+  }
+  const ways = {
+    hop_left: around("detour_left"),
+    hop_right: around("detour_right"),
+    stay: around("wait_here"),
+  };
+  if (decision.extra?.ahead === "closed") {
+    return {
+      p: { ...NONE, ...ways },
+      blocked: new Set<Action>(["hop_forward"]),
+      branch: { text: "the way ahead is closed", p: pClosed },
+    };
+  }
+  const text =
+    decision.extra?.ahead === "passing" ? "things pass on the way ahead" : "the way ahead is open";
+  return {
+    p: {
+      ...NONE,
+      hop_forward: pCross,
+      hop_left: pClosed * ways.hop_left,
+      hop_right: pClosed * ways.hop_right,
+      stay: pClosed * ways.stay,
+    },
+    blocked: new Set(),
+    branch: { text, p: pCross },
+  };
+}
+
+/** The fork of a decision in a few words, for a caption: "the way ahead is closed 58%". */
+export const branchText = (branch: BranchView): string => `${branch.text} ${percent(branch.p)}`;
 
 /**
  * The latest moves for the strip under the game. A chicken that waits for a gap takes the same step again and
@@ -132,6 +228,7 @@ export function buildCompass(state: SessionState): CompassView {
         glyph: ACTION_GLYPH[action],
         p: null,
         winner: false,
+        blocked: false,
       })),
       since: state.asking?.since ?? null,
       strip,
@@ -139,18 +236,21 @@ export function buildCompass(state: SessionState): CompassView {
   }
 
   const log = state.lastModel;
-  const probabilities = log?.decision.probabilities;
+  const bars = log ? barsOf(log) : null;
   const input = log?.decision.sent;
-  if (mode !== "answered" || !log || !probabilities || !input) return { ...ASLEEP, strip };
+  if (mode !== "answered" || !log || !bars || !input) return { ...ASLEEP, strip };
 
   const turn = state.turns.find((t) => t.model === log);
   const winner = winnerOf(log);
   const decision = decisionLabel(asText(log.decision.extra?.maneuver), log.action);
   const go = state.phase !== "reading";
-  // What the chicken is doing now: the model's own decision is the controller's first step, and each later step
-  // is a decision of its own. A strategy with no controller reports no step: its move is simply made.
+  // What the chicken does: the model's own decision is the controller's first step, and each later step is a
+  // decision of its own. A strategy with no controller reports no step: its move is simply made. The step the
+  // chicken is about to take is known as soon as the model answers, so it is shown while the move is still held
+  // for reading, as what comes next.
   const latest = state.last;
-  const step = go && latest ? controllerStep(latest.decision) : null;
+  const step = latest ? controllerStep(latest.decision) : null;
+  const says = step && latest ? controllerSays(latest.decision) : null;
   return {
     ...ASLEEP,
     mode,
@@ -158,14 +258,23 @@ export function buildCompass(state: SessionState): CompassView {
     moves: ACTIONS.map((action) => ({
       action,
       glyph: ACTION_GLYPH[action],
-      p: probabilities[action] ?? 0,
+      p: bars.p[action],
       winner: action === winner,
+      blocked: bars.blocked.has(action),
     })),
     go,
-    launch: go && (step === null || step.kind === "hop"),
-    waiting: step?.kind === "wait",
-    actual: latest && (step?.kind === "walk" || step?.kind === "hold") ? latest.action : null,
-    doing: step && latest ? controllerSays(latest.decision) : null,
+    launch:
+      go &&
+      (step === null ||
+        step.kind === "hop" ||
+        (step.kind === "leave" && latest?.action === winner)),
+    waiting: go && step?.kind === "wait",
+    actual:
+      latest && (step?.kind === "walk" || step?.kind === "hold" || step?.kind === "leave")
+        ? latest.action
+        : null,
+    doing: says === null ? null : go ? says : `next: ${says}`,
+    branch: bars.branch,
     answers: questionsOf(input, log).flatMap((q) => {
       const pick = q.options.find((o) => o.chosen);
       return pick ? [{ glyph: pick.glyph, short: pick.short, skipped: q.skipped !== null }] : [];

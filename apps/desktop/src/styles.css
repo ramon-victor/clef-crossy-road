@@ -1291,6 +1291,45 @@ canvas.game:focus-visible {
   opacity: 0.35;
 }
 
+/* The way ahead is closed: a block where "go straight" would be, and no bar. */
+.compass.answered .cb.blocked {
+  opacity: 0.55;
+  transform: translate(var(--dx), var(--dy)) scale(0.85);
+  border-style: dashed;
+}
+
+/* The platform under the chicken is taking it to the edge of the world: how long it has. */
+.edge-clock {
+  position: absolute;
+  /* Under the left move, clear of the down move and the pause, which sit under the chicken. */
+  left: -84px;
+  top: 56px;
+  transform: translateX(-50%);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 9px 2px 6px;
+  border-radius: 99px;
+  border: 3px solid #fff;
+  background: #0e1b33;
+  color: var(--warn);
+  font-family: "Retro", monospace;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  box-shadow: 0 4px 0 rgba(0, 0, 0, 0.3);
+}
+
+.edge-clock.now {
+  border-color: var(--bad);
+  background: var(--bad);
+  color: #fff;
+}
+
+.edge-clock b {
+  font-weight: 400;
+}
+
 /* The crossing waits for a gap: the choice stays, with a pause on it. */
 .cb-badge {
   position: absolute;
@@ -1353,6 +1392,12 @@ canvas.game:focus-visible {
   font-size: 15px;
   font-weight: 400;
   color: var(--accent);
+}
+
+.cap-branch {
+  font-size: 12px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.7);
 }
 
 .cap-note {
@@ -1657,6 +1702,25 @@ canvas.game:focus-visible {
   color: var(--t-soft);
 }
 
+.platform-line {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 5px;
+  font-size: 12px;
+  color: var(--t-soft);
+}
+
+.platform-line.now {
+  color: var(--bad);
+  font-weight: 700;
+}
+
+.platform-line.soon {
+  color: var(--warn);
+  font-weight: 700;
+}
+
 .scene-tile {
   flex: none;
   width: 24px;
@@ -1788,6 +1852,26 @@ canvas.game:focus-visible {
   background: rgba(74, 54, 0, 0.18);
   font-weight: 400;
   font-size: 16px;
+}
+
+.said {
+  align-self: center;
+  max-width: 100%;
+  margin: 0;
+  font-size: 12px;
+  color: var(--t-soft);
+  text-align: center;
+}
+
+.said-tag {
+  display: inline-block;
+  margin-right: 4px;
+  padding: 0 6px;
+  border-radius: 99px;
+  background: #8fe3ff;
+  color: #0e2238;
+  font-size: 11px;
+  font-weight: 700;
 }
 
 .walk {

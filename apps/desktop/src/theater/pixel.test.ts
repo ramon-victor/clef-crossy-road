@@ -9,7 +9,7 @@ import {
   spriteOf,
 } from "./pixel.ts";
 
-const ALL: IconName[] = [...DIRECTIONS, "wait", "check", "cross", "both", "block"];
+const ALL: IconName[] = [...DIRECTIONS, "wait", "check", "cross", "both", "block", "warn"];
 
 describe("the sprites", () => {
   it("are nine by nine, drawn with # and ., and not empty", () => {
@@ -94,6 +94,7 @@ describe("the icon for a character", () => {
     expect(iconForGlyph("✗")).toBe("cross");
     expect(iconForGlyph("↔")).toBe("both");
     expect(iconForGlyph("▪")).toBe("block");
+    expect(iconForGlyph("!")).toBe("warn");
     expect(iconForGlyph("Yes")).toBeNull();
     expect(iconForGlyph("")).toBeNull();
   });

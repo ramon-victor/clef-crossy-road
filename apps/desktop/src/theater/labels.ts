@@ -21,7 +21,7 @@ export interface QuestionLabel {
   options: Readonly<Record<string, OptionLabel>>;
 }
 
-/** The three lookups of the `route` strategy (ADR-0011). */
+/** The lookups of the `route` strategy (ADR-0011): three always, and a fourth while the chicken stands on a platform. */
 export const ROUTE_LABELS: Readonly<Record<string, QuestionLabel>> = {
   cell: {
     title: "Can it stand there?",
@@ -45,7 +45,17 @@ export const ROUTE_LABELS: Readonly<Record<string, QuestionLabel>> = {
       wait_here: { glyph: "•", label: "Wait here", short: "Wait" },
     },
   },
+  ride: {
+    title: "Is its platform leaving the world?",
+    options: {
+      leaving: { glyph: "!", label: "Yes, the edge is a moment away", short: "Leave" },
+      staying: { glyph: "✓", label: "No, it can stay on it", short: "Stay" },
+    },
+  },
 };
+
+/** The lookups every request of the route strategy carries; `ride` is only there while the chicken is on a platform. */
+export const ALWAYS_ASKED = ["cell", "moving", "around"] as const;
 
 const named = (glyph: string, label: string): OptionLabel => ({ glyph, label, short: label });
 
@@ -58,6 +68,7 @@ export const MANEUVER_LABELS: Readonly<Record<string, OptionLabel>> = {
   sidestep_right: named("→", "Sidestep right"),
   back_off: named("↓", "Back off"),
   wait_here: named("•", "Wait here"),
+  leave_platform: named("↓", "Get off the platform"),
 };
 
 const isAction = (id: string): id is Action => (ACTIONS as readonly string[]).includes(id);
@@ -84,6 +95,10 @@ export function optionLabel(questionId: string, optionId: string): OptionLabel {
 
 /** What the model's decision comes to, in words: the manoeuvre it chose, or else the move itself. */
 export function decisionLabel(maneuverId: string | undefined, action: Action): OptionLabel {
+  // Getting off a platform is made of whichever hop gets the chicken off it, which is the one to draw.
+  if (maneuverId === "leave_platform") {
+    return { glyph: ACTION_GLYPH[action], label: "Get off the platform", short: "Get off" };
+  }
   return (maneuverId ? MANEUVER_LABELS[maneuverId] : undefined) ?? optionLabel("", action);
 }
 
@@ -136,12 +151,38 @@ const OPENING_WORDS: Readonly<Record<string, string>> = {
   none: "none",
 };
 
+/** The clock of the platform the chicken stands on, as the model was told it. */
+export interface PlatformView {
+  phrase: string;
+  /** How loud to say it: the edge is a moment away, coming up, a way off, or the platform is not taking it there. */
+  urgency: "now" | "soon" | "later" | "none";
+}
+
 export interface SceneView {
   /** A CSS class for the tile: grass, tree, water, log, lily, car, train or edge. */
   tile: string;
   phrase: string;
   /** How far to the nearest opening on each side, as "left: 2 away". */
   gaps: string[];
+  /** What the model was told of the platform under the chicken; null off a platform. */
+  platform: PlatformView | null;
+}
+
+const PLATFORM_CLOCK: Readonly<Record<string, { says: string; urgency: PlatformView["urgency"] }>> =
+  {
+    a_moment: { says: "the edge of the world is a moment away", urgency: "now" },
+    soon: { says: "the edge of the world is coming up", urgency: "soon" },
+    later: { says: "the edge of the world is still a way off", urgency: "later" },
+    not_carried: { says: "it is not taking the chicken to the edge", urgency: "none" },
+  };
+
+/** The platform line of the scene, from what the state says of the chicken. */
+function platformOf(state: unknown): PlatformView | null {
+  const clock = PLATFORM_CLOCK[readPath(state, "chicken.edge_in") ?? ""];
+  if (!clock) return null;
+  const toward = readPath(state, "chicken.carried_towards");
+  const carried = toward === "left" || toward === "right" ? ` carried ${toward}` : "";
+  return { phrase: `On a platform${carried}: ${clock.says}`, urgency: clock.urgency };
 }
 
 /**
@@ -166,5 +207,5 @@ export function sceneOf(state: unknown): SceneView | null {
     : moving
       ? `${cell.phrase}, things moving ${move}`
       : cell.phrase;
-  return { tile: cell.tile, phrase, gaps };
+  return { tile: cell.tile, phrase, gaps, platform: platformOf(state) };
 }

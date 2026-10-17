@@ -1,6 +1,6 @@
 import { ACTION_GLYPH } from "../format.ts";
 import type { SessionState, Turn } from "../session.ts";
-import { controllerStep, waitsForGap } from "./controller.ts";
+import { controllerSays, controllerStep, waitsForGap } from "./controller.ts";
 import { decisionLabel, type SceneView, sceneOf } from "./labels.ts";
 import { asText, type QuestionView, questionsOf } from "./view.ts";
 
@@ -28,6 +28,12 @@ export interface TurnView {
   facts: TurnFacts;
   /** What the model's answers come to, in words: its manoeuvre, or else the move itself. */
   move: { glyph: string; label: string } | null;
+  /**
+   * What the controller did with the answer itself, when it was not simply the crossing: it waits for a gap, walks a
+   * detour, gets off a platform, or refused ("the platform carries it past the edge; stepping back"). Null when
+   * the move was made as chosen.
+   */
+  said: string | null;
   /** The controller's steps after the answer, in order; a run of waits is one step with a count. */
   steps: Array<{ glyph: string; note: string; count: number }>;
   /** Earlier rounds shrink to one line: the move and the pick of each question. */
@@ -79,6 +85,7 @@ function answered(turn: Turn): TurnView | null {
       glyph: move.glyph,
       label: waitsForGap(turn) ? `${move.label} · when clear` : move.label,
     },
+    said: controllerSays(log.decision),
     steps: stepsOf(turn),
     old: false,
     summary: questions.flatMap((q) => {
@@ -105,6 +112,7 @@ function reading(state: SessionState): TurnView | null {
       cached: false,
     },
     move: null,
+    said: null,
     steps: [],
     old: false,
     summary: [],

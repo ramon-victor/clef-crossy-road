@@ -4,7 +4,7 @@
  * an odd angle, which is what makes pixel art blur.
  */
 export type Direction = "n" | "e" | "s" | "w";
-export type Sign = "wait" | "check" | "cross" | "both" | "block";
+export type Sign = "wait" | "check" | "cross" | "both" | "block" | "warn";
 export type IconName = Direction | Sign;
 
 /** The arrow straight up, 9x9. */
@@ -75,6 +75,18 @@ const SIGNS: Readonly<Record<Sign, readonly string[]>> = {
     "..#####..",
     "..#####..",
     ".........",
+    ".........",
+  ],
+  // An exclamation mark: the platform is carrying the chicken to the edge of the world.
+  warn: [
+    "...###...",
+    "...###...",
+    "...###...",
+    "...###...",
+    "...###...",
+    ".........",
+    "...###...",
+    "...###...",
     ".........",
   ],
 };
@@ -169,6 +181,8 @@ export function iconForGlyph(glyph: string): IconName | null {
       return "both";
     case "▪":
       return "block";
+    case "!":
+      return "warn";
     default:
       return null;
   }
