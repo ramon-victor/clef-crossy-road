@@ -7,6 +7,7 @@ import {
   type Memory,
   type PolicyFactory,
   parseClefPolicyId,
+  platformClock,
   randomPolicy,
   readLanes,
   readOrdered,
@@ -36,6 +37,9 @@ export const STRATA = [
   { id: "tree-stuck", quota: 10, about: "the same tree after 1 or 3 bumps, so the memory says so" },
   { id: "grass-open", quota: 8, about: "open grass ahead" },
   { id: "rail", quota: 6, about: "rail ahead" },
+  // Last, so that the states picked for the strata above are the ones they were before these were added.
+  { id: "platform-edge", quota: 12, about: "on a platform a moment from the edge of the world" },
+  { id: "platform-far", quota: 12, about: "on a platform that is not (soon, later, or still)" },
 ] as const;
 
 export type Stratum = (typeof STRATA)[number]["id"];
@@ -121,6 +125,17 @@ async function candidatesFor(seeds: readonly number[], maxDecisions: number): Pr
         const outcomes = outcomesAt(game);
         const stratum = classify(game.row(game.heroRow + 1)?.kind, outcomes.hop_forward);
         if (stratum) found.push({ stratum, seed, actions: [...actions], outcomes });
+        // A chicken on a platform is a decision point of its own as well: the clock of the platform is what is asked.
+        const seen = observe(game);
+        if (seen.player.riding) {
+          const edge = platformClock(seen)?.word === "a_moment";
+          found.push({
+            stratum: edge ? "platform-edge" : "platform-far",
+            seed,
+            actions: [...actions],
+            outcomes,
+          });
+        }
         const decision =
           policy.kind === "oracle"
             ? await policy.decide(game)
