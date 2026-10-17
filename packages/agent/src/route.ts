@@ -1,4 +1,4 @@
-import { type Action, MAX_ABS_X, type Observation } from "@ccr/core";
+import { type Action, MAX_ABS_X, type Observation, type ObsRow } from "@ccr/core";
 import { HOP_SECONDS } from "./forecast.ts";
 import {
   type Cell,
@@ -26,8 +26,8 @@ import { type SceneState, type SideName, sceneState } from "./scene.ts";
  * Manoeuvres with a detour (ADR-0011). The model says WHAT to do about the row in front of it: cross,
  * go round by one side, or wait. The controller says HOW: for a detour it walks the way round (back one
  * row if it must, along the row, forward onto the first row not yet reached), checking the world at
- * every hop, the way the Doom, Tetris and Minecraft projects leave the path to code. It never swaps the
- * side the model chose, and gives the decision back, with the reason, when it cannot go on.
+ * every hop, the way the Doom, Tetris and Minecraft projects leave the path to code. It gives the decision
+ * back, with the reason, when it cannot go on.
  */
 export const ROUTE_IDS = [
   "cross_ahead",
@@ -47,9 +47,13 @@ export const ROUTE_ACTION: Readonly<Record<Exclude<RouteManeuver, "leave_platfor
 };
 
 /** Hops a detour may take before it gives the decision back. */
-export const MAX_DETOUR_STEPS = 12;
-/** How many hops the route search looks ahead. */
+export const MAX_DETOUR_STEPS = 40;
+/** How many hops the search for a detour looks ahead: back some rows, along a row, forward again. */
+export const DETOUR_DEPTH = 24;
+/** How many hops the search for a way off a platform looks ahead: it is urgent, so it stays short. */
 export const ROUTE_DEPTH = 8;
+/** Decisions without a new row after which a side that failed is tried again: the world has moved on. */
+export const RETRY_AFTER = 4;
 /** Steps a crossing waits for the cell ahead to clear: three seconds of game time. */
 export const MAX_CROSS_WAIT = 15;
 export const MAX_LEAVE_STEPS = 8;
@@ -86,11 +90,12 @@ export interface Route {
  * hop counts. It looks at no simulator: only the observation.
  */
 export function searchRoute(obs: Observation, request: RouteRequest): Route | null {
-  const { goalDz, side, col0, depth = ROUTE_DEPTH } = request;
+  const { goalDz, side, col0, depth = DETOUR_DEPTH } = request;
   return walk(
     obs,
     depth,
     (node) => node.dz >= goalDz && (side === "left" ? node.c < col0 : node.c > col0),
+    (node) => node.dz >= goalDz,
   );
 }
 
@@ -103,8 +108,16 @@ interface WalkNode {
   d: number;
 }
 
-/** The shortest way to any cell the goal accepts, one hop of 0.2 s per level. */
-function walk(obs: Observation, depth: number, isGoal: (node: WalkNode) => boolean): Route | null {
+/**
+ * The shortest way to any cell the goal accepts, one hop of 0.2 s per level. A cell for which `isDead` holds is
+ * reached but not walked on from: a detour that arrives on the wrong side of the new row is not that detour.
+ */
+function walk(
+  obs: Observation,
+  depth: number,
+  isGoal: (node: WalkNode) => boolean,
+  isDead: (node: WalkNode) => boolean = () => false,
+): Route | null {
   // `v` is the speed (columns per second) of the platform the chicken stands on, which carries it while it waits.
   let level: Array<{ dz: number; c: number; v: number; path: Action[] }> = [
     { dz: 0, c: obs.player.col, v: ridingSpeed(obs), path: [] },
@@ -131,8 +144,9 @@ function walk(obs: Observation, depth: number, isGoal: (node: WalkNode) => boole
         seen.add(key);
         const path = [...node.path, move];
         const landed = { dz, c, v: platformSpeed(row, c, d * T) };
-        if (isGoal({ ...landed, d })) return { first: path[0] as Action, path };
-        next.push({ ...landed, path });
+        const reached = { ...landed, d };
+        if (isGoal(reached)) return { first: path[0] as Action, path };
+        if (!isDead(reached)) next.push({ ...landed, path });
       }
     }
     level = next;
@@ -179,6 +193,8 @@ export interface RouteAct {
   action: Action;
   note: string;
   step: RouteStep;
+  /** The manoeuvre could not begin, so this step only holds the chicken. */
+  refused?: boolean;
 }
 
 interface DetourPlan {
@@ -236,6 +252,9 @@ function safeHold(obs: Observation, memory: Memory): RouteAct {
   };
 }
 
+const staysWater = (row: ObsRow | undefined, cell: Cell): boolean =>
+  cell === "water" && row?.kind === "water" && row.platforms.every((p) => p.speed_cols_per_s === 0);
+
 /** Stepping onto a road or rail that the chicken then has to wait on, with a vehicle or train about to arrive, is how the first games were lost. */
 function canSettle(obs: Observation): boolean {
   if (canStand(hopWindow(rowAt(obs, 1), obs.player.col, T, 1.9, true))) return true;
@@ -256,7 +275,7 @@ function crossingCell(obs: Observation): { cell: Cell; noRest: boolean } {
 export class RouteExecutor {
   private plan: CrossPlan | DetourPlan | LeavePlan | null = null;
   private last: string | undefined;
-  private readonly failed: Record<SideName, boolean> = { left: false, right: false };
+  private readonly failedAt: Record<SideName, number | null> = { left: null, right: null };
   private failedAtScore = 0;
 
   /** How the last manoeuvre went, in a sentence, for the model's memory. */
@@ -264,13 +283,17 @@ export class RouteExecutor {
     return this.last;
   }
 
-  /** Sides whose detour was refused or given back since the last new row. */
+  /** Sides whose detour was refused or given back less than `RETRY_AFTER` decisions ago, on this row. */
   failedSides(memory: Memory): Readonly<Record<SideName, boolean>> {
     if (memory.score > this.failedAtScore) {
-      this.failed.left = false;
-      this.failed.right = false;
+      this.failedAt.left = null;
+      this.failedAt.right = null;
     }
-    return this.failed;
+    const failed = (side: SideName): boolean => {
+      const at = this.failedAt[side];
+      return at !== null && memory.sinceProgress - at < RETRY_AFTER;
+    };
+    return { left: failed("left"), right: failed("right") };
   }
 
   /** The step of the manoeuvre in progress, or null when there is none or it gave the decision back. */
@@ -292,12 +315,12 @@ export class RouteExecutor {
     if (maneuver === "cross_ahead") {
       const plan: CrossPlan = { kind: "cross", waited: 0 };
       this.plan = plan;
-      return this.crossStep(plan, obs, memory, true) ?? this.hold(obs, memory);
+      return this.crossStep(plan, obs, memory, true) ?? this.refusal(obs, memory);
     }
     if (maneuver === "leave_platform") {
       const plan: LeavePlan = { kind: "leave", steps: 0 };
       this.plan = plan;
-      return this.leaveStep(plan, obs, true) ?? this.hold(obs, memory);
+      return this.leaveStep(plan, obs, true) ?? this.refusal(obs, memory);
     }
     const plan: DetourPlan = {
       kind: "detour",
@@ -307,7 +330,11 @@ export class RouteExecutor {
       steps: 0,
     };
     this.plan = plan;
-    return this.detourStep(plan, obs, memory, true) ?? this.hold(obs, memory);
+    return this.detourStep(plan, obs, memory, true) ?? this.refusal(obs, memory);
+  }
+
+  private refusal(obs: Observation, memory: Memory): RouteAct {
+    return { ...this.hold(obs, memory), refused: true };
   }
 
   /** A refused manoeuvre still costs the chicken a step: it waits, or steps off a cell that cannot hold it. */
@@ -340,8 +367,9 @@ export class RouteExecutor {
         step: { kind: "hop" },
       };
     }
-    if (isPermanent(cell))
+    if (isPermanent(cell)) {
       return this.giveBack(starting, "cross_ahead", `${cell} does not go away`);
+    }
     if (!canStand(chicken.stays_on)) {
       const why = `the chicken cannot stay where it stands (${chicken.stays_on})`;
       return this.giveBack(starting, "cross_ahead", why);
@@ -352,6 +380,9 @@ export class RouteExecutor {
         "cross_ahead",
         "a platform is carrying it past the edge of the world",
       );
+    }
+    if (staysWater(rowAt(obs, 1), cell)) {
+      return this.giveBack(starting, "cross_ahead", "nothing moves on that row, the water stays");
     }
     if (plan.waited >= MAX_CROSS_WAIT) {
       const why = `the cell (${cell}) did not clear in ${plan.waited} steps`;
@@ -400,7 +431,7 @@ export class RouteExecutor {
   ): RouteAct | null {
     const name = plan.side === "left" ? "detour_left" : "detour_right";
     const fail = (why: string): null => {
-      this.failed[plan.side] = true;
+      this.failedAt[plan.side] = memory.sinceProgress;
       this.failedAtScore = memory.score;
       return this.giveBack(starting, name, why);
     };
@@ -417,7 +448,7 @@ export class RouteExecutor {
       side: plan.side,
       col0: plan.col0,
     });
-    if (!route) return fail(`no way to an opening on the ${plan.side} within ${ROUTE_DEPTH} hops`);
+    if (!route) return fail(`no way to an opening on the ${plan.side} within ${DETOUR_DEPTH} hops`);
     return legAct(name, "walk", ++plan.steps, route);
   }
 }

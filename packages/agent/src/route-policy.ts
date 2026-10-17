@@ -11,7 +11,7 @@ import type {
   PolicyFactory,
 } from "./policy.ts";
 import { PROMPT_VERSION } from "./prompts.ts";
-import { ROUTE_ACTION, RouteExecutor, type RouteManeuver } from "./route.ts";
+import { ROUTE_ACTION, type RouteAct, RouteExecutor, type RouteManeuver } from "./route.ts";
 import {
   AROUND_OPTIONS,
   CELL_OPTIONS,
@@ -74,7 +74,7 @@ export function routePolicy(
         const sent = inputOf(request);
         hooks?.onAsk?.(sent);
         const chosen = fromRoute(await client.run(request));
-        const first = executor.start(chosen.maneuver, obs, memory);
+        const { act, started, note } = begin(executor, chosen, obs, memory);
         return {
           ...chosen.decision,
           ...(chosen.pLeaving === undefined
@@ -83,13 +83,18 @@ export function routePolicy(
                 probabilities: withLeaving(
                   chosen.decision.probabilities,
                   chosen.pLeaving,
-                  first.action,
+                  act.action,
                 ),
               }),
-          action: first.action,
+          action: act.action,
           source: "model",
-          note: `model chose ${chosen.maneuver}; ${first.note}`,
-          extra: { ...chosen.decision.extra, maneuver: chosen.maneuver, controller: first.step },
+          note: `model chose ${chosen.maneuver}; ${note}`,
+          extra: {
+            ...chosen.decision.extra,
+            maneuver: chosen.maneuver,
+            controller: act.step,
+            ...(started === chosen.maneuver ? {} : { fallback: started }),
+          },
           sent,
         };
       },
@@ -100,6 +105,38 @@ export function routePolicy(
 
 function inputOf({ model, state, questions }: ClefRequest): ModelInput {
   return { model, state, questions };
+}
+
+/**
+ * Starts the manoeuvre the model chose. One that cannot begin (nothing to walk, water that never changes) passes to
+ * the next of the model's own answers, in the order of its probabilities, without asking again.
+ */
+function begin(
+  executor: RouteExecutor,
+  chosen: { maneuver: RouteManeuver; fallbacks: readonly RouteManeuver[] },
+  obs: Observation,
+  memory: Memory,
+): { act: RouteAct; started: RouteManeuver; note: string } {
+  let act = executor.start(chosen.maneuver, obs, memory);
+  let started = chosen.maneuver;
+  const refusals: string[] = [];
+  for (const next of chosen.fallbacks) {
+    if (!act.refused) break;
+    refusals.push(executor.lastResult ?? "");
+    act = executor.start(next, obs, memory);
+    started = next;
+  }
+  return { act, started, note: [...refusals, act.note].join("; ") };
+}
+
+/** What to try after `chosen` is refused: the answers to `around` by probability, all of them for "go straight", the others for a detour. */
+export function refusalOrder(
+  chosen: RouteManeuver,
+  around: Readonly<Record<(typeof AROUND_OPTIONS)[number], number>>,
+): RouteManeuver[] {
+  if (chosen === "wait_here" || chosen === "leave_platform") return [];
+  const ranked = [...AROUND_OPTIONS].sort((a, b) => around[b] - around[a]);
+  return ranked.filter((option) => option !== chosen);
 }
 
 function choiceOf<T extends string>(
@@ -126,6 +163,7 @@ export function fromRoute(result: ClefResult): {
   maneuver: RouteManeuver;
   decision: Decision;
   pLeaving?: number;
+  fallbacks: RouteManeuver[];
 } {
   const cell = choiceOf(result.answers[ROUTE_QUESTION_IDS[0]], CELL_OPTIONS, "cell");
   const moving = choiceOf(result.answers[ROUTE_QUESTION_IDS[1]], MOVING_OPTIONS, "moving");
@@ -176,6 +214,7 @@ export function fromRoute(result: ClefResult): {
       ...choiceAnswers(result),
     },
     ...(pLeaving === undefined ? {} : { pLeaving }),
+    fallbacks: refusalOrder(maneuver, around.probabilities),
   };
 }
 

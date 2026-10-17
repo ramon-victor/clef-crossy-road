@@ -12,7 +12,7 @@ import { emptyMemory, type Memory, remember } from "./memory.ts";
 import type { Decision, Policy, PolicyFactory } from "./policy.ts";
 
 export const DEFAULT_MAX_DECISIONS = 300;
-export const DEFAULT_STALL_LIMIT = 40;
+export const DEFAULT_STALL_LIMIT = 60;
 
 export interface EpisodeOptions {
   /** Ticks the world advances after each action. Default: one full hop (12). */

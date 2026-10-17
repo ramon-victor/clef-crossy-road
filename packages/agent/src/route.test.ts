@@ -20,6 +20,7 @@ import {
   MAX_CROSS_WAIT,
   MAX_DETOUR_STEPS,
   MAX_LEAVE_STEPS,
+  RETRY_AFTER,
   ROUTE_IDS,
   RouteExecutor,
   routeChoice,
@@ -27,7 +28,7 @@ import {
   searchExit,
   searchRoute,
 } from "./route.ts";
-import { fromRoute } from "./route-policy.ts";
+import { fromRoute, refusalOrder } from "./route-policy.ts";
 import {
   AROUND_CRITERIA,
   AROUND_OPTIONS,
@@ -222,6 +223,19 @@ describe("searchRoute: the way round, over the words alone", () => {
     expect(route?.first).toBe("hop_back");
   });
 
+  it("walks a long way to a lily pad, further than the first eight hops", () => {
+    const farPad = world([grass([], -1), grass([], 0), water([{ col: 4 }], 1)], -4);
+    const request = { goalDz: 1, side: "right", col0: -4 } as const;
+    expect(searchRoute(farPad, { ...request, depth: 8 })).toBeNull();
+    const route = searchRoute(farPad, request);
+    expect(route?.path).toHaveLength(9);
+    expect(route?.path.at(-1)).toBe("hop_forward");
+  });
+
+  it("does not count as a detour to one side a way that arrives on the other and walks back", () => {
+    expect(searchRoute(boxedIn(), { goalDz: 1, side: "left", col0: 0 })).toBeNull();
+  });
+
   it("keeps to the side it was asked for, and says when that side has no way", () => {
     expect(searchRoute(boxedIn(), { goalDz: 1, side: "left", col0: 0 })).toBeNull();
   });
@@ -364,10 +378,10 @@ describe("RouteExecutor: what each step is, without reading its sentence", () =>
     const act = executor.start("cross_ahead", obs, emptyMemory());
     expect(act.action).toBe("stay");
     expect(act.step).toEqual({ kind: "hold", why: "refused" });
-    expect(executor.start("wait_here", obs, emptyMemory()).step).toEqual({
-      kind: "hold",
-      why: "refused",
-    });
+    expect(act.refused).toBe(true);
+    const waiting = executor.start("wait_here", obs, emptyMemory());
+    expect(waiting.step).toEqual({ kind: "hold", why: "refused" });
+    expect(waiting.refused).toBeUndefined();
   });
 
   it("names the vehicle or the train that would reach a cell that is clear for the hop, and says it is not the cell that blocks", () => {
@@ -490,6 +504,36 @@ describe("RouteExecutor: the manoeuvre in progress", () => {
     expect(executor.failedSides({ ...memory, score: 1 }).left).toBe(false);
   });
 
+  it("forgets a side that failed after a few decisions, and not before", () => {
+    const executor = new RouteExecutor();
+    const failedAt = { ...emptyMemory(), sinceProgress: 3 };
+    executor.start("detour_left", boxedIn(), failedAt);
+    const later = (decisions: number) => ({
+      ...failedAt,
+      sinceProgress: failedAt.sinceProgress + decisions,
+    });
+    expect(executor.failedSides(later(RETRY_AFTER - 1)).left).toBe(true);
+    expect(executor.failedSides(later(RETRY_AFTER)).left).toBe(false);
+    expect(executor.failedSides(later(RETRY_AFTER)).right).toBe(false);
+  });
+
+  it("refuses at once a crossing into water that nothing on its row will ever cover, and still waits where logs pass", () => {
+    const refusals = [water([{ col: 3 }], 1), water([], 1)].map((row) => {
+      const executor = new RouteExecutor();
+      const act = executor.start("cross_ahead", world([grass([], 0), row]), emptyMemory());
+      return [act.refused, executor.lastResult, act.step.kind] as const;
+    });
+    for (const [refused, result, kind] of refusals) {
+      expect(refused).toBe(true);
+      expect(result).toBe("cross_ahead: refused, nothing moves on that row, the water stays");
+      expect(kind).toBe("hold");
+    }
+    const logs = world([grass([], 0), water([{ col: 4, speed: -1, type: "log" }], 1)]);
+    const waiting = new RouteExecutor().start("cross_ahead", logs, emptyMemory());
+    expect(waiting.refused).toBeUndefined();
+    expect(waiting.step.kind).toBe("wait");
+  });
+
   it("gives a detour back after too many hops", () => {
     const executor = new RouteExecutor();
     const memory = emptyMemory();
@@ -497,7 +541,9 @@ describe("RouteExecutor: the manoeuvre in progress", () => {
     for (let i = 0; i < MAX_DETOUR_STEPS + 2 && executor.next(boxedIn(), memory); i++) {
       // keep asking: the world does not change here, so the route never ends
     }
-    expect(executor.lastResult).toMatch(/more than 12 hops and no new row/);
+    expect(executor.lastResult).toMatch(
+      new RegExp(`more than ${MAX_DETOUR_STEPS} hops and no new row`),
+    );
   });
 
   it("steps off a cell a vehicle is about to cover instead of waiting on it when a manoeuvre is refused", () => {
@@ -935,6 +981,46 @@ describe("the route strategy through the Clef policy", () => {
       const decision = await policyOf(client).decide(logAtEdge());
       expect(decision.extra).toMatchObject({ maneuver: "cross_ahead", ride: "staying" });
       expect(sum(decision.probabilities)).toBeCloseTo(1, 5);
+    });
+  });
+
+  describe("when the manoeuvre the model chose cannot begin", () => {
+    it.each([
+      ["cross_ahead", ["detour_right", "detour_left", "wait_here"]],
+      ["detour_right", ["detour_left", "wait_here"]],
+      ["detour_left", ["detour_right", "wait_here"]],
+      ["wait_here", []],
+      ["leave_platform", []],
+    ] as const)("%s passes on to %j, by the probabilities the model gave", (chosen, order) => {
+      const around = { detour_left: 0.2, detour_right: 0.6, wait_here: 0.2 };
+      expect(refusalOrder(chosen, around)).toEqual(order);
+    });
+
+    it("takes the model's next answer for water that never changes, without asking again", async () => {
+      const { client, requests } = clientAnswering("stand", "still", "detour_right", 0.9);
+      const open = world([grass([], -1), grass([], 0), water([{ col: 2 }], 1), grass([], 2)]);
+      const decision = await policyOf(client).decide(open);
+      expect(requests).toHaveLength(1);
+      expect(decision).toMatchObject({
+        action: "hop_right",
+        extra: { maneuver: "cross_ahead", fallback: "detour_right", controller: { kind: "walk" } },
+      });
+      expect(decision.note).toContain(
+        "cross_ahead: refused, nothing moves on that row, the water stays; detour_right: hop 1",
+      );
+    });
+
+    it("goes on to the other side when the side it chose has no way", async () => {
+      const { client } = clientAnswering("no_stand", "still", "detour_left", 0.1);
+      const decision = await policyOf(client).decide(boxedIn());
+      expect(decision.note).toContain("detour_left: refused, no way to an opening on the left");
+      expect(decision.extra).toMatchObject({ maneuver: "detour_left", fallback: "detour_right" });
+    });
+
+    it("says nothing of a fallback when the manoeuvre began", async () => {
+      const { client } = clientAnswering("stand", "still", "wait_here", 0.9);
+      const decision = await policyOf(client).decide(world([grass([], 0), grass([], 1)]));
+      expect(decision.extra).not.toHaveProperty("fallback");
     });
   });
 
