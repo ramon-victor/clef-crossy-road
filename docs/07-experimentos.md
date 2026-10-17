@@ -26,7 +26,7 @@ Resultados em `runs/<nome>/episodes.ndjson` (retomável) e `reports/`. As açõe
 
 ## Regras do benchmark
 
-- Cada decisão avança 12 ticks (um salto completo, 0,2 s). A partida termina na morte, em 300 decisões, ou por **estagnação**: 40 decisões seguidas sem alcançar uma linha nova (aplicado a todas as políticas por igual; também limita o custo de uma política que fica indecisa para sempre).
+- Cada decisão avança 12 ticks (um salto completo, 0,2 s). A partida termina na morte, em 300 decisões, ou por **estagnação**: 60 decisões seguidas sem alcançar uma linha nova (40 até 2026-10-16: tudo o que está abaixo e é anterior a essa data usa 40) (aplicado a todas as políticas por igual; também limita o custo de uma política que fica indecisa para sempre).
 - **Sem atraso** é o modo do gate. Atraso é uma condição à parte (abaixo).
 - Os rótulos de política em um relatório incluem o sufixo da condição, por exemplo `@lat300` (serial) ou `@latp300` (pipelined).
 
@@ -381,7 +381,7 @@ Sem efeito, medido e fora: enxergar até 12 linhas atrás (57,35 → 57,50), gua
 | 7 | 8 (carro) | **8** (carro) | 19 | igual |
 | 8 | 39 (preso, 171 decisões) | **115** com o teto de 300 decisões, **183 ruas** gravada inteira (671 decisões, +653 neurons) | 233 | preso de novo, esperando um tronco (o limite de 60 corta uma espera) |
 
-Na seed 8, **31 recusas** passaram à próxima resposta do modelo (`extra.fallback`), 4 delas nas primeiras 300 decisões. As três seeds seguem reproduzindo do cache com `--daily-neurons 0` (272 acertos, 0 chamadas) e no app de verdade (0 chamadas ao bridge; "Stuck: no new row in 60 decisions" com 183 ruas); a seed 8 foi gravada **sem teto de 300 decisões** (`--max-decisions 1000`) justamente para o app a reproduzir inteira. O app lista **6 a 8**.
+Na seed 8, **31 recusas** passaram à próxima resposta do modelo (`extra.fallback`), 4 delas nas primeiras 300 decisões. Numa primeira versão a fila incluía `wait_here` e 23 das 31 terminavam esperando; uma revisão apontou que esperar já é o que a recusa faz, a fila passou a ter só os desvios, e a seed 8 gravada de novo (31 chamadas, 207 neurons) deu **o mesmo placar (183) e as mesmas decisões**: os desvios tentados no lugar das esperas também foram recusados, não havia caminho. As três seeds seguem reproduzindo do cache com `--daily-neurons 0` (272 acertos, 0 chamadas) e no app de verdade (0 chamadas ao bridge; "Stuck: no new row in 60 decisions" com 183 ruas); a seed 8 foi gravada **sem teto de 300 decisões** (`--max-decisions 1000`) justamente para o app a reproduzir inteira. O app lista **6 a 8**.
 
 **6. Protocolo.** `DEFAULT_STALL_LIMIT` passou de 40 para **60**. Todas as medições anteriores a 2026-10-17 neste documento são com 40; `bench run --stall-limit 40` as reproduz. A mudança não afeta o modelo (os passos do controlador são grátis), mas um jogo realmente preso gasta mais chamadas antes de parar (até ~20, ~130 neurons).
 
