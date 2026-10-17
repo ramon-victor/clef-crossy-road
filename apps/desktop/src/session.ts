@@ -16,6 +16,7 @@ import {
   observe,
   TICKS_PER_SECOND,
 } from "@ccr/core";
+import { type ErrorInfo, errorInfo } from "./bridge/errors.ts";
 import { EpisodeStats } from "./episode-stats.ts";
 
 /**
@@ -50,6 +51,7 @@ export interface SessionState {
   decisions: number;
   phase: Phase;
   error: string | null;
+  errorInfo: ErrorInfo | null;
   paused: boolean;
   speed: number;
   timing: Timing;
@@ -97,6 +99,7 @@ export class Session {
   private singleStep = false;
   private speed = 1;
   private error: string | null = null;
+  private errorInfo: ErrorInfo | null = null;
   private best = 0;
   private decisions = 0;
   private history: DecisionLog[] = [];
@@ -154,6 +157,7 @@ export class Session {
     this.stalled = false;
     this.phase = "idle";
     this.error = null;
+    this.errorInfo = null;
     this.singleStep = false;
     this.decisions = 0;
     this.history = [];
@@ -252,6 +256,7 @@ export class Session {
       decisions: this.decisions,
       phase: this.phase,
       error: this.error,
+      errorInfo: this.errorInfo,
       paused: this.paused,
       speed: this.speed,
       timing: this.timing,
@@ -343,6 +348,7 @@ export class Session {
         this.inFlight = false;
         this.phase = "error";
         this.error = error instanceof Error ? error.message : String(error);
+        this.errorInfo = errorInfo(error);
         this.emit();
       },
     );

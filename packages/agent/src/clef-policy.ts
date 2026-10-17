@@ -299,7 +299,8 @@ export function clefPolicy(client: ClefClient, config: ClefPolicyConfig): Policy
         }
         const state = lanesState(obs, memory);
         const step = executor.next(state);
-        if (step) return { action: step.action, source: "executor", note: step.note };
+        if (step)
+          return { action: step.action, source: "executor", note: step.note, notice: step.notice };
         const request = requestFor(obs, memory, executor.lastResult);
         const answered = await client.run(request);
         const chosen = graphs ? fromGraphManeuver(answered) : fromManeuver(answered);
@@ -309,6 +310,7 @@ export function clefPolicy(client: ClefClient, config: ClefPolicyConfig): Policy
           action: first.action,
           source: "model",
           note: `model chose ${chosen.maneuver}; ${first.note}`,
+          notice: { kind: "model", maneuver: chosen.maneuver, step: first.notice },
           extra: { ...chosen.decision.extra, maneuver: chosen.maneuver },
           sent: inputOf(request),
         };

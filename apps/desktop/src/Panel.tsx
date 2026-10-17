@@ -1,8 +1,10 @@
-import { isBudgetRefusal } from "@ccr/clef";
+import type { ErrorInfo } from "./bridge/errors.ts";
 import type { BudgetStatus, CredentialStatus } from "./bridge/types.ts";
+import { useI18n } from "./i18n/provider.tsx";
 import { BudgetCard } from "./panel/BudgetCard.tsx";
 import { ControlsCard } from "./panel/ControlsCard.tsx";
 import { DecisionCard } from "./panel/DecisionCard.tsx";
+import { ErrorMessage } from "./panel/ErrorMessage.tsx";
 import { Footer } from "./panel/Footer.tsx";
 import { PlayerCard } from "./panel/PlayerCard.tsx";
 import { SetupCard } from "./panel/SetupCard.tsx";
@@ -34,25 +36,21 @@ export interface PanelProps {
   onAutoRestart(on: boolean): void;
 }
 
-function ErrorCard({ error }: { error: string }) {
+function ErrorCard({ info }: { info: ErrorInfo }) {
+  const { t } = useI18n();
   return (
     <section class="card warn error-card">
-      <strong>Stopped</strong>
-      <p>{error}</p>
-      {isBudgetRefusal(error) && (
-        <p class="small">
-          The free tier is spent for today (it resets at 00:00 UTC). Cached decisions still play for
-          free. Pick another player, or come back later.
-        </p>
-      )}
+      <strong>{t("error.stopped")}</strong>
+      <ErrorMessage info={info} />
     </section>
   );
 }
 
 export function Panel(props: PanelProps) {
   const { state } = props;
+  const { t } = useI18n();
   return (
-    <aside class="panel" aria-label="Game controls and decisions">
+    <aside class="panel" aria-label={t("panel.label")}>
       <h1 class="sr-only">Clef Crossy Road</h1>
       <div class="panel-top">
         <PlayerCard
@@ -80,7 +78,9 @@ export function Panel(props: PanelProps) {
           onSeed={props.onSeed}
           onAutoRestart={props.onAutoRestart}
         />
-        {state.error && <ErrorCard error={state.error} />}
+        {state.error && (
+          <ErrorCard info={state.errorInfo ?? { code: "unknown", detail: state.error }} />
+        )}
         {!state.human && <DecisionCard state={state} onInspect={props.onInspect} />}
         <StatsCard state={state} />
       </div>

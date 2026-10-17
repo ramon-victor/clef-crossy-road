@@ -1,17 +1,13 @@
 import { inputAsJson, type ModelInput, optionsOf, prettyState, sentences } from "@ccr/agent";
 import { useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
-import { ACTION_GLYPH, ACTION_LABEL, ACTION_ORDER, ms, percent } from "../format.ts";
+import { ACTION_GLYPH, ACTION_ORDER } from "../format.ts";
+import { actionLabel } from "../i18n/presentation.ts";
+import { useI18n } from "../i18n/provider.tsx";
 import { copyText, policyFacts } from "../inspect.ts";
 import type { DecisionLog } from "../session.ts";
 
-type Tab = "state" | "question" | "options" | "answer";
-
-const TABS: readonly { id: Tab; label: string }[] = [
-  { id: "state", label: "State" },
-  { id: "question", label: "Question" },
-  { id: "options", label: "Options" },
-  { id: "answer", label: "Answer" },
-];
+const TABS = ["state", "question", "options", "answer"] as const;
+type Tab = (typeof TABS)[number];
 
 export interface InputInspectorProps {
   history: readonly DecisionLog[];
@@ -20,30 +16,36 @@ export interface InputInspectorProps {
 }
 
 function StateTab({ sent }: { sent: ModelInput }) {
+  const { t } = useI18n();
   return (
     <>
-      <p class="hint">
-        The state the model evaluates, exactly as sent ({JSON.stringify(sent.state).length}{" "}
-        characters).
-        {sent.images ? ` ${sent.images} picture(s) went with it.` : ""}
-      </p>
-      <pre class="inspector-pre">{prettyState(sent.state)}</pre>
+      <p class="hint">{t("inspect.stateHelp", { count: JSON.stringify(sent.state).length })}</p>
+      {sent.images !== undefined && (
+        <p class="hint">{t("inspect.images", { count: sent.images })}</p>
+      )}
+      <pre class="inspector-pre" lang="en" dir="ltr">
+        {prettyState(sent.state)}
+      </pre>
     </>
   );
 }
 
 function QuestionTab({ sent }: { sent: ModelInput }) {
+  const { t } = useI18n();
   return (
     <>
-      <p class="hint">
-        The instructions of each question, one sentence per line here (they are sent as one text).
-      </p>
+      <p class="hint">{t("inspect.questionHelp")}</p>
       {Object.entries(sent.questions).map(([id, question]) => (
         <div key={id}>
           <div class="field-label">
-            {id} · {question.type} · {question.instructions.length} characters
+            <code lang="en">
+              {id} · {question.type}
+            </code>{" "}
+            · {t("inspect.characters", { count: question.instructions.length })}
           </div>
-          <pre class="inspector-pre">{sentences(question.instructions)}</pre>
+          <pre class="inspector-pre" lang="en" dir="ltr">
+            {sentences(question.instructions)}
+          </pre>
         </div>
       ))}
     </>
@@ -51,17 +53,16 @@ function QuestionTab({ sent }: { sent: ModelInput }) {
 }
 
 function OptionsTab({ sent }: { sent: ModelInput }) {
-  const choices = Object.entries(sent.questions).filter(([, q]) => q.type === "choice");
-  if (choices.length === 0) {
-    return (
-      <p class="hint">This player asks yes/no questions, so it has no options to choose from.</p>
-    );
-  }
+  const { t } = useI18n();
+  const choices = Object.entries(sent.questions).filter(
+    ([, question]) => question.type === "choice",
+  );
+  if (choices.length === 0) return <p class="hint">{t("inspect.noOptions")}</p>;
   return (
     <>
-      <p class="hint">The options the model picks from, and the text it is given for each.</p>
+      <p class="hint">{t("inspect.optionsHelp")}</p>
       {choices.map(([id, question]) => (
-        <table class="options" key={id}>
+        <table class="options" key={id} lang="en" dir="ltr">
           <tbody>
             {optionsOf(question).map(([name, text]) => (
               <tr key={name}>
@@ -77,60 +78,75 @@ function OptionsTab({ sent }: { sent: ModelInput }) {
 }
 
 function AnswerTab({ log }: { log: DecisionLog }) {
-  const d = log.decision;
+  const translation = useI18n();
+  const { t, number, percent, ms } = translation;
+  const decision = log.decision;
   return (
     <>
-      <p class="hint">
-        What the model answered: its probability for each option, and the move taken (the most
-        likely one).
-      </p>
+      <p class="hint">{t("inspect.answerHelp")}</p>
       <div class="bars">
-        {ACTION_ORDER.map((a) => (
-          <div class={`bar-row ${a === log.action ? "chosen-row" : ""}`} key={a}>
-            <span class="bar-glyph">{ACTION_GLYPH[a]}</span>
-            <span class="bar-name">{ACTION_LABEL[a]}</span>
+        {ACTION_ORDER.map((action) => (
+          <div class={`bar-row ${action === log.action ? "chosen-row" : ""}`} key={action}>
+            <span class="bar-glyph">{ACTION_GLYPH[action]}</span>
+            <span class="bar-name">{actionLabel(action, translation)}</span>
             <div class="bar">
-              <div style={{ width: `${Math.round((d.probabilities?.[a] ?? 0) * 100)}%` }} />
+              <div
+                style={{ width: `${Math.round((decision.probabilities?.[action] ?? 0) * 100)}%` }}
+              />
             </div>
-            <span class="bar-num">{percent(d.probabilities?.[a])}</span>
+            <span class="bar-num">{percent(decision.probabilities?.[action])}</span>
           </div>
         ))}
       </div>
       <p class="hint">
-        {d.cached ? "answered from the cache (free)" : "answered by the model"} ·{" "}
-        {d.inputTokens ?? "?"} input tokens · {(d.neurons ?? 0).toFixed(2)} neurons ·{" "}
-        {ms(d.latencyMs)}
-        {d.confidence !== undefined
-          ? ` · confidence ${d.confidence.toFixed(2)} (undocumented)`
-          : ""}
+        {t(decision.cached ? "inspect.cached" : "inspect.model")} ·{" "}
+        {t("inspect.tokens", {
+          value: decision.inputTokens === undefined ? "?" : number(decision.inputTokens),
+        })}{" "}
+        ·{" "}
+        {t("inspect.neurons", {
+          value: decision.neurons ?? 0,
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2,
+        })}{" "}
+        · {ms(decision.latencyMs)}
       </p>
+      {decision.confidence !== undefined && (
+        <p class="hint">
+          {t("decision.confidence", {
+            value: decision.confidence,
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2,
+          })}
+        </p>
+      )}
     </>
   );
 }
 
-/**
- * A window over the game that shows what the model read for a decision: the state, the question, the
- * options and its answer, as sent. It is the place to look when the chicken does something odd.
- */
+/** Translates the inspection UI while preserving every byte of the actual model input. */
 export function InputInspector({ history, policyId, onClose }: InputInspectorProps) {
+  const translation = useI18n();
+  const { t } = translation;
   const closeRef = useRef<HTMLButtonElement>(null);
+  const copyTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const [picked, setPicked] = useState<number | null>(null);
   const [tab, setTab] = useState<Tab>("state");
-  const [copied, setCopied] = useState(false);
+  const [copyStatus, setCopyStatus] = useState<"idle" | "copied" | "error">("idle");
   const facts = policyFacts(policyId);
-  // Only the decisions that asked the model have something to show; a controller step is a move the code made
-  // inside a manoeuvre, and the chips list it after the request it belongs to.
-  const asked = history.filter((h) => h.decision.sent);
-  const log = asked.find((h) => h.index === picked) ?? asked[asked.length - 1];
+  const asked = history.filter((entry) => entry.decision.sent);
+  const log = asked.find((entry) => entry.index === picked) ?? asked[asked.length - 1];
   const sent = log?.decision.sent;
   const controllerSince = log
-    ? history.filter((h) => h.index > log.index && h.decision.source === "executor").length
+    ? history.filter((entry) => entry.index > log.index && entry.decision.source === "executor")
+        .length
     : 0;
 
   useLayoutEffect(() => {
     const previous = document.activeElement;
     closeRef.current?.focus();
     return () => {
+      clearTimeout(copyTimer.current);
       if (previous instanceof HTMLElement && previous.isConnected) previous.focus();
     };
   }, []);
@@ -145,51 +161,60 @@ export function InputInspector({ history, policyId, onClose }: InputInspectorPro
 
   const copy = async () => {
     if (!sent) return;
-    setCopied(await copyText(inputAsJson(sent)));
-    setTimeout(() => setCopied(false), 1500);
+    setCopyStatus((await copyText(inputAsJson(sent))) ? "copied" : "error");
+    clearTimeout(copyTimer.current);
+    copyTimer.current = setTimeout(() => setCopyStatus("idle"), 1500);
   };
 
   return (
-    <div class="inspector" role="dialog" aria-label="What the model read">
+    <div class="inspector" role="dialog" aria-label={t("inspect.title")}>
       <header class="inspector-head">
         <div>
-          <div class="inspector-title">What the model read</div>
+          <div class="inspector-title">{t("inspect.title")}</div>
+          <p class="hint">{t("language.original")}</p>
           {facts && (
             <div class="inspector-sub">
               <code>{facts.id}</code>
               <br />
-              sees {facts.sees}; question: {facts.style}
-              {facts.executor && "; the model picks the manoeuvre, a controller picks the moment"}
+              {t("inspect.sees", { sees: t(`perception.${facts.level}`, { seconds: 0.2 }) })}
+              <br />
+              {t("inspect.style", { style: t(`style.${facts.style}`) })}
+              {facts.executor && <p>{t("inspect.executor")}</p>}
             </div>
           )}
         </div>
         <div class="inspector-actions">
           <button type="button" class="btn small" onClick={copy} disabled={!sent}>
-            {copied ? "Copied" : "Copy"}
+            {t(copyStatus === "copied" ? "common.copied" : "common.copy")}
           </button>
           <button ref={closeRef} type="button" class="btn small" onClick={onClose}>
-            Close
+            {t("common.close")}
           </button>
         </div>
+        {copyStatus === "error" && (
+          <p class="hint" role="status">
+            {t("common.copyFailed")}
+          </p>
+        )}
       </header>
-
       {!log || !sent ? (
-        <p class="hint inspector-empty">
-          Nothing to show yet. Pick the Clef and let it make a move: this window shows what it was
-          sent for each decision. The look-ahead and the baselines never ask a model.
-        </p>
+        <p class="hint inspector-empty">{t("inspect.empty")}</p>
       ) : (
         <>
-          <div class="inspector-chips" title="Recent decisions">
-            {asked.map((h) => (
+          <div class="inspector-chips" title={t("decision.recent")}>
+            {asked.map((entry) => (
               <button
                 type="button"
-                key={h.index}
-                class={`chip ${h.index === log.index ? "on" : ""}`}
-                title={`Decision ${h.index + 1}: ${ACTION_LABEL[h.action]} at row ${h.row}`}
-                onClick={() => setPicked(h.index)}
+                key={entry.index}
+                class={`chip ${entry.index === log.index ? "on" : ""}`}
+                title={t("inspect.decisionTitle", {
+                  index: entry.index + 1,
+                  action: actionLabel(entry.action, translation),
+                  row: entry.row,
+                })}
+                onClick={() => setPicked(entry.index)}
               >
-                {ACTION_GLYPH[h.action]}
+                {ACTION_GLYPH[entry.action]}
               </button>
             ))}
             <button
@@ -197,28 +222,31 @@ export function InputInspector({ history, policyId, onClose }: InputInspectorPro
               class={`btn small ${picked === null ? "primary" : ""}`}
               onClick={() => setPicked(null)}
             >
-              Latest
+              {t("inspect.latest")}
             </button>
             <span class="hint">
-              decision {log.index + 1} · row {log.row} · took {ACTION_LABEL[log.action]}
-              {controllerSince > 0 &&
-                ` · then ${controllerSince} step${controllerSince === 1 ? "" : "s"} by the controller`}
+              {t("inspect.decision", {
+                index: log.index + 1,
+                row: log.row,
+                action: actionLabel(log.action, translation),
+              })}
+              {controllerSince > 0 && <> · {t("inspect.controller", { count: controllerSince })}</>}
             </span>
           </div>
-
           <nav class="inspector-tabs">
-            {TABS.map((t) => (
+            {TABS.map((id) => (
               <button
                 type="button"
-                key={t.id}
-                class={tab === t.id ? "on" : ""}
-                onClick={() => setTab(t.id)}
+                key={id}
+                data-tab={id}
+                class={tab === id ? "on" : ""}
+                aria-pressed={tab === id}
+                onClick={() => setTab(id)}
               >
-                {t.label}
+                {t(`inspect.${id}`)}
               </button>
             ))}
           </nav>
-
           <div class="inspector-body">
             {tab === "state" && <StateTab sent={sent} />}
             {tab === "question" && <QuestionTab sent={sent} />}

@@ -1,3 +1,4 @@
+import { useI18n } from "../i18n/provider.tsx";
 import type { SessionState } from "../session.ts";
 
 export interface ControlsCardProps {
@@ -9,25 +10,26 @@ export interface ControlsCardProps {
 }
 
 export function ControlsCard({ state, onPause, onStep, onRetry, onNewMap }: ControlsCardProps) {
+  const { t } = useI18n();
   return (
-    <section class="controls" aria-label="Playback controls">
-      <button type="button" class="btn primary" onClick={onPause} title="Space">
-        {state.paused ? "▶ Resume" : "⏸ Pause"}
+    <section class="controls" aria-label={t("controls.label")}>
+      <button type="button" class="btn primary" onClick={onPause} title={t("controls.space")}>
+        {state.paused ? `▶ ${t("controls.resume")}` : `⏸ ${t("controls.pause")}`}
       </button>
       <button
         type="button"
         class="btn"
         onClick={onStep}
         disabled={state.human || state.timing !== "step" || !state.paused}
-        title="N: one decision while paused"
+        title={t("controls.stepHelp")}
       >
-        ⏭ Step
+        ⏭ {t("controls.step")}
       </button>
       <button type="button" class="btn" onClick={onRetry} title="R">
-        ↺ Retry
+        ↺ {t("controls.retry")}
       </button>
       <button type="button" class="btn" onClick={onNewMap} title="M">
-        ✦ New map
+        ✦ {t("controls.newMap")}
       </button>
     </section>
   );

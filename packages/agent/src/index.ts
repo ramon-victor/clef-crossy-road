@@ -84,6 +84,7 @@ export {
   type RememberedMove,
   remember,
 } from "./memory.ts";
+export type { ControllerManeuver, DecisionNotice } from "./notice.ts";
 export type {
   Decision,
   ModelInput,

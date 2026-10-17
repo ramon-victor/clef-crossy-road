@@ -42,11 +42,17 @@ pub fn load(root: &Path) -> Credentials {
 
 /// Saved GUI settings take precedence; environment variables remain a startup fallback.
 fn load_with(root: &Path, account: Option<String>, token: Option<String>) -> Credentials {
-    let saved: HashMap<String, String> = dotenvy::from_path_iter(root.join(".env"))
-        .into_iter()
-        .flatten()
-        .filter_map(Result::ok)
-        .collect();
+    let path = root.join(".env");
+    // On Unix, File::open can accept a directory; dotenvy's iterator then repeats its I/O error.
+    let saved: HashMap<String, String> = if path.is_file() {
+        dotenvy::from_path_iter(path)
+            .into_iter()
+            .flatten()
+            .filter_map(Result::ok)
+            .collect()
+    } else {
+        HashMap::new()
+    };
     Credentials {
         account_id: saved
             .get("CF_ACCOUNT_ID")
@@ -72,8 +78,9 @@ impl Credentials {
 
     pub fn save(&mut self, root: &Path, input: CredentialInput) -> CommandResult<CredentialStatus> {
         let next = validated(input)?;
-        persist(root, &next)
-            .map_err(|_| CommandError::new("Could not save local Cloudflare credentials."))?;
+        persist(root, &next).map_err(|_| {
+            CommandError::coded("credentials_save", "Could not save local Cloudflare credentials.")
+        })?;
         *self = next;
         Ok(self.status())
     }
@@ -83,7 +90,8 @@ fn validated(input: CredentialInput) -> CommandResult<Credentials> {
     let account = input.account_id.trim().to_ascii_lowercase();
     let token = input.api_token.trim().to_owned();
     if account.len() != 32 || !account.bytes().all(|b| b.is_ascii_hexdigit()) {
-        return Err(CommandError::new(
+        return Err(CommandError::coded(
+            "account_invalid",
             "Account ID must contain 32 hexadecimal characters.",
         ));
     }
@@ -94,7 +102,8 @@ fn validated(input: CredentialInput) -> CommandResult<Credentials> {
             .bytes()
             .all(|b| b.is_ascii_alphanumeric() || b"._~+/-".contains(&b))
     {
-        return Err(CommandError::new(
+        return Err(CommandError::coded(
+            "token_invalid",
             "Enter the API token itself, without Bearer or spaces.",
         ));
     }

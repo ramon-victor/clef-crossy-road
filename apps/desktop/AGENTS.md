@@ -12,7 +12,7 @@ lets a person play.
 ## Hard rules
 
 - **The backend never returns saved credentials.** The settings form accepts new values once and clears them on save/close;
-  never prefill from storage or use localStorage/sessionStorage. All API traffic goes through the Rust command `clef_run` (desktop) or, in browser
+  never prefill credentials from storage or store them in localStorage/sessionStorage. The only browser-storage setting is the non-sensitive language preference `ccr.locale`. All API traffic goes through the Rust command `clef_run` (desktop) or, in browser
   development only, the Vite plugin `dev-bridge.ts`. Never import `@ccr/clef/node` from `src/`, never read `.env` in the UI, and never put
   a credential in `index.html`, `tauri.conf.json` or the bundle. After a production build, grep `dist/` for the token prefix.
 - `credential_status` returns only `{ configured }`; `save_credentials` validates and atomically updates the root `.env`.
@@ -30,13 +30,15 @@ lets a person play.
 
 - `pnpm run dev` at the repository root prepares assets and serves the browser UI at `http://localhost:5173`.
 - `pnpm run dev:desktop` at the root prepares assets and starts Tauri development, including its Vite server.
-- `pnpm --filter @ccr/desktop test` (Session, key map, seeds, policies; no DOM and no real timers) and `typecheck`.
+- `pnpm --filter @ccr/desktop test` (Session, key map, seeds, policies and i18n; jsdom only for UI integration tests, no API calls) and `typecheck`.
 - `pnpm --filter @ccr/desktop tauri dev`; add `CCR_SELFTEST=1` for the scripted check that writes `runs/selftest.json`.
 - `cargo test --lib` in `src-tauri` (PATH needs `%USERPROFILE%\.cargo\bin`).
 - To look at the window without grabbing the whole screen, capture it with `PrintWindow` on the app's window handle (a plain
   screen copy also captures whatever else is on top).
 
 ## Gotchas
+
+- UI text lives in `src/i18n/locales/`; add all seven translations, preserve interpolation variables and plural forms. Language changes must never recreate a policy/session or translate model input, feedback or cache keys. See `docs/12-i18n.md`.
 
 - `Session` is framework-free on purpose; `App.tsx` only subscribes to it. Real-time and step timing share the same loop.
 - In step timing the world waits for the model; in real-time it keeps running at 60 Hz and the action lands whenever the answer arrives.

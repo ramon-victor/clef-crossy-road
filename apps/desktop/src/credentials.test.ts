@@ -154,7 +154,7 @@ describe("development credential bridge", () => {
     const response = await app.post("/credentials", { accountId: ACCOUNT_A, apiToken: TOKEN_A });
     expect(response.status).toBe(500);
     expect(await response.json()).toEqual({
-      error: "Could not save local Cloudflare credentials.",
+      error: { code: "credentials_save", message: "Could not save local Cloudflare credentials." },
     });
     expect(await (await app.get("/credentials")).json()).toEqual({ configured: false });
   });

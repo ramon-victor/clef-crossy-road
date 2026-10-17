@@ -1,7 +1,10 @@
 import { GameView } from "@ccr/render";
 import { useEffect, useRef, useState } from "preact/hooks";
 import type { Sounds } from "./audio.ts";
-import { ACTION_GLYPH, endTitle, percent } from "./format.ts";
+import { ACTION_GLYPH } from "./format.ts";
+import { gameEndTitle } from "./i18n/presentation.ts";
+import { useI18n } from "./i18n/provider.tsx";
+import { ErrorMessage } from "./panel/ErrorMessage.tsx";
 import type { Session, SessionState } from "./session.ts";
 
 export interface GameCanvasProps {
@@ -16,6 +19,8 @@ export interface GameCanvasProps {
 
 /** Owns the WebGL view and the animation loop; everything else is plain DOM on top of it. */
 export function GameCanvas(props: GameCanvasProps) {
+  const translation = useI18n();
+  const { t, number, percent } = translation;
   const { session, state } = props;
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const bubbleRef = useRef<HTMLDivElement>(null);
@@ -102,18 +107,11 @@ export function GameCanvas(props: GameCanvasProps) {
 
   return (
     <div class="stage">
-      <canvas
-        ref={canvasRef}
-        class="game"
-        tabIndex={0}
-        aria-label="Game. Arrow keys or WASD to move; Space to pause."
-      />
+      <canvas ref={canvasRef} class="game" tabIndex={0} aria-label={t("game.canvas")} />
 
       <div class="hud">
-        <div class="hud-score">{state.score}</div>
-        <div class="hud-sub">
-          rows · best {state.best} · seed {state.seed}
-        </div>
+        <div class="hud-score">{number(state.score)}</div>
+        <div class="hud-sub">{t("game.hud", { best: state.best, seed: String(state.seed) })}</div>
       </div>
 
       <div ref={bubbleRef} class="bubble-anchor">
@@ -134,26 +132,26 @@ export function GameCanvas(props: GameCanvasProps) {
         )}
       </div>
 
-      {status === "loading" && <div class="overlay-note">Loading models…</div>}
+      {status === "loading" && <div class="overlay-note">{t("game.loading")}</div>}
       {status === "error" && (
         <div class="overlay-card">
-          <h2>Could not start the view</h2>
-          <p>{errorText}</p>
-          <p class="small">If the models are missing, run: node scripts/fetch-assets.mjs</p>
+          <h2>{t("game.loadError")}</h2>
+          <ErrorMessage info={{ code: "render", detail: errorText }} />
+          <p class="small">{t("game.assetsHelp", { command: "node scripts/fetch-assets.mjs" })}</p>
         </div>
       )}
 
       {status === "ready" && (!state.alive || state.stalled) && (
         <div class="overlay-card over">
-          <div class="over-title">{endTitle(state)}</div>
-          <div class="over-score">{state.score}</div>
-          <div class="over-sub">rows crossed · best {state.best}</div>
+          <div class="over-title">{gameEndTitle(state, translation)}</div>
+          <div class="over-score">{number(state.score)}</div>
+          <div class="over-sub">{t("game.rows", { count: state.score, best: state.best })}</div>
           <div class="over-actions">
             <button type="button" class="btn primary" onClick={props.onRetry}>
-              Retry same map
+              {t("game.retryMap")}
             </button>
             <button type="button" class="btn" onClick={props.onNewMap}>
-              New map
+              {t("controls.newMap")}
             </button>
           </div>
         </div>

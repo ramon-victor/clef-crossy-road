@@ -17,7 +17,9 @@
   --warn: #e8a317;
   --bad: #dc4b4b;
   --radius: 12px;
-  font-family: "Segoe UI", system-ui, sans-serif;
+  --ui-font:
+    "Segoe UI", "Yu Gothic UI", "Meiryo", "Microsoft YaHei UI", "PingFang SC", system-ui, sans-serif;
+  font-family: var(--ui-font);
   color: var(--ink);
 }
 
@@ -35,7 +37,7 @@ body,
 }
 
 .shell {
-  --panel-width: clamp(264px, 24vw, 280px);
+  --panel-width: clamp(296px, 27vw, 320px);
   display: flex;
   height: 100%;
 }
@@ -544,8 +546,10 @@ canvas.game {
 }
 
 .stat-value {
-  font-family: "Retro", monospace;
-  font-size: 16px;
+  font-family: var(--ui-font);
+  font-variant-numeric: tabular-nums;
+  font-size: 20px;
+  font-weight: 700;
   line-height: 1.1;
   overflow-wrap: anywhere;
 }
@@ -1172,4 +1176,57 @@ canvas.game:focus-visible {
   .player-info * {
     transition: none;
   }
+}
+
+/* Translation growth and CJK glyphs must not depend on the Latin-only game font. */
+:root {
+  --ui-font:
+    "Segoe UI", "Yu Gothic UI", "Meiryo", "Microsoft YaHei UI", "PingFang SC", system-ui, sans-serif;
+  font-family: var(--ui-font);
+}
+
+.over-title,
+.decision .chosen,
+.inspector-title {
+  font-family: var(--ui-font);
+}
+
+.controls .btn,
+.panel .setup-body button,
+.stat-label,
+.tag,
+.bar-name,
+.connection-setting {
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+.decision-head,
+.player-label,
+.budget-head,
+.inspector-tabs {
+  flex-wrap: wrap;
+}
+
+.inspector .bar-row {
+  grid-template-columns: 22px minmax(55px, 100px) minmax(0, 1fr) 52px;
+}
+
+.inspector-head {
+  flex-shrink: 0;
+  max-height: 45%;
+  overflow-y: auto;
+}
+
+.inspector-chips,
+.inspector-tabs {
+  flex-shrink: 0;
+}
+
+.technical-details {
+  overflow-wrap: anywhere;
+}
+
+.technical-details summary {
+  cursor: pointer;
 }

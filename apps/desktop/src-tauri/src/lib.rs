@@ -48,6 +48,7 @@ pub fn run() {
     };
 
     tauri::Builder::default()
+        .plugin(tauri_plugin_os::init())
         .manage(state)
         .invoke_handler(tauri::generate_handler![
             commands::clef_run,

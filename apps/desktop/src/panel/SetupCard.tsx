@@ -1,13 +1,12 @@
 import { useState } from "preact/hooks";
 import type { CredentialStatus } from "../bridge/types.ts";
+import { isLocale, LANGUAGE_NAMES, LOCALES } from "../i18n/locale.ts";
+import { useI18n } from "../i18n/provider.tsx";
 import { parseSeedText } from "../seed.ts";
 import type { SessionState, Timing } from "../session.ts";
 
 const SPEEDS = [0.5, 1, 2, 4];
-const TIMINGS: readonly { value: Timing; label: string; title: string }[] = [
-  { value: "step", label: "Step", title: "The world waits while the model thinks" },
-  { value: "realtime", label: "Real-time", title: "Cars keep moving while the model thinks" },
-];
+const TIMINGS = ["step", "realtime"] as const;
 
 export interface SetupCardProps {
   state: SessionState;
@@ -30,36 +29,58 @@ export function SetupCard({
   onSeed,
   onAutoRestart,
 }: SetupCardProps) {
+  const { t, number, preference, detected, select } = useI18n();
   const [seedText, setSeedText] = useState("");
-  const timing = state.human ? "You" : state.timing === "step" ? "Step" : "Real-time";
+  const timing = t(state.human ? "setup.human" : `setup.${state.timing}`);
   return (
     <details class="card setup">
       <summary>
-        <span class="setup-label">Setup</span>
+        <span class="setup-label">{t("setup.title")}</span>
         <span class="setup-current">
-          {timing} · {state.speed}× · seed {state.seed}
+          {t("setup.summary", { timing, speed: state.speed, seed: String(state.seed) })}
         </span>
       </summary>
       <div class="setup-body">
+        <label class="field-label" for="language">
+          {t("language.label")}
+        </label>
+        <select
+          id="language"
+          class="select"
+          value={preference}
+          onChange={(event) => {
+            const value = event.currentTarget.value;
+            if (value === "system" || isLocale(value)) select(value);
+          }}
+        >
+          <option value="system">
+            {t("language.system", { language: LANGUAGE_NAMES[detected] })}
+          </option>
+          {LOCALES.map((locale) => (
+            <option key={locale} value={locale} lang={locale}>
+              {LANGUAGE_NAMES[locale]}
+            </option>
+          ))}
+        </select>
         {!state.human && (
           <fieldset class="segmented">
-            <legend>Timing</legend>
-            {TIMINGS.map((t) => (
+            <legend>{t("setup.timing")}</legend>
+            {TIMINGS.map((timingOption) => (
               <button
                 type="button"
-                key={t.value}
-                class={state.timing === t.value ? "on" : ""}
-                aria-pressed={state.timing === t.value}
-                onClick={() => onTiming(t.value)}
-                title={t.title}
+                key={timingOption}
+                class={state.timing === timingOption ? "on" : ""}
+                aria-pressed={state.timing === timingOption}
+                onClick={() => onTiming(timingOption)}
+                title={t(`setup.${timingOption}Help`)}
               >
-                {t.label}
+                {t(`setup.${timingOption}`)}
               </button>
             ))}
           </fieldset>
         )}
         <fieldset class="speeds">
-          <legend>Speed</legend>
+          <legend>{t("setup.speed")}</legend>
           {SPEEDS.map((speed) => (
             <button
               type="button"
@@ -68,7 +89,7 @@ export function SetupCard({
               aria-pressed={state.speed === speed}
               onClick={() => onSpeed(speed)}
             >
-              {speed}×
+              {number(speed)}×
             </button>
           ))}
         </fieldset>
@@ -83,7 +104,7 @@ export function SetupCard({
           }}
         >
           <label class="field-label" for="map-seed">
-            Map seed
+            {t("setup.seed")}
           </label>
           <div class="seed">
             <input
@@ -95,7 +116,7 @@ export function SetupCard({
               onInput={(event) => setSeedText(event.currentTarget.value)}
             />
             <button type="submit" class="btn small">
-              Go
+              {t("setup.go")}
             </button>
           </div>
         </form>
@@ -107,10 +128,10 @@ export function SetupCard({
               aria-describedby="auto-restart-help"
               onChange={(event) => onAutoRestart(event.currentTarget.checked)}
             />
-            Auto-restart
+            {t("setup.autoRestart")}
           </label>
           <p id="auto-restart-help" class="hint">
-            Only free reference players restart automatically. Models never do.
+            {t("setup.autoRestartHelp")}
           </p>
         </div>
         <div class="connection-setting">
@@ -118,14 +139,14 @@ export function SetupCard({
             <strong>Cloudflare</strong>
             <p class="hint">
               {credentials === null
-                ? "Status unavailable"
+                ? t("setup.statusUnavailable")
                 : credentials.configured
-                  ? "Configured locally"
-                  : "Not configured"}
+                  ? t("setup.configured")
+                  : t("setup.notConfigured")}
             </p>
           </div>
           <button type="button" class="btn small" onClick={onConfigure}>
-            Configure
+            {t("setup.configure")}
           </button>
         </div>
       </div>

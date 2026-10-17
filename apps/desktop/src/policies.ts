@@ -16,8 +16,14 @@ export type ChoiceKind = "human" | "model" | "reference";
 
 export interface PolicyChoice {
   id: string;
-  label: string;
-  detail: string;
+  presentation:
+    | "human"
+    | "lookahead"
+    | "always-forward"
+    | "random"
+    | "clef-flash"
+    | "clef-27b"
+    | "custom";
   kind: ChoiceKind;
   /** True if a fresh decision may spend neurons (cache hits never do). */
   usesApi: boolean;
@@ -84,8 +90,7 @@ export const canonicalPlayerId = (id: string): string => ALIASES[id] ?? id;
 
 const HUMAN: PolicyChoice = {
   id: "human",
-  label: "You",
-  detail: "Arrow keys or WASD",
+  presentation: "human",
   kind: "human",
   usesApi: false,
   factory: null,
@@ -94,24 +99,21 @@ const HUMAN: PolicyChoice = {
 const REFERENCES: readonly PolicyChoice[] = [
   {
     id: "lookahead",
-    label: "Look-ahead (reference)",
-    detail: "Reads the simulator and searches 4 hops ahead. A ceiling, not a model",
+    presentation: "lookahead",
     kind: "reference",
     usesApi: false,
     factory: lookaheadPolicy(),
   },
   {
     id: "always-forward",
-    label: "Always forward (baseline)",
-    detail: "The honest floor: about 4 rows on average",
+    presentation: "always-forward",
     kind: "reference",
     usesApi: false,
     factory: alwaysForward,
   },
   {
     id: "random",
-    label: "Random (baseline)",
-    detail: "Uniform over the five actions",
+    presentation: "random",
     kind: "reference",
     usesApi: false,
     factory: randomPolicy,
@@ -130,8 +132,7 @@ function modelChoices(client: ClefClient | null): PolicyChoice[] {
   return [
     {
       id: CLEF_ID,
-      label: "Clef-flash",
-      detail: `Cloudflare's 9B decision model. Our code turns the screen into words and asks it three small questions: can it stand on the cell ahead, do things move there, and which side to go round. A controller does the hopping and walks the detours, and its steps cost nothing. About ${Math.round(flash.neurons)} neurons per question set.`,
+      presentation: "clef-flash",
       kind: "model",
       usesApi: true,
       neuronsPerDecision: flash.neurons,
@@ -140,8 +141,7 @@ function modelChoices(client: ClefClient | null): PolicyChoice[] {
     },
     {
       id: CLEF_27B_ID,
-      label: "Clef (27B)",
-      detail: `Cloudflare's larger model, with the same gameplay. About ${Math.round(large.neurons / flash.neurons)} times the cost: ${Math.round(large.neurons)} neurons per question set, so the free tier lasts about ${Math.floor(10_000 / large.neurons)} of them a day. No map is cached for it: every move asks the model.`,
+      presentation: "clef-27b",
       kind: "model",
       usesApi: true,
       neuronsPerDecision: large.neurons,
@@ -169,8 +169,7 @@ export function customChoice(id: string, client: ClefClient | null): PolicyChoic
   const { neurons } = decisionCost(config);
   return {
     id: canonical,
-    label: `Custom: ${canonical}`,
-    detail: `A combination from the benchmark. Nothing about it is cached, so every move asks the model and spends about ${Math.round(neurons)} neurons.`,
+    presentation: "custom",
     kind: "model",
     usesApi: true,
     neuronsPerDecision: neurons,

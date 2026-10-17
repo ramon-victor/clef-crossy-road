@@ -48,7 +48,8 @@ export function routePolicy(
       describe: (obs, memory = emptyMemory()) => inputOf(requestFor(obs, memory, executor)),
       async decide(obs: Observation, memory: Memory = emptyMemory()): Promise<Decision> {
         const step = executor.next(obs, memory);
-        if (step) return { action: step.action, source: "executor", note: step.note };
+        if (step)
+          return { action: step.action, source: "executor", note: step.note, notice: step.notice };
         const request = requestFor(obs, memory, executor);
         const chosen = fromRoute(await client.run(request));
         const first = executor.start(chosen.maneuver, obs, memory);
@@ -57,6 +58,7 @@ export function routePolicy(
           action: first.action,
           source: "model",
           note: `model chose ${chosen.maneuver}; ${first.note}`,
+          notice: { kind: "model", maneuver: chosen.maneuver, step: first.notice },
           extra: { ...chosen.decision.extra, maneuver: chosen.maneuver },
           sent: inputOf(request),
         };

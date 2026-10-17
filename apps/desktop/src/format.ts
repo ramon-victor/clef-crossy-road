@@ -10,6 +10,7 @@ export const ACTION_GLYPH: Readonly<Record<Action, string>> = {
   stay: "•",
 };
 
+/** Fixed English labels for terminal logs. UI uses the i18n presentation helpers. */
 export const ACTION_LABEL: Readonly<Record<Action, string>> = {
   hop_forward: "forward",
   hop_back: "back",

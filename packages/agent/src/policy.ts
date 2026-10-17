@@ -1,6 +1,7 @@
 import type { ClefModel, Question } from "@ccr/clef";
 import type { Action, Game, Observation } from "@ccr/core";
 import type { Memory } from "./memory.ts";
+import type { DecisionNotice } from "./notice.ts";
 
 /**
  * Everything a model was asked for one decision, as sent: the state it evaluates and the questions
@@ -32,6 +33,8 @@ export interface Decision {
   source?: "model" | "executor";
   /** In a sentence, what happened, for the log and the inspector (executor steps). */
   note?: string;
+  /** Language-neutral companion to note; presentation only, never model input. */
+  notice?: DecisionNotice;
   /**
    * What the model read to give this answer. For people to look at (the app shows it); the episode
    * records do not keep it.

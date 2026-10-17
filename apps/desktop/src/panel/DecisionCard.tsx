@@ -1,5 +1,7 @@
 import { ACTIONS } from "@ccr/core";
-import { ACTION_GLYPH, ACTION_LABEL, ACTION_ORDER, percent } from "../format.ts";
+import { ACTION_GLYPH, ACTION_ORDER } from "../format.ts";
+import { actionLabel, noticeText } from "../i18n/presentation.ts";
+import { useI18n } from "../i18n/provider.tsx";
 import type { SessionState } from "../session.ts";
 
 export interface DecisionCardProps {
@@ -8,6 +10,9 @@ export interface DecisionCardProps {
 }
 
 export function DecisionCard({ state, onInspect }: DecisionCardProps) {
+  const translation = useI18n();
+  const { t, percent } = translation;
+  const action = (value: (typeof ACTION_ORDER)[number]) => actionLabel(value, translation);
   const last = state.last;
   const decision = last?.decision;
   const probabilities = decision?.probabilities;
@@ -16,25 +21,27 @@ export function DecisionCard({ state, onInspect }: DecisionCardProps) {
   return (
     <section class="card decision">
       <header class="decision-head">
-        <div class="field-label">{state.phase === "thinking" ? "Thinking…" : "Last decision"}</div>
-        {decision?.cached && <span class="tag">cached</span>}
-        {decision?.source === "executor" && <span class="tag">controller</span>}
+        <div class="field-label">
+          {t(state.phase === "thinking" ? "decision.thinking" : "decision.last")}
+        </div>
+        {decision?.cached && <span class="tag">{t("decision.cached")}</span>}
+        {decision?.source === "executor" && <span class="tag">{t("decision.controller")}</span>}
       </header>
       {last ? (
         <>
           <div class="chosen">
             <span class="chosen-arrow">{ACTION_GLYPH[last.action]}</span>
-            <span>{ACTION_LABEL[last.action]}</span>
+            <span>{action(last.action)}</span>
           </div>
           {!probabilities && decision?.source !== "executor" && (
-            <p class="hint">No probabilities reported.</p>
+            <p class="hint">{t("decision.noProbabilities")}</p>
           )}
-          {decision?.source === "executor" && <p class="hint">Controller step · no model call.</p>}
+          {decision?.source === "executor" && <p class="hint">{t("decision.controllerStep")}</p>}
           <div class="bars" hidden={!probabilities}>
             {ACTION_ORDER.map((a) => (
               <div class={`bar-row ${a === last.action ? "chosen-row" : ""}`} key={a}>
-                <span class="bar-glyph" title={ACTION_LABEL[a]}>
-                  <span class="sr-only">{ACTION_LABEL[a]}: </span>
+                <span class="bar-glyph" title={action(a)}>
+                  <span class="sr-only">{action(a)}: </span>
                   {ACTION_GLYPH[a]}
                 </span>
                 <div class="bar">
@@ -44,11 +51,15 @@ export function DecisionCard({ state, onInspect }: DecisionCardProps) {
               </div>
             ))}
           </div>
-          <div class="history" title="Recent decisions">
+          <div class="history" title={t("decision.recent")}>
             {state.history.map((h) => (
-              <span class="chip" key={h.index} title={`${ACTION_LABEL[h.action]} at row ${h.row}`}>
+              <span
+                class="chip"
+                key={h.index}
+                title={t("decision.atRow", { action: action(h.action), row: h.row })}
+              >
                 <span class="sr-only">
-                  {ACTION_LABEL[h.action]} at row {h.row};{" "}
+                  {t("decision.atRow", { action: action(h.action), row: h.row })};{" "}
                 </span>
                 <span aria-hidden="true">{ACTION_GLYPH[h.action]}</span>
               </span>
@@ -57,17 +68,28 @@ export function DecisionCard({ state, onInspect }: DecisionCardProps) {
           <div class="decision-actions">
             {canInspect && (
               <button type="button" class="text-button" onClick={onInspect}>
-                What it read (I)
+                {t("decision.inspect")}
               </button>
             )}
             {(decision?.note || decision?.confidence !== undefined) && (
               <details class="decision-details">
-                <summary>Details</summary>
-                {decision.note && <p class="hint">{decision.note}</p>}
+                <summary>{t("common.details")}</summary>
+                {decision.notice ? (
+                  <p class="hint">{noticeText(decision.notice, translation)}</p>
+                ) : (
+                  decision.note && (
+                    <p class="hint" lang="en">
+                      {decision.note}
+                    </p>
+                  )
+                )}
                 {decision.confidence !== undefined && (
                   <p class="hint">
-                    confidence {decision.confidence.toFixed(2)}{" "}
-                    <em>(undocumented by Cloudflare)</em>
+                    {t("decision.confidence", {
+                      value: decision.confidence,
+                      minimumFractionDigits: 2,
+                      maximumFractionDigits: 2,
+                    })}
                   </p>
                 )}
               </details>
@@ -75,7 +97,7 @@ export function DecisionCard({ state, onInspect }: DecisionCardProps) {
           </div>
         </>
       ) : (
-        <p class="hint">{ACTIONS.length} possible moves. Waiting for the first decision…</p>
+        <p class="hint">{t("decision.waiting", { count: ACTIONS.length })}</p>
       )}
     </section>
   );

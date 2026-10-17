@@ -147,4 +147,4 @@ Typecheck, lint and tests pass; determinism test passes if `core` changed; docs 
 
 `docs/README.md` (index) · `00-viabilidade` · `02-arquitetura` · `04-game-core` · `05-integracao-clef` ·
 `06-observacao-e-prompts` · `07-experimentos` (results) · `08-ui-desktop` · `09-roadmap` (next steps) ·
-`10-seguranca-e-licencas` · `11-licoes-dos-jogos-do-jev` · `adr/` (0001-0011) · `references.md`
+`10-seguranca-e-licencas` · `11-licoes-dos-jogos-do-jev` · `12-i18n` · `adr/` (0001-0011) · `references.md`

@@ -1,11 +1,11 @@
 # 08 · App desktop (Tauri v2) e painel da IA
 
-> **Status:** implementado e verificado (Fase 3) · **Verificado em:** 2026-10-15 · **ADRs:** [0007](adr/0007-desktop-tauri-token-no-rust.md), [0008](adr/0008-orcamento-diario-no-free-tier.md)
+> **Status:** implementado e verificado (Fase 3) · **Verificado em:** 2026-10-17 · **ADRs:** [0007](adr/0007-desktop-tauri-token-no-rust.md), [0008](adr/0008-orcamento-diario-no-free-tier.md)
 
 ## O que existe
 
 Uma janela Tauri v2 (WebView2) de 1180×800 (mínimo 980×660), com a cena Three.js à esquerda e o painel da IA sempre aberto à direita.
-O painel usa `clamp(264px, 24vw, 280px)`: 264 px na janela mínima e 280 px na janela padrão. Os modelos, texturas, fonte e sons
+O painel usa `clamp(296px, 27vw, 320px)`, com espaço para os rótulos traduzidos. Os modelos, texturas, fonte e sons
 são os do Expo-Crossy-Road, baixados localmente por `node scripts/fetch-assets.mjs` (ficam fora do git).
 
 Para desenvolver no navegador: `pnpm install` e `pnpm run dev` na raiz, depois abrir
@@ -57,12 +57,26 @@ os dois usam a porta 5173. Ctrl+C encerra o processo.
 | **Logs no terminal** | `.\play.cmd` abre o app **esperando por ele** no mesmo terminal e mostra, a cada decisão, o que foi mandado ao modelo e o que ele respondeu. `CCR_LOG=full` (o padrão do `play.cmd`): no início de cada partida a pergunta e as opções (uma vez, e de novo se mudarem), e por decisão o cabeçalho (`decision N, linha, cached, tokens, neurons, ms`), o **STATE exatamente como enviado** e a resposta com as probabilidades; no fim, a causa da morte, as linhas, as decisões e os neurons da partida. `CCR_LOG=brief`: uma linha por decisão. `CCR_LOG=off` (ou sem a variável, ao abrir o `.exe` direto): nada. As mesmas linhas vão para `runs\logs\play.log` (recriado a cada abertura; bom para colar numa conversa). Só ASCII, para o terminal não quebrar a codificação |
 | Atalhos de abertura | `CCR_PLAYER`, `CCR_SEED` e `CCR_LOG` (lidos pelo Rust; no navegador de desenvolvimento, `?player=...&seed=...&log=...`, e o log vai para o `console` do navegador) escolhem o jogador, o mapa e o log iniciais. `CCR_PLAYER` aceita `human`, `clef-flash` (e os antigos `clef` e `clef-words`), `clef-27b`, `lookahead`, `always-forward`, `random` ou um id de política do benchmark. `play.cmd` abre o modo normal com o log completo; `play-clef.cmd` abre o Clef-flash na seed 6 (do cache, sem custo). Um id que não existe (por exemplo os antigos `clef-flash-json`) cai no look-ahead gratuito |
 
+## Idioma da interface
+
+A interface tem inglês, português brasileiro, espanhol, francês, alemão, japonês e chinês simplificado.
+**Configurações → Idioma** troca o idioma imediatamente e lembra a preferência; “Automático (sistema)”
+retoma a detecção nativa do Tauri ou do navegador de desenvolvimento. Idioma não atendido cai em inglês.
+Números e plurais seguem a língua selecionada. Prompts e JSON do inspector continuam originais, em
+inglês, com identificação explícita. CLI e logs continuam em inglês/ASCII.
+
+Jogadores mantêm suas fábricas independentes dos textos. `Decision.notice` acrescenta eventos de
+apresentação sem alterar notas, memória ou pedidos do modelo; `SessionState.errorInfo` preserva os
+códigos de falha para tradução na hora da renderização. Rust e Vite devolvem falhas estruturadas
+`{ code, message, params? }`; detalhes técnicos continuam disponíveis numa expansão. Só `ccr.locale`
+é salvo no armazenamento do webview, nunca credenciais. Contratos, glossário e fontes em [12](12-i18n.md).
+
 ## Organização compacta e acessibilidade
 
 O topo mantém jogador e quatro controles; a base mantém orçamento, som e FPS. Só o corpo intermediário
-rola quando Setup ou Details estão abertos, há erro ou a altura disponível diminui. No estado inicial,
-com as expansões fechadas, decisão, probabilidades, histórico e métricas cabem na janela mínima,
-inclusive com o aviso de orçamento esgotado. Nenhuma seção corta texto para forçar esse encaixe.
+rola quando Setup ou Details estão abertos, há erro ou a altura disponível diminui. Os rótulos traduzidos podem quebrar em mais de uma linha; quando necessário, o corpo intermediário
+rola e mantém as métricas e configurações alcançáveis, inclusive com orçamento esgotado.
+Nenhuma seção corta texto para forçar o encaixe.
 
 O título grande e os parágrafos explicativos saíram do fluxo; o título permanece como heading acessível e
 no ⓘ. A descrição selecionada e os atalhos podem ser lidos com teclado e toque. Botões principais têm

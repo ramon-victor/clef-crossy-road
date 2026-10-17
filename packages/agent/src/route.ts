@@ -2,6 +2,7 @@ import { type Action, MAX_ABS_X, type Observation, type ObsRow } from "@ccr/core
 import { columnAfter, HOP_SECONDS } from "./forecast.ts";
 import { canStand, cellWindow, isPermanent, lanesState } from "./lanes.ts";
 import { emptyMemory, type Memory } from "./memory.ts";
+import type { ControllerManeuver, DecisionNotice } from "./notice.ts";
 import type { Decision, ObservationPolicy, PolicyFactory } from "./policy.ts";
 import { type SceneState, type SideName, sceneState } from "./scene.ts";
 
@@ -150,6 +151,7 @@ export function driftingOff(obs: Observation): "left" | "right" | "no" {
 export interface RouteAct {
   action: Action;
   note: string;
+  notice: DecisionNotice;
 }
 
 interface DetourPlan {
@@ -173,16 +175,21 @@ interface CrossPlan {
 function safeHold(obs: Observation, memory: Memory): RouteAct {
   const off = driftingOff(obs);
   if (off === "no" && canStand(lanesState(obs, memory).chicken.stays_on)) {
-    return { action: "stay", note: "waiting where it is safe" };
+    return { action: "stay", note: "waiting where it is safe", notice: { kind: "safe_wait" } };
   }
   const away = searchEscape(obs);
   if (away) {
     return {
       action: away.first,
       note: `stepping off a cell it cannot stay on: ${away.first.replace("hop_", "")} (${away.path.length} to go)`,
+      notice: { kind: "escape", action: away.first, remaining: away.path.length },
     };
   }
-  return { action: "stay", note: "nowhere safe to step, waiting" };
+  return {
+    action: "stay",
+    note: "nowhere safe to step, waiting",
+    notice: { kind: "blocked_wait" },
+  };
 }
 
 /**
@@ -203,6 +210,7 @@ function canSettle(obs: Observation, col: number): boolean {
 export class RouteExecutor {
   private plan: CrossPlan | DetourPlan | null = null;
   private last: string | undefined;
+  private lastNotice: DecisionNotice | undefined;
   private readonly failed: Record<SideName, boolean> = { left: false, right: false };
   private failedAtScore = 0;
 
@@ -234,6 +242,7 @@ export class RouteExecutor {
     this.plan = null;
     if (maneuver === "wait_here") {
       this.last = "wait_here: waited";
+      this.lastNotice = { kind: "waited" };
       return this.hold(obs, memory);
     }
     if (maneuver === "cross_ahead") {
@@ -255,11 +264,24 @@ export class RouteExecutor {
   /** A refused manoeuvre still costs the chicken a step: it waits, or steps off a cell that cannot hold it. */
   private hold(obs: Observation, memory: Memory): RouteAct {
     const held = safeHold(obs, memory);
-    return { action: held.action, note: `${this.last ?? "hold"}; ${held.note}` };
+    return {
+      action: held.action,
+      note: `${this.last ?? "hold"}; ${held.note}`,
+      notice: {
+        kind: "sequence",
+        parts: this.lastNotice ? [this.lastNotice, held.notice] : [held.notice],
+      },
+    };
   }
 
-  private giveBack(starting: boolean, name: string, why: string): null {
+  private giveBack(
+    starting: boolean,
+    name: ControllerManeuver,
+    why: string,
+    reason: DecisionNotice,
+  ): null {
     this.last = `${name}: ${starting ? "refused" : "given back"}, ${why}`;
+    this.lastNotice = { kind: starting ? "refused" : "returned", maneuver: name, reason };
     this.plan = null;
     return null;
   }
@@ -278,30 +300,53 @@ export class RouteExecutor {
     if (canStand(cell)) {
       const after = plan.waited === 0 ? "" : ` after waiting ${plan.waited} step(s)`;
       this.last = `cross_ahead: hopped${after}`;
+      this.lastNotice = { kind: "hopped", maneuver: "cross_ahead", count: plan.waited };
       this.plan = null;
-      return { action: "hop_forward", note: "cross_ahead: the cell is clear, hopping" };
+      return {
+        action: "hop_forward",
+        note: "cross_ahead: the cell is clear, hopping",
+        notice: { kind: "clear", maneuver: "cross_ahead" },
+      };
     }
     if (isPermanent(cell))
-      return this.giveBack(starting, "cross_ahead", `${cell} does not go away`);
+      return this.giveBack(starting, "cross_ahead", `${cell} does not go away`, {
+        kind: "permanent",
+        cell,
+      });
     if (!canStand(chicken.stays_on)) {
       const why = `the chicken cannot stay where it stands (${chicken.stays_on})`;
-      return this.giveBack(starting, "cross_ahead", why);
+      return this.giveBack(starting, "cross_ahead", why, {
+        kind: "cannot_stay",
+        cell: chicken.stays_on,
+      });
     }
     if (driftingOff(obs) !== "no") {
       return this.giveBack(
         starting,
         "cross_ahead",
         "a platform is carrying it past the edge of the world",
+        { kind: "drift" },
       );
     }
     if (plan.waited >= MAX_CROSS_WAIT) {
       const why = `the cell (${cell}) did not clear in ${plan.waited} steps`;
-      return this.giveBack(starting, "cross_ahead", why);
+      return this.giveBack(starting, "cross_ahead", why, {
+        kind: "timeout",
+        cell,
+        count: plan.waited,
+      });
     }
     plan.waited++;
     return {
       action: "stay",
       note: `cross_ahead: waiting for the cell (${cell}) to clear, ${plan.waited}/${MAX_CROSS_WAIT}`,
+      notice: {
+        kind: "waiting",
+        maneuver: "cross_ahead",
+        cell,
+        waited: plan.waited,
+        limit: MAX_CROSS_WAIT,
+      },
     };
   }
 
@@ -312,29 +357,45 @@ export class RouteExecutor {
     starting: boolean,
   ): RouteAct | null {
     const name = plan.side === "left" ? "detour_left" : "detour_right";
-    const fail = (why: string): null => {
+    const fail = (why: string, reason: DecisionNotice): null => {
       this.failed[plan.side] = true;
       this.failedAtScore = memory.score;
-      return this.giveBack(starting, name, why);
+      return this.giveBack(starting, name, why, reason);
     };
     if (memory.score > plan.scoreAtStart) {
       this.last = `${name}: reached a new row after ${plan.steps} hop(s)`;
+      this.lastNotice = { kind: "reached", maneuver: name, count: plan.steps };
       this.plan = null;
       return null;
     }
     if (plan.steps >= MAX_DETOUR_STEPS) {
-      return fail(`more than ${MAX_DETOUR_STEPS} hops and no new row`);
+      return fail(`more than ${MAX_DETOUR_STEPS} hops and no new row`, {
+        kind: "too_long",
+        count: MAX_DETOUR_STEPS,
+      });
     }
     const route = searchRoute(obs, {
       goalDz: memory.behindFrontier + 1,
       side: plan.side,
       col0: plan.col0,
     });
-    if (!route) return fail(`no way to an opening on the ${plan.side} within ${ROUTE_DEPTH} hops`);
+    if (!route)
+      return fail(`no way to an opening on the ${plan.side} within ${ROUTE_DEPTH} hops`, {
+        kind: "no_route",
+        side: plan.side,
+        count: ROUTE_DEPTH,
+      });
     plan.steps++;
     return {
       action: route.first,
       note: `${name}: hop ${plan.steps}, ${route.first.replace("hop_", "")} (${route.path.length} to go)`,
+      notice: {
+        kind: "detour",
+        maneuver: name,
+        step: plan.steps,
+        action: route.first,
+        remaining: route.path.length,
+      },
     };
   }
 }
@@ -377,10 +438,21 @@ export const execRoute: PolicyFactory = (() => {
         id,
         async decide(obs: Observation, memory: Memory = emptyMemory()): Promise<Decision> {
           const step = executor.next(obs, memory);
-          if (step) return { action: step.action, source: "executor", note: step.note };
+          if (step)
+            return {
+              action: step.action,
+              source: "executor",
+              note: step.note,
+              notice: step.notice,
+            };
           const scene = sceneState(obs, memory, { failed: executor.failedSides(memory) });
           const first = executor.start(routeChoice(scene), obs, memory);
-          return { action: first.action, source: "executor", note: first.note };
+          return {
+            action: first.action,
+            source: "executor",
+            note: first.note,
+            notice: first.notice,
+          };
         },
       };
       return policy;

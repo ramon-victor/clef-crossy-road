@@ -232,14 +232,12 @@ async function checkInspector(ctx: Context): Promise<Report> {
   const text = (selector: string) => document.querySelector(selector)?.textContent ?? "";
   const opened = document.querySelector(".inspector") !== null;
   const state = text(".inspector-pre");
-  const click = (label: string) =>
-    [...document.querySelectorAll<HTMLButtonElement>(".inspector-tabs button")]
-      .find((b) => b.textContent === label)
-      ?.click();
-  click("Question");
+  const click = (tab: string) =>
+    document.querySelector<HTMLButtonElement>(`[data-tab="${tab}"]`)?.click();
+  click("question");
   await sleep(100);
   const question = text(".inspector-pre");
-  click("Options");
+  click("options");
   await sleep(100);
   const options = text(".inspector-body");
   press();
