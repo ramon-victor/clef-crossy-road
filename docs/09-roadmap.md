@@ -19,6 +19,8 @@ A ordem é guiada pelo risco: primeiro descobrir se o modelo consegue jogar, dep
 
 0b. **Embarcar** (2026-10-17, [07](07-experimentos.md)): o que mata na seed 6 é a decisão de pular para um tronco rápido que não leva a lugar nenhum; o modelo agora lê o relógio da plataforma, mas já era tarde. Impedir o embarque tira as mortes na borda (11 → 3 a 0 em 100 seeds) e custa 9 a 23 ruas (a galinha passa a esperar na margem). Falta um critério que só barre o embarque **sem saída** (um planejador do cruzamento inteiro, não uma checagem por salto) e uma forma de a espera na margem não estagnar. Também em aberto: o **tempo real** (o movimento é jogado no mundo de agora, [08](08-ui-desktop.md)).
 
+0c. **O que ainda termina preso** (referência grátis, limite 60, 24 de 100): trilho 9 e água com troncos 5 (esperas de trem e de tronco que batem no limite de decisões), água parada sem saída 6, grama 3. Falta decidir se o limite de "preso" deve contar só as chamadas ao modelo (os passos do controlador são grátis) e uma forma de a espera não contar enquanto algo vai chegar.
+
 O experimento zero-shot está respondido: **nenhum modelo testado supera "sempre em frente"** ([07](07-experimentos.md)). O que sobra é escolher o que fazer com esse resultado:
 
 1. **Fase 5, o caminho natural:** fine-tuning por RL usando o núcleo como ambiente (ver [ADR-0006](adr/0006-sem-fine-tuning-nem-self-host.md)). O diagnóstico aponta o alvo: aprender a ler posição e velocidade para acertar toras e lírios, que é onde 72% a 85% dos saltos para a água morrem. Depende do programa de RL da Cloudflare (ainda com apoio de equipe) ou de hospedar os pesos abertos (Apache 2.0).

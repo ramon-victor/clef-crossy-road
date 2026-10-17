@@ -75,6 +75,21 @@ Segunda leitura dos mesmos 13 repositórios (código pela API do GitHub, nada ex
 
 **O que não levamos, e por quê.** `jev-games` (Mario) e `Slither-Me-Jev` **inventam probabilidades** (0,85/0,15; 0,7 e 0,3) para o que não foi o modelo, e mostram essas barras; nós não: o passo do controlador não tem barras. O painel do `jev-games` tem uma linha `override` que nunca é preenchida, e o `typesafe-mario` grava a ação do modelo, não a executada, quando o código troca; nós **gravamos e mostramos as duas** (a escolha e o passo). O `Slither-Me-Jev` oferece ao modelo as jogadas que matam, escritas como "wall, death": é a consequência por jogada, que a [ADR-0009](adr/0009-percepcao-memoria-e-julgamento.md) proíbe.
 
+## Presa sem saída aparente (2026-10-17): o que levamos e o que não
+
+Terceira leitura (código pela API do GitHub, nada executado), agora para "como o agente sai de um beco: voltar, dar a volta, e não repetir a mesma falha":
+
+| Projeto | O que faz | O que fizemos |
+|---|---|---|
+| `tsai-sc` | A falha **expira** (`_FAILED_BUILD_COOLDOWN_FRAMES = 720`, `retry_after_frame` no estado) e vale só para o mesmo ponto; "os outros candidatos seguem disponíveis" | O lado que falhou é esquecido após 4 decisões (`RETRY_AFTER`). A chave por lugar não mudou nada na referência |
+| `jev-doom` (olivier) | Contador de falhas **que nunca expira**; Dijkstra sobre o mapa visto; só viram opção os alvos **com caminho** (o resto vai para `omitted` com o motivo) | O contador eterno era o nosso defeito. As opções só com o que tem caminho **não** (é "jogadas legais", [ADR-0009](adr/0009-percepcao-memoria-e-julgamento.md); o dono manteve o lado com o modelo) |
+| `jev-games` | `_apply_tactics`: depois de repetir, o código **proíbe** a ação (`forbidden`) | A recusa de um começo passa para a **próxima resposta do próprio modelo**, em ordem de probabilidade, sem nova chamada; o código não escolhe lado |
+| `typesafe-mario`, `civ2` | `recent_control.outcome`, `no_observed_change_count`, "repetir sem motivo novo não deu progresso" | Já temos `last_maneuver` e `recently_failed`; nenhum campo novo |
+| `Tetris`, `jev-doom` | O código acha o caminho inteiro e o **replaneja a cada entrada**; o plano atravessa as rodadas | Já era assim; o desvio passou de 8 para 24 saltos e de 12 para 40 passos |
+| `jev-doom-agent`, Mario | Preso: o código assume (voltar e lado ao acaso) | **Não**: tiraria a decisão do modelo, e o conserto acima já cobre |
+| `StarCraft`, `jev-doom` | Memória de células visitadas / mapa além da vista | **Não**: medido, ver até 12 linhas atrás não muda nenhum resultado (os becos que sobram estão fechados) |
+| Nenhum | Oferece "voltar" como opção do modelo: o recuo é sempre do código, só em combate | Também: o desvio já volta linhas quando precisa, e o modelo só escolhe o lado |
+
 ## Perguntas abertas
 
 - Quase nenhum dos 13 mede o jogador contra um roteirizado que lê a mesma vista (o Doom empata com a mira roteirizada). Não sabemos quanto do resultado dos outros é do modelo e quanto é do código ao redor; é o que `exec-cross`, `exec-rules` e `rule-lanes` medem para nós.
