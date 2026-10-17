@@ -312,7 +312,7 @@ Pedido do dono: "ele não sabe que está num tronco em movimento que logo vai sa
 | carro **logo depois de sair de um tronco** | 6 |
 | trem | 2 |
 
-53% dos passos "parado" acontecem fora da grama (28% em tronco, 20% em estrada, 6% em trilho). O terceiro item era um erro do controlador: saindo de um tronco a galinha está numa coluna **fracionária** (0,7), o salto à frente vai até a coluna arredondada (1) e a conferência da janela olhava só a de destino; a galinha entra na estrada ainda a meio caminho (reproduzido tick a tick na seed 58: morre no tick 3 do salto). `hopWindow` confere as duas colunas.
+53% dos passos "parado" acontecem fora da grama (28% em tronco, 20% em estrada, 6% em trilho). O terceiro item era um erro do controlador: saindo de um tronco a galinha está numa coluna **fracionária** (0,7), o salto à frente vai até a coluna arredondada (1) e a conferência da janela olhava só a de destino; a galinha entra na estrada ainda a meio caminho (reproduzido tick a tick na seed 58: morre no tick 3 do salto). `hopWindow` confere as duas colunas durante o salto (a espera na coluna inteira que vem depois só olha a inteira).
 
 **3. O controlador, medido de graça (100 seeds, `exec-route`).**
 
@@ -320,9 +320,9 @@ Pedido do dono: "ele não sabe que está num tronco em movimento que logo vai sa
 |---|---|---|
 | antes | 47,5 | 19 / 9 / 3 |
 | só a correção do salto fracionário | 48,7 | 15 / 10 / 3 |
-| **final** (+ relógio, `leave_platform` só com a borda "a_moment" e a saída para a frente antes da de trás) | **48,3** (mediana 39) | 16 / 11 / 3 (total 31 → 30) |
+| **final** (+ relógio, `leave_platform` só com a borda "a_moment" e a saída para a frente antes da de trás, e a coluna que a galinha deixa conferida só durante o salto) | **48,6** (mediana 39) | 16 / 9 / 3 (total 31 → 28) |
 
-O que **não** valeu, medido e descartado: sair da plataforma com a borda a menos de 2,5 s (`soon`) pela saída mais curta: 27,2 ruas; só com `a_moment` (menos de 1 s): 42,1, porque a saída mais curta era **voltar** e a galinha **embarcava no mesmo tronco, saía e embarcava de novo**; com "para a frente antes de voltar" (o que ficou): 48,3 só com `a_moment` e 46,7 também com `soon`; o limiar de `a_moment` em 0,6 s: 46,3 ruas e 15 mortes na borda; em 1,5 s: 47,5; em 2,0 s: 45,4; **não embarcar** num tronco que sai do mundo antes de a galinha poder seguir: **48,3 → 39,2 / 31,8 / 25,2 ruas** (limiares de 1,0 / 1,5 / 2,5 s), com a borda indo de 11 mortes a 3 / 1 / 0, porque ela passa a esperar na margem até o fim (estagnação 54% → 66% / 79% / 84%); e "sobreviver 8 a 24 saltos" na retenção: sem ganho. **Nenhum remendo simples tira a espera em estrada**; o plano não promete ganho de placar além da correção do salto.
+O que **não** valeu, medido e descartado: sair da plataforma com a borda a menos de 2,5 s (`soon`) pela saída mais curta: 27,2 ruas; só com `a_moment` (menos de 1 s): 42,1, porque a saída mais curta era **voltar** e a galinha **embarcava no mesmo tronco, saía e embarcava de novo**; com "para a frente antes de voltar" (o que ficou): 48,3 só com `a_moment` e 46,7 também com `soon`; o limiar de `a_moment` em 0,6 s: 46,3 ruas e 15 mortes na borda; em 1,5 s: 47,5; em 2,0 s: 45,4; **não embarcar** num tronco que sai do mundo antes de a galinha poder seguir: **48,3 → 39,2 / 31,8 / 25,2 ruas** (medido sobre os 48,3 de então, antes do último ajuste da janela) (limiares de 1,0 / 1,5 / 2,5 s), com a borda indo de 11 mortes a 3 / 1 / 0, porque ela passa a esperar na margem até o fim (estagnação 54% → 66% / 79% / 84%); e "sobreviver 8 a 24 saltos" na retenção: sem ganho. **Nenhum remendo simples tira a espera em estrada**; o plano não promete ganho de placar além da correção do salto.
 
 **4. O modelo lê o relógio? A sonda de plataforma** (114 estados: os 90 de antes, sem mudança de id nem de resposta, mais 12 `platform-edge`, a uma palavra da borda, e 12 `platform-far`; ~330 a 350 neurons por variante, 45 chamadas):
 
