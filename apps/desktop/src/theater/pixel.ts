@@ -77,7 +77,6 @@ const SIGNS: Readonly<Record<Sign, readonly string[]>> = {
     ".........",
     ".........",
   ],
-  // An exclamation mark: the platform is carrying the chicken to the edge of the world.
   warn: [
     "...###...",
     "...###...",

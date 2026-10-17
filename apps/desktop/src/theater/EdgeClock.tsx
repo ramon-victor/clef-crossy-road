@@ -8,16 +8,11 @@ export interface EdgeClockProps {
   session: Session;
 }
 
-/**
- * A countdown on the chicken while the platform it stands on is taking it to the edge of the world: which way,
- * and how many seconds. It reads the live game (the clock moves with the world, not with the model's answers),
- * and is a component of its own so that only this badge re-renders at the clock's pace. Hidden from screen
- * readers: the caption carries the words.
- */
+/** A countdown on the chicken while its platform takes it to the edge of the world, read from the live game. */
 export function EdgeClock({ session }: EdgeClockProps) {
-  useNow(true, 100);
   const game = session.game;
-  const clock = game.alive ? platformClock(observe(game)) : null;
+  useNow(game.heroRiding, 100);
+  const clock = game.alive && game.heroRiding ? platformClock(observe(game)) : null;
   if (!clock || (clock.word !== "a_moment" && clock.word !== "soon")) return null;
   return (
     <div class={`edge-clock ${clock.word === "a_moment" ? "now" : "soon"}`} aria-hidden="true">

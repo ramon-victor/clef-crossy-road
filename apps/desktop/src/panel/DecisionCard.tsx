@@ -1,7 +1,7 @@
 import { ACTIONS } from "@ccr/core";
 import { ACTION_GLYPH, ACTION_LABEL, ACTION_ORDER, percent } from "../format.ts";
 import type { SessionState } from "../session.ts";
-import { barsOf, branchText, winnerOf } from "../theater/compass.ts";
+import { branchText, modelChoice } from "../theater/choice.ts";
 import { controllerSays, waitsForGap } from "../theater/controller.ts";
 import { Glyph } from "../theater/Glyph.tsx";
 import { decisionLabel } from "../theater/labels.ts";
@@ -16,8 +16,8 @@ export interface DecisionCardProps {
 export function DecisionCard({ state, theaterOpen, onInspect, onTheater }: DecisionCardProps) {
   const last = state.last;
   const decision = last?.decision;
-  // The bars are the model's answers within the fork the routing took, so the lit row is the move it chose.
-  const bars = last && decision?.source !== "executor" ? barsOf(last) : null;
+  const chosen = last ? modelChoice(last) : null;
+  const bars = chosen?.bars ?? null;
   const probabilities = bars ? bars.p : decision?.probabilities;
   const canInspect = state.history.some((entry) => entry.decision.sent);
   // What the model chose (a manoeuvre) is what the card names; the move the controller starts with, or the wait
@@ -30,7 +30,7 @@ export function DecisionCard({ state, theaterOpen, onInspect, onTheater }: Decis
   const turn = state.turns.at(-1);
   const waits = choice !== null && turn !== undefined && turn.model === last && waitsForGap(turn);
   const says = decision ? controllerSays(decision) : null;
-  const chosenMove = last && choice ? winnerOf(last) : last?.action;
+  const chosenMove = chosen?.move ?? last?.action;
   return (
     <section class="card decision">
       <header class="decision-head">

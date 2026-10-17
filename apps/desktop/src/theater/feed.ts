@@ -1,6 +1,6 @@
 import { ACTION_GLYPH } from "../format.ts";
 import type { SessionState, Turn } from "../session.ts";
-import { controllerSays, controllerStep, waitsForGap } from "./controller.ts";
+import { controllerSays, controllerStep, foldWaits, waitsForGap } from "./controller.ts";
 import { decisionLabel, type SceneView, sceneOf } from "./labels.ts";
 import { asText, type QuestionView, questionsOf } from "./view.ts";
 
@@ -28,11 +28,7 @@ export interface TurnView {
   facts: TurnFacts;
   /** What the model's answers come to, in words: its manoeuvre, or else the move itself. */
   move: { glyph: string; label: string } | null;
-  /**
-   * What the controller did with the answer itself, when it was not simply the crossing: it waits for a gap, walks a
-   * detour, gets off a platform, or refused ("the platform carries it past the edge; stepping back"). Null when
-   * the move was made as chosen.
-   */
+  /** What the controller did with the answer when it was not simply the crossing (waited, refused and why, detoured, left a platform). */
   said: string | null;
   /** The controller's steps after the answer, in order; a run of waits is one step with a count. */
   steps: Array<{ glyph: string; note: string; count: number }>;
@@ -41,25 +37,13 @@ export interface TurnView {
   summary: string[];
 }
 
-/** The controller's steps, with the run of waits for a gap folded into one step that says how many. */
 function stepsOf(turn: Turn): TurnView["steps"] {
-  const steps: TurnView["steps"] = [];
-  let inRunOfWaits = false;
-  for (const step of turn.steps) {
-    const waits = controllerStep(step.decision)?.kind === "wait";
-    const last = steps.at(-1);
-    if (waits && inRunOfWaits && last) {
-      steps[steps.length - 1] = {
-        ...last,
-        note: step.decision.note ?? last.note,
-        count: last.count + 1,
-      };
-      continue;
-    }
-    steps.push({ glyph: ACTION_GLYPH[step.action], note: step.decision.note ?? "", count: 1 });
-    inRunOfWaits = waits;
-  }
-  return steps;
+  return foldWaits(
+    turn.steps,
+    (step) => controllerStep(step.decision)?.kind === "wait",
+    (step) => ({ glyph: ACTION_GLYPH[step.action], note: step.decision.note ?? "", count: 1 }),
+    (item, step) => ({ ...item, note: step.decision.note ?? item.note }),
+  );
 }
 
 function answered(turn: Turn): TurnView | null {

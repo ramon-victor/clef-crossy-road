@@ -1,21 +1,14 @@
-import type { Decision } from "@ccr/agent";
+import { type Decision, HOLD_WHYS, type HoldWhy, type WaitWhy } from "@ccr/agent";
 import type { Turn } from "../session.ts";
 import { spoken } from "./labels.ts";
 
-/**
- * What a step of the controller is (the route strategy reports it with every decision: see `RouteStep`):
- * the crossing made now, standing until the cell ahead clears, one hop of a detour, one hop off a platform
- * that carries the chicken to the edge, or a refusal that holds the chicken where it is safe. The screen tells
- * them apart by this and never by reading the sentence.
- */
+/** A `RouteStep` as read back from `Decision.extra`, which is untyped: the screen never reads the note's sentence. */
 export type ControllerStep =
   | { kind: "hop" }
-  | { kind: "wait"; n: number; of: number; cell: string; why: "gap" | "no_rest" }
+  | { kind: "wait"; n: number; of: number; cell: string; why: WaitWhy }
   | { kind: "walk"; n: number; left: number }
   | { kind: "leave"; n: number; left: number }
-  | { kind: "hold"; why: "refused" | "unsafe_here" | "edge" | "no_way" | null };
-
-const HOLD_WHY = ["refused", "unsafe_here", "edge", "no_way"] as const;
+  | { kind: "hold"; why: HoldWhy | null };
 
 const isCount = (value: unknown): value is number =>
   typeof value === "number" && Number.isFinite(value);
@@ -29,7 +22,7 @@ export function controllerStep(decision: Pick<Decision, "extra">): ControllerSte
     case "hop":
       return { kind: "hop" };
     case "hold":
-      return { kind: "hold", why: HOLD_WHY.find((why) => why === step.why) ?? null };
+      return { kind: "hold", why: HOLD_WHYS.find((why) => why === step.why) ?? null };
     case "wait":
       return isCount(step.n) && isCount(step.of) && typeof step.cell === "string"
         ? {
@@ -58,7 +51,6 @@ const WAITING_FOR: Readonly<Record<string, string>> = {
   water: "a log to come",
 };
 
-/** What would reach a cell that is clear for the hop but not for the chicken to stay on. */
 const WOULD_REACH: Readonly<Record<string, string>> = {
   vehicle: "a vehicle",
   train: "the train",
@@ -107,12 +99,30 @@ export function controllerSays(decision: Pick<Decision, "extra" | "note">): stri
   return null;
 }
 
-/**
- * The round's crossing waited for the way to open: the controller's own first step or a later one stood still for
- * a gap. "Go straight" then means "go straight when it is clear". A way that only opens as things pass but was
- * crossed at once is just "Go straight": the label says what the chicken did, not what the answers allowed.
- */
+/** The crossing waited for a gap, in the controller's first step or a later one: "Go straight" then reads "when clear". */
 export function waitsForGap(turn: Turn): boolean {
   const waits = (decision: Pick<Decision, "extra">) => controllerStep(decision)?.kind === "wait";
   return waits(turn.model.decision) || turn.steps.some((step) => waits(step.decision));
+}
+
+/** Folds each run of consecutive waits into one item with a count. */
+export function foldWaits<E, T extends { count: number }>(
+  entries: readonly E[],
+  isWait: (entry: E) => boolean,
+  make: (entry: E) => T,
+  extend: (item: T, entry: E) => T = (item) => item,
+): T[] {
+  const items: T[] = [];
+  let inRun = false;
+  for (const entry of entries) {
+    const waits = isWait(entry);
+    const last = items.at(-1);
+    if (waits && inRun && last) {
+      items[items.length - 1] = { ...extend(last, entry), count: last.count + 1 };
+      continue;
+    }
+    items.push(make(entry));
+    inRun = waits;
+  }
+  return items;
 }

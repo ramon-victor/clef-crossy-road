@@ -3,7 +3,8 @@ import type { Ref } from "preact";
 import { percent } from "../format.ts";
 import type { Session, SessionState } from "../session.ts";
 import { Clock } from "./Clock.tsx";
-import { branchText, buildCompass, type CompassView } from "./compass.ts";
+import { branchText } from "./choice.ts";
+import { buildCompass, type CompassView } from "./compass.ts";
 import { EdgeClock } from "./EdgeClock.tsx";
 import { Glyph, PixelIcon } from "./Glyph.tsx";
 
@@ -63,15 +64,11 @@ function Caption({ view, since }: { view: CompassView; since: number | null }) {
 }
 
 /**
- * The model's decision drawn around the chicken, in the game: the five moves, each as big as the model wants it,
- * the one it chose lit. What happens next is told by that one move: it **leaves** when the chicken goes, it
- * **pulses with a pause** while the crossing waits for a gap (the wait is part of "go straight", not another
- * move), and when the controller walks a detour, gets off a platform or steps aside, the move it makes is **ringed**
- * (already while the answer is held for reading, as what comes next) and the caption says what it is doing. A way
- * ahead that is closed shows a **block** where "go straight" would be, and the sizes are those of the fork the
- * routing took, so the lit move is always the biggest. A countdown sits on the chicken while its platform takes it
- * to the edge of the world. A caption and the latest moves sit under the game.
- * Everything is `aria-hidden` except the caption, and nothing takes a pointer but the button.
+ * The model's decision drawn around the chicken: the five moves, each as big as the model wants it within the fork
+ * the routing took, the chosen one lit. The lit move **leaves** when the chicken goes and **pulses with a pause**
+ * while the crossing waits for a gap; the move the controller really makes (a detour, a way off a platform, a
+ * refusal) is **ringed**, already while the answer is held for reading. A closed way shows a **block** where "go
+ * straight" would be. Everything is `aria-hidden` except the caption, and nothing takes a pointer but the button.
  */
 export function Compass({
   session,

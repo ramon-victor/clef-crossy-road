@@ -1,3 +1,4 @@
+import type { EdgeIn } from "@ccr/agent";
 import { ACTIONS, type Action } from "@ccr/core";
 import { ACTION_GLYPH, ACTION_LABEL, ACTION_ORDER } from "../format.ts";
 
@@ -21,7 +22,7 @@ export interface QuestionLabel {
   options: Readonly<Record<string, OptionLabel>>;
 }
 
-/** The lookups of the `route` strategy (ADR-0011): three always, and a fourth while the chicken stands on a platform. */
+/** The lookups of the `route` strategy (ADR-0011). */
 export const ROUTE_LABELS: Readonly<Record<string, QuestionLabel>> = {
   cell: {
     title: "Can it stand there?",
@@ -54,7 +55,7 @@ export const ROUTE_LABELS: Readonly<Record<string, QuestionLabel>> = {
   },
 };
 
-/** The lookups every request of the route strategy carries; `ride` is only there while the chicken is on a platform. */
+/** `ride` is only asked on a platform. */
 export const ALWAYS_ASKED = ["cell", "moving", "around"] as const;
 
 const named = (glyph: string, label: string): OptionLabel => ({ glyph, label, short: label });
@@ -95,7 +96,6 @@ export function optionLabel(questionId: string, optionId: string): OptionLabel {
 
 /** What the model's decision comes to, in words: the manoeuvre it chose, or else the move itself. */
 export function decisionLabel(maneuverId: string | undefined, action: Action): OptionLabel {
-  // Getting off a platform is made of whichever hop gets the chicken off it, which is the one to draw.
   if (maneuverId === "leave_platform") {
     return { glyph: ACTION_GLYPH[action], label: "Get off the platform", short: "Get off" };
   }
@@ -151,10 +151,8 @@ const OPENING_WORDS: Readonly<Record<string, string>> = {
   none: "none",
 };
 
-/** The clock of the platform the chicken stands on, as the model was told it. */
 export interface PlatformView {
   phrase: string;
-  /** How loud to say it: the edge is a moment away, coming up, a way off, or the platform is not taking it there. */
   urgency: "now" | "soon" | "later" | "none";
 }
 
@@ -164,11 +162,10 @@ export interface SceneView {
   phrase: string;
   /** How far to the nearest opening on each side, as "left: 2 away". */
   gaps: string[];
-  /** What the model was told of the platform under the chicken; null off a platform. */
   platform: PlatformView | null;
 }
 
-const PLATFORM_CLOCK: Readonly<Record<string, { says: string; urgency: PlatformView["urgency"] }>> =
+const PLATFORM_CLOCK: Readonly<Record<EdgeIn, { says: string; urgency: PlatformView["urgency"] }>> =
   {
     a_moment: { says: "the edge of the world is a moment away", urgency: "now" },
     soon: { says: "the edge of the world is coming up", urgency: "soon" },
@@ -176,10 +173,10 @@ const PLATFORM_CLOCK: Readonly<Record<string, { says: string; urgency: PlatformV
     not_carried: { says: "it is not taking the chicken to the edge", urgency: "none" },
   };
 
-/** The platform line of the scene, from what the state says of the chicken. */
 function platformOf(state: unknown): PlatformView | null {
-  const clock = PLATFORM_CLOCK[readPath(state, "chicken.edge_in") ?? ""];
-  if (!clock) return null;
+  const word = readPath(state, "chicken.edge_in");
+  if (word === undefined || !Object.hasOwn(PLATFORM_CLOCK, word)) return null;
+  const clock = PLATFORM_CLOCK[word as EdgeIn];
   const toward = readPath(state, "chicken.carried_towards");
   const carried = toward === "left" || toward === "right" ? ` carried ${toward}` : "";
   return { phrase: `On a platform${carried}: ${clock.says}`, urgency: clock.urgency };

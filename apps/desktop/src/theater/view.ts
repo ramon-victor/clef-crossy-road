@@ -30,6 +30,9 @@ export interface QuestionView {
 export const asText = (value: unknown): string | undefined =>
   typeof value === "string" ? value : undefined;
 
+export const asNumber = (value: unknown): number | undefined =>
+  typeof value === "number" && Number.isFinite(value) ? value : undefined;
+
 /** Which questions the routing never looked at, with the reason (the `route` strategy only). */
 function skippedBecause(
   questionId: string,
@@ -37,8 +40,7 @@ function skippedBecause(
 ): string | null {
   const ahead = asText(extra?.ahead);
   if (ahead === undefined) return null;
-  // The platform is leaving the world, so the manoeuvre is to get off it and the row ahead is not asked about.
-  if (extra?.ride === "leaving" && (ALWAYS_ASKED as readonly string[]).includes(questionId)) {
+  if (extra?.ride === "leaving" && ALWAYS_ASKED.some((id) => id === questionId)) {
     return "not needed: its platform is leaving the world";
   }
   if (questionId === "moving" && extra?.cell === "stand") return "not needed: it can stand there";
@@ -57,7 +59,6 @@ export function questionsOf(
 ): QuestionView[] {
   const answers = log?.decision.answers;
   const extra = log?.decision.extra;
-  // The route strategy's lookups, in the order a person reads them (and `ride` only when it was asked).
   const isRoute = ALWAYS_ASKED.every((id) => id in input.questions);
   const ids = isRoute
     ? Object.keys(ROUTE_LABELS).filter((id) => id in input.questions)
