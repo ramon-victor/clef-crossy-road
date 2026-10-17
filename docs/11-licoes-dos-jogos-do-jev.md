@@ -1,6 +1,6 @@
 # 11 · Lições dos 13 jogos controlados pelo Jev
 
-> **Status:** estudo concluído, aplicado em [ADR-0010](adr/0010-palavras-regras-e-executor-de-manobras.md); resultado medido em [07](07-experimentos.md) (10,05 ruas em 40 partidas) · **Verificado em:** 2026-10-15 · **Método:** leitura dos READMEs e do código de cada repositório pela API do GitHub; nenhum código foi copiado nem executado, nenhuma chamada de modelo foi feita
+> **Status:** estudo concluído, aplicado em [ADR-0010](adr/0010-palavras-regras-e-executor-de-manobras.md); resultado medido em [07](07-experimentos.md) (10,05 ruas em 40 partidas) · **Verificado em:** 2026-10-17 · **Método:** leitura dos READMEs e do código de cada repositório pela API do GitHub; nenhum código foi copiado nem executado, nenhuma chamada de modelo foi feita
 
 O Jev é o modelo "System One" da TypeSafe AI (o Clef é o mesmo tipo de modelo, e a API é a mesma: `state` + perguntas `choice`, `noul` e `score`, com probabilidades). Os 13 repositórios que o dono indicou
 resolvem o mesmo problema que nós: fazer um modelo de decisão jogar. Eles são estudos de terceiros, de qualidade desigual, e poucos medem contra um jogador roteirizado (o Doom de `jev-plays-doom` e o Pong de `pong-jev` medem); o que vale aqui é o padrão que se repete.
@@ -60,6 +60,20 @@ A condição de [ADR-0010](adr/0010-palavras-regras-e-executor-de-manobras.md) e
 | **Instrução refeita depois de ver a falha** | Civ2: revisões v4 e v5 do guia a partir dos registros | — | o texto das perguntas foi refeito três vezes olhando as respostas gravadas (86% → 85% → 94% de concordância) |
 
 O que **não** levamos: a lista de candidatos com a consequência de cada um (Tetris, Snake, Pokémon), que é julgamento por jogada.
+
+## O tronco que leva a galinha para fora do mapa (2026-10-17): o que levamos e o que não
+
+Segunda leitura dos mesmos 13 repositórios (código pela API do GitHub, nada executado), agora para a pergunta "como um fato que acaba o jogo em um instante chega ao modelo, e como se mostra quem decidiu":
+
+| Projeto | O que faz | O que fizemos |
+|---|---|---|
+| `typesafe-mario` | O código calcula o **prazo** e entrega um fato tipado (`jump_must_start_this_decision`, `takeoff_deadline_frames`, com o atraso do modelo já descontado), repetido na instrução, na regra da opção e numa pergunta `Noul` própria (`jump_needed`) | `chicken.edge_in` (o prazo da plataforma, em quatro palavras) e a pergunta `ride`, só com a plataforma sob a galinha. **Não** descontamos o atraso do modelo: em passo a passo o mundo espera |
+| `olivier-motium/jev-doom` | Uma pergunta própria (`dodge_question`: `carry_on`, `left`, `right`) **só aparece quando o perigo existe**; cada registro traz `override_reasons[]` e a tela junta as sobreposições numa linha de aviso | `ride` só entra no pedido numa plataforma (o resto dos pedidos fica igual, e o cache vale); `RouteStep` traz o motivo de cada espera, recusa e saída, e a conversa o diz sob a jogada |
+| `pong-jev` | **Palavras em faixas** ("about to reach my paddle", "little room to move up"), sem números; a fonte de cada decisão (`jev`, `heuristic`, `fallback`) ao lado dela | As faixas de `edge_in`; o passo do controlador é marcado como tal, nunca como a escolha do modelo |
+| `jev-t-rex-runner` | O modelo só escolhe a manobra e o navegador dá o tempo; resposta tardia é **pulada**, sem substituto | É o que o controlador já faz; a decisão tardia em tempo real continua pergunta aberta ([08](08-ui-desktop.md)) |
+| `tirukovelamanoj/jev-plays-doom` | Limites numéricos na regra da opção funcionam (6,20 abates), só o propósito não (−0,60) | Mesmo achado, de novo: **a redação decide** ([07](07-experimentos.md): pedindo o julgamento "vai para fora do mundo?" 3 de 12; pedindo "a palavra é `a_moment`?" 12 de 12). Sem números: a faixa já é a palavra |
+
+**O que não levamos, e por quê.** `jev-games` (Mario) e `Slither-Me-Jev` **inventam probabilidades** (0,85/0,15; 0,7 e 0,3) para o que não foi o modelo, e mostram essas barras; nós não: o passo do controlador não tem barras. O painel do `jev-games` tem uma linha `override` que nunca é preenchida, e o `typesafe-mario` grava a ação do modelo, não a executada, quando o código troca; nós **gravamos e mostramos as duas** (a escolha e o passo). O `Slither-Me-Jev` oferece ao modelo as jogadas que matam, escritas como "wall, death": é a consequência por jogada, que a [ADR-0009](adr/0009-percepcao-memoria-e-julgamento.md) proíbe.
 
 ## Perguntas abertas
 

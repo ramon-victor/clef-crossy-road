@@ -1,6 +1,6 @@
 # 07 · Experimentos e benchmark
 
-> **Status:** gate da Fase 2 avaliado (reprovado com os prompts testados; uma condição nova, com palavras e executor, passa com 40 seeds e espera as 100) · **Verificado em:** 2026-10-15 · **Código:** `apps/bench`, `packages/agent`
+> **Status:** gate da Fase 2 avaliado (reprovado com os prompts testados; uma condição nova, com palavras e executor, passa com 40 seeds e espera as 100) · **Verificado em:** 2026-10-17 · **Código:** `apps/bench`, `packages/agent`
 
 ## Princípios
 
@@ -296,6 +296,51 @@ Média **22,43 ruas [10,85, 35,71]**, contra **4,43** da condição anterior nas
 **6. O app, e o que errei.** O app passou a abrir no Clef-flash num mapa em cache. Abrindo-o na seed 2, ele **gastou 49 neurons**: as decisões das seeds 2 a 5 só se repetem se o controlador fizer os mesmos movimentos de quando foram gravadas, e o controlador tinha mudado entre as rodadas. Conferir cada seed com `pnpm bench run ... --daily-neurons 0` (qualquer pedido novo é recusado e nada é gasto) mostrou que só as seeds 6, 7 e 8 reproduzem inteiras (20, 19 e 56 acertos de cache). O app lista **6 a 8**.
 
 Nada disto toca o que valia antes: o `json-fx` segue igual a `always-forward`. O Clef do app é uma condição **rotulada** ("palavras, regras no texto, roteamento e controlador de desvio nossos"), não uma prova de que o modelo joga: o controlador planeja a rota, e o modelo só escolhe entre atravessar, contornar por um lado ou esperar.
+
+### O tronco que leva a galinha para fora do mapa: o relógio da plataforma (2026-10-17)
+
+Pedido do dono: "ele não sabe que está num tronco em movimento que logo vai sair do mapa e vai dar game over". Diagnóstico sem rede, nas partidas em cache e no `exec-route`; o que se mediu com o modelo veio de 114 estados de sonda e de 3 partidas ([ADR-0011](adr/0011-controlador-com-rota-e-tres-consultas.md), adendo; [ADR-0009](adr/0009-percepcao-memoria-e-julgamento.md), adendo).
+
+**1. O que acontecia.** Seed 6 (Clef-flash, 9 ruas, borda): a galinha pulou duas vezes para um rio cujo tronco corria para a esquerda a 3,3 colunas/s e cuja linha seguinte só tinha troncos parados do outro lado, e esperou até passar de -5 (`detour_*` recusados, `wait_here` ×4: "nowhere safe to step"). **Nenhuma das três perguntas lia `carried_towards` nem `place_in_world`**, então o modelo não tinha como fazer outra coisa. Seed 7 (8 ruas, carro): esperou numa estrada um tronco passar na linha da frente, fugindo de um carro para o lado em que ele ia, até a borda.
+
+**2. As mortes do `exec-route` (escolhedor ideal, sem modelo; 100 seeds; 31 mortes), pela última jogada antes de morrer:**
+
+| Causa | Mortes |
+|---|---|
+| esperando numa estrada ou num trilho ("a galinha não pode ficar onde está") | 14 |
+| num tronco levado para fora do mapa | 9 |
+| carro **logo depois de sair de um tronco** | 6 |
+| trem | 2 |
+
+53% dos passos "parado" acontecem fora da grama (28% em tronco, 20% em estrada, 6% em trilho). O terceiro item era um erro do controlador: saindo de um tronco a galinha está numa coluna **fracionária** (0,7), o salto à frente vai até a coluna arredondada (1) e a conferência da janela olhava só a de destino; a galinha entra na estrada ainda a meio caminho (reproduzido tick a tick na seed 58: morre no tick 3 do salto). `hopWindow` confere as duas colunas.
+
+**3. O controlador, medido de graça (100 seeds, `exec-route`).**
+
+| Versão | Ruas | Mortes (carro / borda / trem) |
+|---|---|---|
+| antes | 47,5 | 19 / 9 / 3 |
+| só a correção do salto fracionário | 48,7 | 15 / 10 / 3 |
+| **final** (+ relógio, `leave_platform` só com a borda "a_moment" e a saída para a frente antes da de trás) | **48,3** (mediana 39) | 16 / 11 / 3 (total 31 → 30) |
+
+O que **não** valeu, medido e descartado: sair da plataforma com a borda a menos de 2,5 s (`soon`) pela saída mais curta: 27,2 ruas; só com `a_moment` (menos de 1 s): 42,1, porque a saída mais curta era **voltar** e a galinha **embarcava no mesmo tronco, saía e embarcava de novo**; com "para a frente antes de voltar" (o que ficou): 48,3 só com `a_moment` e 46,7 também com `soon`; o limiar de `a_moment` em 0,6 s: 46,3 ruas e 15 mortes na borda; em 1,5 s: 47,5; em 2,0 s: 45,4; **não embarcar** num tronco que sai do mundo antes de a galinha poder seguir: **48,3 → 39,2 / 31,8 / 25,2 ruas** (limiares de 1,0 / 1,5 / 2,5 s), com a borda indo de 11 mortes a 3 / 1 / 0, porque ela passa a esperar na margem até o fim (estagnação 54% → 66% / 79% / 84%); e "sobreviver 8 a 24 saltos" na retenção: sem ganho. **Nenhum remendo simples tira a espera em estrada**; o plano não promete ganho de placar além da correção do salto.
+
+**4. O modelo lê o relógio? A sonda de plataforma** (114 estados: os 90 de antes, sem mudança de id nem de resposta, mais 12 `platform-edge`, a uma palavra da borda, e 12 `platform-far`; ~330 a 350 neurons por variante, 45 chamadas):
+
+| Redação da 4ª pergunta (`ride`) | `platform-edge`: respondeu `leaving` | `platform-far`: respondeu `leaving` | P(leaving) na borda / longe | Concordância geral |
+|---|---|---|---|---|
+| "a plataforma está para levá-la para fora do mundo?" (mais o texto do jogo) | 3 de 12 | 0 de 12 | 0,17–0,62 / 0,04–0,15 | 86% |
+| com o motivo, as faixas de tempo e mais exemplos | 0 de 12 | 0 de 12 | 0,19–0,44 / 0,08–0,23 | 82% |
+| **"`chicken.edge_in` é `a_moment`?"** (um campo, só a palavra) | **12 de 12** | **0 de 12** | **0,73–0,90 / 0,05–0,11** | **95%** |
+
+Como nas outras condições, **o texto da opção decide**: pedindo o julgamento ("vai para fora?"), o modelo respondia `staying` quase sempre, embora desse mais probabilidade a `leaving` nos estados da borda (ordem certa, nunca acima de 0,5); pedindo a consulta de uma palavra, acertou todos. O ideal da sonda agora é `leave_platform` quando `edge_in` é `a_moment` (`routeChoice`), por isso a concordância dos 90 estados antigos passou de 94% para 93% (84 de 90).
+
+**5. Partidas** (seeds 6 a 8, Clef-flash, o mesmo `clef:clef-flash:scene:route:lookup` com a 4ª pergunta): **9, 8 e 39 ruas, as mesmas de antes** (30, 72 e 171 decisões, as mesmas), 94 acertos de cache e 29 chamadas novas (212 neurons: a pergunta nova só aparece nos 31 estados em plataforma). Na seed 6 o modelo respondeu `leaving` nos **5 estados a um instante da borda** (P 0,79 a 0,90) e o controlador recusou os cinco com "no way off within 8 hops; nowhere safe to step": **não havia saída em 8 saltos** (a galinha já tinha embarcado num tronco rápido, e à frente só havia água e troncos parados do outro lado). Saber não bastou: a morte foi decidida ao **embarcar**, e a regra que impediria isso custa mais ruas do que salva (item 3). As três partidas continuam reproduzindo do cache com `--daily-neurons 0` (94 acertos, 0 chamadas), então o app segue listando **6 a 8**.
+
+**6. Custo.** Hoje (UTC 2026-10-17), na conta do `.env`: 225 (primeira regravação, com a redação nova ainda não escolhida) + 337 + 350 + 327 (três sondas) + 212 (partidas finais) = **1.451 neurons**, de 10.000. As corridas usaram `--daily-neurons` de 1.500 a 3.000 e `--root` apontando para o checkout principal, para que o razão (`runs/cache/spend.ndjson`) e o cache sejam os mesmos do app.
+
+**7. O que a tela mostrava errado** (auditoria; o que mudou está em [08](08-ui-desktop.md)): em **21 das 95 decisões** gravadas (22%) a barra maior da bússola não era a jogada escolhida (as barras eram probabilidades conjuntas, a escolha é uma cascata de argmax: com P(stand) 0,45 e P(moving) 0,5 a chance conjunta de atravessar é 0,725, mas as duas respostas, uma a uma, dizem "não" e "parada"); uma manobra recusada aparecia como "Go straight"; 5% dos passos de espera diziam "vehicle" com a casa da frente vazia (era a linha **depois** que bloqueava, ou um trem).
+
+**Não medido:** o portão de 100 seeds (segue pendente; ~25.000 a 30.000 neurons); o efeito do relógio em partidas longas (são três seeds, todas iguais às de antes); o tempo real (o movimento é calculado no mundo do pedido e jogado no mundo de agora, e os contadores `n/15` contam quadros: pergunta aberta em [08](08-ui-desktop.md)).
 
 ## Atraso: a pergunta do modo tempo real
 
