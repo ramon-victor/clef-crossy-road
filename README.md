@@ -16,12 +16,25 @@ e quantas ruas ele atravessou. Um benchmark em CLI compara modelos nas mesmas se
 - **O app tem dois modelos no "Who plays"**: **Clef-flash** e **Clef (27B)**, os dois com a jogabilidade nova (palavras, três consultas e controlador de desvio). No navegador, abre no look-ahead gratuito. O desktop abre no Clef-flash na seed 6; esse replay só é gratuito quando o cache local está presente (seeds 6 a 8). Qualquer outra combinação abre por `CCR_PLAYER`. Um jogador de IA que passa 60 decisões sem uma linha nova (por exemplo, batendo numa árvore) encerra a partida com o cartão "Preso" e para de gastar.
 - **Regra do projeto:** ficar no free tier (10.000 neurons por dia UTC, por conta). O código recusa chamadas além disso ([ADR-0008](docs/adr/0008-orcamento-diario-no-free-tier.md)).
 
+## Preparar o ambiente
+
+Instale **Node 24 ou superior** e **Git**. O projeto fixa o **pnpm 12.14.0** no `package.json`.
+Para instalar essa versão na máquina, use o [instalador oficial do pnpm](https://pnpm.io/installation):
+
+```bash
+npx --yes get-pnpm@0.0.5 12.14.0
+```
+
+Feche e abra o terminal depois da instalação e confira `pnpm --version`: deve mostrar `12.14.0`.
+Isso vale também para quem já tem uma versão antiga do pnpm: `pnpm self-update` dentro do projeto
+altera a versão fixada, mas não atualiza a instalação global antiga.
+
 ## Rodar em localhost
 
 Na raiz do projeto:
 
 ```bash
-pnpm install
+pnpm install --frozen-lockfile
 pnpm run dev
 ```
 
@@ -45,6 +58,10 @@ O comando prepara os assets, inicia o Vite e compila/abre o Tauri com recarga au
 Requer Rust, as ferramentas de compilação C++ do Windows e WebView2. A primeira compilação pode demorar.
 Use **Ctrl+C** no terminal para encerrar. Encerre antes qualquer `pnpm run dev`, pois ambos usam a porta 5173.
 
+Se um pnpm antigo falhar com `ERR_PNPM_NO_MATCHING_VERSION` ao buscar `@pnpm/win-x64`,
+atualize a instalação da máquina pelo comando em **Preparar o ambiente** e reabra o terminal.
+Veja o [diagnóstico da inicialização](docs/08-ui-desktop.md#recuperar-o-pnpm-após-self-update).
+
 Depois de construir uma vez (comandos abaixo), basta dar **duplo clique**:
 
 | Arquivo | O que abre |
@@ -64,9 +81,9 @@ de cada ação, a latência, os tokens e quantos neurons do dia já foram usados
 ## Outros comandos
 
 ```bash
-pnpm install
+pnpm install --frozen-lockfile
 node scripts/fetch-assets.mjs          # baixa os modelos do Evan (não vão para o git)
-pnpm typecheck && pnpm lint && pnpm test
+pnpm check                            # typecheck, lint e testes
 
 pnpm --filter @ccr/desktop build
 cd apps/desktop && pnpm tauri build --no-bundle && cd ../..   # gera o .exe de release (precisa do Rust: rustup)
@@ -84,7 +101,13 @@ Antes de qualquer execução com modelo, rode `pnpm bench plan`: ele estima os n
 2. O token deve ter **só** a permissão *Workers AI* e uma data de expiração.
 3. O `.env` é ignorado pelo git. Nunca o publique nem o cole em conversas.
 
-Requisitos: Node 24, pnpm 10 e Git para o localhost. Rust e WebView2 (já vem no Windows 11) são necessários para o app desktop.
+Requisitos: Node 24+, pnpm 12.14.0 e Git para o localhost, que pode ser usado em Windows, Linux e macOS.
+Para o desktop, instale também os [pré-requisitos do Tauri v2](https://v2.tauri.app/start/prerequisites/)
+da sua plataforma; no Windows, Rust, ferramentas C++ e WebView2 (já vem no Windows 11).
+O desktop foi verificado no Windows; os outros sistemas ainda precisam de validação da janela nativa.
+
+O GitHub Actions executa a instalação com lockfile congelado, `pnpm check` e o build web em Windows,
+Linux e macOS; no Windows, também executa os testes Rust. A CI não precisa de `.env` ou credenciais Cloudflare.
 
 ## Por onde ler
 

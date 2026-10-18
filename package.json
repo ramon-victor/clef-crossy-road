@@ -2,7 +2,7 @@
   "name": "clef-crossy-road",
   "private": true,
   "type": "module",
-  "packageManager": "pnpm@10.12.1",
+  "packageManager": "pnpm@12.14.0",
   "engines": {
     "node": ">=24"
   },
@@ -11,6 +11,7 @@
     "dev:desktop": "node scripts/fetch-assets.mjs && pnpm --filter @ccr/desktop tauri dev",
     "typecheck": "pnpm -r typecheck",
     "test": "pnpm -r test",
+    "check": "pnpm typecheck && pnpm lint && pnpm test",
     "bench": "node --env-file-if-exists=.env apps/bench/src/cli.ts",
     "lint": "biome check .",
     "format": "biome format --write ."

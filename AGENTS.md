@@ -29,7 +29,7 @@ The app's "Who plays" lists You, **Clef-flash**, **Clef (27B)** and the three re
 **A cached map only replays if the controller makes the same moves it made when it was cached.** After changing the prompts or `route.ts`, re-run the seeds and check each one with `pnpm bench run ... --seeds N --daily-neurons 0` (any cache miss is refused: nothing is spent) before listing it in the app. `--max-calls` only stops *starting* games; a game in progress runs on (a 5-game run planned for ~900 neurons spent 1,380).
 The owner authorized commits on 2026-10-14 (history is on `main`, Conventional Commits, one logical change each, with the
 `Co-Authored-By` trailer). Pushing still needs their say-so. `.env` holds a working `CF_API_TOKEN` and `CF_ACCOUNT_ID`; `.env.second` (gitignored) holds a second account's.
-Installed: Node 24, pnpm 10, git, MSVC, WebView2, Rust 1.99 (rustup, user-level). Git checks out LF (`.gitattributes`), except
+Installed: Node 24, pnpm 12.14.0, git, MSVC, WebView2, Rust 1.99 (rustup, user-level). Git checks out LF (`.gitattributes`), except
 `*.cmd`, which must stay CRLF.
 
 ## Commands
@@ -38,6 +38,7 @@ Installed: Node 24, pnpm 10, git, MSVC, WebView2, Rust 1.99 (rustup, user-level)
 - `pnpm run dev` at the root prepares assets and serves `http://localhost:5173`, starting with the free look-ahead player.
 - `pnpm run dev:desktop` prepares assets and launches Tauri development (Rust/C++ tools/WebView2 required); stop browser dev first (same port).
 - `pnpm typecheck` / `pnpm lint` / `pnpm test`: run all three before declaring work done
+- `pnpm check` runs all three. Keep the pnpm version pinned in `packageManager` and verify upgrades with a frozen install; update the machine's pnpm using the official installer rather than downgrading the project to match an old binary. CI checks Windows, Linux and macOS without credentials or API calls.
 - `pnpm --filter @ccr/core test`: core only, no network, ~3 s
 - `pnpm bench plan --policies <ids> --seeds 1..100`: estimates neurons and splits a run over days. **Run it before any `run` or `probe-run` that uses a model.**
   From a git worktree (no `.env`, its own `runs/`), run the same CLI with `--root <main checkout>` and `node --env-file=<main checkout>/.env`, so the ledger, the cache and the runs are the ones the app of the main checkout reads (a copy of the ledger undercounts the day, and a dev server keeps the cache it loaded in memory: restart it after a recording).

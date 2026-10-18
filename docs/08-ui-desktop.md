@@ -325,7 +325,41 @@ Não verifiquei: o autoteste do `.exe` com WebView2 (este worktree é Linux), o 
 
 ## Pré-requisitos (todos instalados em 2026-10-14)
 
-Node 24, pnpm 10, MSVC (Visual Studio com C++), WebView2 155, Rust 1.99 via `rustup` (instalação em nível de usuário, reversível com `rustup self uninstall`).
+Node 24, pnpm 12.14.0 (atualizado em 2026-10-18), MSVC (Visual Studio com C++), WebView2 155, Rust 1.99 via `rustup` (instalação em nível de usuário, reversível com `rustup self uninstall`).
+
+## Recuperar o pnpm após self-update
+
+O projeto fixa `pnpm@12.14.0` no campo `packageManager` do `package.json`.
+Dentro do projeto, [`pnpm self-update`](https://pnpm.io/cli/self-update) altera essa versão;
+o próximo comando tenta baixar e usar a versão escolhida automaticamente.
+Em 2026-10-18, o pnpm global 10.12.1 não conseguiu carregar a versão 12.14.0 exigida pelo projeto:
+`ERR_PNPM_NO_MATCHING_VERSION` ao buscar `@pnpm/win-x64@12.14.0`. A falha ocorre antes de iniciar o Vite ou o Rust.
+O pnpm 12 distribui o binário atual como `@pnpm/exe.win32-x64`, formato que o instalador antigo não conhece.
+
+Para atualizar a instalação da máquina sem depender desse pnpm antigo, use o
+[instalador oficial](https://pnpm.io/installation):
+
+```powershell
+npx --yes get-pnpm@0.0.5 12.14.0
+```
+
+Feche e abra o terminal para carregar o novo `PATH`. Depois, na raiz do projeto:
+
+```powershell
+pnpm --version
+pnpm install --frozen-lockfile
+pnpm run dev:desktop
+```
+
+O primeiro comando deve imprimir `12.14.0`. O instalador configura `PNPM_HOME/bin` no `PATH`;
+um terminal aberto antes da instalação pode continuar escolhendo o executável antigo em `PNPM_HOME`.
+No PowerShell, `Get-Command pnpm` mostra qual instalação está sendo usada.
+Atualizações futuras devem manter a versão fixada no projeto e a instalação da máquina alinhadas,
+com instalação congelada e verificações locais antes de publicar.
+
+Verificado em 2026-10-18 no Windows: pnpm global e projeto em 12.14.0, instalação congelada,
+`pnpm check` (801 testes TS), build web e 35 testes Rust. `pnpm run dev:desktop` iniciou o Vite
+e executou a janela nativa; essa verificação usou o jogador manual, sem chamadas à API.
 
 ## Perguntas abertas
 

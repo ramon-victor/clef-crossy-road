@@ -1,6 +1,6 @@
 # ADR-0003 · TypeScript + pnpm workspaces
 
-- **Status:** aceito · **Data:** 2026-10-14
+- **Status:** aceito · **Data:** 2026-10-14 · **Verificado em:** 2026-10-18
 
 ## Contexto
 
@@ -8,7 +8,10 @@ O projeto tem um núcleo, um cliente de API, agentes, um renderer e dois apps (C
 
 ## Decisão
 
-TypeScript estrito em ESM, monorepo com **pnpm workspaces**, Vitest e Biome. Node 24 e pnpm 10 já estão instalados.
+TypeScript estrito em ESM, monorepo com **pnpm workspaces**, Vitest e Biome. Node 24 e pnpm 12.14.0 já estão instalados.
+Em 2026-10-18, o pnpm foi atualizado de 10.12.1 para 12.14.0: versão exata em `packageManager`,
+instalação global pelo instalador oficial e lockfile compatível. A CI instala a mesma versão e usa
+`--frozen-lockfile` em Windows, Linux e macOS; `pnpm check` reúne typecheck, lint e testes.
 Os pacotes são consumidos como código-fonte TS (`exports` aponta para `src/index.ts`), sem etapa de build; imports usam a extensão `.ts` e só sintaxe TypeScript apagável (`erasableSyntaxOnly`), para o Node 24 executar os arquivos direto.
 
 A direção das dependências é imposta pelo **layout estrito do `node_modules` do pnpm**: um pacote só consegue importar o que declara no `package.json`. Cada pacote tem seu próprio `typecheck`. (A ideia inicial de *TS project references* foi trocada por isso: sem emissão de arquivos, as references acrescentam configuração e não impõem nada além do que o pnpm já impõe.) O core ainda ganha uma camada extra: o `tsconfig` dele não carrega tipos de DOM nem de Node, e um teste de pureza varre o código.
