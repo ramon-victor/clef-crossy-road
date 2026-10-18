@@ -52,6 +52,35 @@ function controlledPolicy() {
 }
 
 describe("Session: human control", () => {
+  it("suspends a queued single step when explicitly paused, as on window minimization", async () => {
+    const controlled = controlledPolicy();
+    const session = new Session();
+    session.setPolicy(controlled.factory, 1);
+    session.setPaused(true);
+    session.stepOnce();
+    session.setPaused(true);
+    run(session, 1);
+    await settle();
+    expect(controlled.asked()).toBe(0);
+    expect(session.state()).toMatchObject({ tick: 0, paused: true, decisions: 0 });
+    session.setPaused(false);
+    session.frame(FRAME);
+    expect(controlled.asked()).toBe(1);
+  });
+
+  it("accounts for an in-flight answer while paused without starting another turn", async () => {
+    const controlled = controlledPolicy();
+    const session = new Session();
+    session.setPolicy(controlled.factory, 1);
+    session.frame(FRAME);
+    session.setPaused(true);
+    const tick = session.state().tick;
+    await controlled.answer({ action: "hop_forward", neurons: 2 });
+    run(session, 1);
+    expect(session.state()).toMatchObject({ tick, paused: true, decisions: 1, neurons: 2 });
+    expect(controlled.asked()).toBe(0);
+  });
+
   it("runs the world and applies key input immediately", () => {
     const s = new Session();
     s.start(7);

@@ -103,6 +103,11 @@ pub async fn clef_run(
         }
     }
 
+    // A fresh checkout may lack the benchmark cache. Self-tests must never spend on a cache miss.
+    if crate::launch::selftest_requested() {
+        return Err(CommandError::new("Self-test is cache-only. Nothing was sent."));
+    }
+
     let token = credentials.api_token.ok_or_else(|| {
         CommandError::new("CF_API_TOKEN is not set. Open Setup and configure Cloudflare.")
     })?;

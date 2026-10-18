@@ -3,7 +3,7 @@
 use std::fs;
 
 use serde_json::{json, Value};
-use tauri::{AppHandle, State};
+use tauri::{AppHandle, Manager, State};
 
 use crate::{
     error::{CommandError, CommandResult},
@@ -26,8 +26,33 @@ pub fn launch_options(state: State<'_, AppState>) -> Value {
     json!({ "player": player, "seed": seed, "log": state.log.mode().as_str() })
 }
 
-fn selftest_requested() -> bool {
+pub fn selftest_requested() -> bool {
     std::env::var("CCR_SELFTEST").is_ok()
+}
+
+/// Native lifecycle actions used only by the dual-window self-test.
+#[tauri::command]
+pub fn selftest_window_action(app: AppHandle, action: &str) -> CommandResult<()> {
+    if !selftest_requested() {
+        return Err(CommandError::new("self-test is not enabled"));
+    }
+    let game = app
+        .get_webview_window("main")
+        .ok_or_else(|| CommandError::new("game missing"))?;
+    match action {
+        "close-controls" => {
+            app.get_webview_window("controls")
+                .ok_or_else(|| CommandError::new("controls missing"))?
+                .close()?;
+        }
+        "minimize" => game.minimize()?,
+        "restore" => {
+            game.unminimize()?;
+            game.set_focus()?;
+        }
+        _ => return Err(CommandError::new("unknown self-test action")),
+    }
+    Ok(())
 }
 
 /// True when the app was launched with `CCR_SELFTEST=1` (used by scripted checks, never by players).

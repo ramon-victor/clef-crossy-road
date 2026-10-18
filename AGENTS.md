@@ -17,7 +17,7 @@ Language: code, identifiers, commits and this file in English. `docs/` is in Bra
 
 ## Status
 
-Phases 0-4 are built (553 TS tests + 32 Rust tests). **The gate was NOT passed, in the first 12 conditions**: Clef-flash (JSON, grid,
+Phases 0-4 are built (563 TS tests + 35 Rust tests). **The gate was NOT passed, in the first 12 conditions**: Clef-flash (JSON, grid,
 critic-go, minimal manual, relative columns, and the player's view with the whole screen, motion and memory) plays like "always forward" (~3.7 rows),
 image input is significantly worse, and Clef 27B chose "forward" every time (`docs/07-experimentos.md`). Diagnosis: 72-96% of hops into water are
 fatal and the model puts its top probability on "forward" even when the platform is written right in front of it. Scripted readers of the same views make

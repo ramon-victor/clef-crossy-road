@@ -40,6 +40,15 @@ body,
   height: 100%;
 }
 
+.controls-shell {
+  --panel-width: 100%;
+  background: var(--panel);
+}
+
+.connection-status {
+  margin: 24px;
+}
+
 /* ---------- stage ---------- */
 
 .stage {
@@ -57,6 +66,44 @@ canvas.game {
   height: 100%;
   display: block;
   outline: none;
+}
+
+.open-controls {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  z-index: 4;
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 1px solid rgba(29, 43, 69, 0.2);
+  border-radius: 9px;
+  color: var(--ink);
+  background: rgba(255, 255, 255, 0.85);
+  cursor: pointer;
+}
+
+.open-controls:hover {
+  background: #fff;
+}
+
+.open-controls:focus-visible {
+  outline: 3px solid var(--ink);
+  outline-offset: 3px;
+}
+
+.paused-note {
+  position: absolute;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.9);
+  white-space: nowrap;
+  pointer-events: none;
 }
 
 .hud {
@@ -1128,6 +1175,56 @@ canvas.game:focus-visible {
 .connection-dialog .input {
   min-height: 36px;
   font-size: 13px;
+}
+
+/* Detached controls must not reserve space for a sidebar outside their own viewport. */
+.controls-shell .panel {
+  width: 100%;
+  border-left: 0;
+}
+
+.controls-shell .player-info {
+  inset: 12px 12px auto;
+  width: calc(100vw - 24px);
+}
+
+.controls-shell .inspector {
+  inset: 12px;
+  overflow-y: auto;
+}
+
+.controls-shell .inspector-head {
+  flex-wrap: wrap;
+  flex: none;
+}
+
+.controls-shell .inspector-title {
+  font-family: "Segoe UI", system-ui, sans-serif;
+  font-size: 18px;
+  font-weight: 800;
+  line-height: 1.2;
+}
+
+.controls-shell .inspector-sub {
+  max-height: 96px;
+  overflow-y: auto;
+}
+
+.controls-shell .inspector-tabs {
+  flex-wrap: wrap;
+  flex: none;
+}
+
+.controls-shell .inspector-chips {
+  flex: none;
+}
+
+.controls-shell .inspector-body {
+  flex: 1 0 120px;
+}
+
+.controls-shell .inspector :is(td, th) {
+  overflow-wrap: anywhere;
 }
 
 .connection-dialog :is(button, input):focus-visible {

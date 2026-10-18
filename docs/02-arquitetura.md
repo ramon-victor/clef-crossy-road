@@ -1,6 +1,6 @@
 # 02 · Arquitetura
 
-> **Status:** implementada e verificada · **Verificado em:** 2026-10-15 · **ADRs:** 0001 a 0008
+> **Status:** implementada e verificada · **Verificado em:** 2026-10-18 · **ADRs:** 0001 a 0008
 
 ## Visão geral
 
@@ -39,7 +39,7 @@ Detalhes e limites do armazenamento: [10](10-seguranca-e-licencas.md).
 | `@ccr/agent` | `Policy`, baselines, encoders (`json`, `grid`, `image`), prompts, `ClefPolicy`, runner com latência injetada (`applyDecision`, usado também para reproduzir partidas gravadas), custo por decisão (`decisionCost`) | `core`, `clef` |
 | `@ccr/render` | Cena Three.js a partir de um `Snapshot` somente leitura | `core` |
 | `apps/bench` | CLI: `run`, `report`, `plan`, `diagnose`, `export` (N seeds × políticas, NDJSON retomável, IC por bootstrap pareado). `cli.ts` só despacha; opções, comandos, latência e arquivos têm módulo próprio | `core`, `agent`, `clef` |
-| `apps/desktop` | Tauri v2: janela, painel Preact (um componente por cartão), `Session`, comandos Rust (um módulo por assunto) | `core`, `agent`, `clef`, `render` |
+| `apps/desktop` | Tauri v2: janelas de jogo e controles, painel Preact (um componente por cartão), `Session`, comandos Rust (um módulo por assunto) | `core`, `agent`, `clef`, `render` |
 
 As regras de dependência são impostas pelo layout estrito do `node_modules` do pnpm ([ADR-0003](adr/0003-typescript-pnpm-monorepo.md)). O core
 tem uma camada a mais: o `tsconfig` dele não carrega tipos de DOM nem de Node e um teste de pureza varre o código.
@@ -76,9 +76,15 @@ Humano, baselines e modelos jogam o mesmo ambiente, então as comparações são
 
 ## Ponte para o lado nativo (app desktop)
 
-O `ClefClient` roda no webview com um `Transport`, um `DecisionCache` e um `SpendBudget` que atravessam uma `Bridge`: `tauri.ts` (IPC
+O `ClefClient` roda no webview do jogo com um `Transport`, um `DecisionCache` e um `SpendBudget` que atravessam uma `Bridge`: `tauri.ts` (IPC
 para os comandos Rust) ou `http.ts` (só em `vite serve`, para desenvolver no navegador, servido por `dev-bridge.ts`). Nas duas, quem
 tem as credenciais, aplica o teto diário e grava o ledger é o lado nativo, nunca a interface.
+
+O desktop abre dois webviews: `main` é o único dono da `Session`, políticas, cliente, render, áudio
+e logs; `controls` recebe snapshots serializáveis e envia comandos por eventos direcionados do Tauri.
+O painel não instancia cliente nem simulação. A sincronização inicial e ao reabrir não começa outra
+partida; fechar o jogo encerra ambos. A configuração de credenciais permanece somente no painel,
+com pausa confirmada antes de abrir. Ver [08](08-ui-desktop.md).
 
 ## Desempenho (medido)
 

@@ -4,7 +4,8 @@ Applies to everything under `apps/desktop`. The root `AGENTS.md` still applies. 
 
 ## What this app is
 
-A Tauri v2 window (WebView2) running a Vite + Preact UI and a Three.js scene (`@ccr/render`). Rust (`src-tauri/src`) holds
+Two independent Tauri v2 windows run a Vite + Preact UI. `main` owns the only Session, ClefClient,
+Three.js scene (`@ccr/render`), audio and logs; `controls` is presentation only. Rust (`src-tauri/src`) holds
 the Cloudflare credentials and exposes a handful of commands: `commands.rs` (the API call, the cache, the budget), `ledger.rs`
 (what is spent, per account) and `launch.rs` (launch options, self-test). The UI watches Clef (or the free references) play, or
 lets a person play.
@@ -38,6 +39,8 @@ lets a person play.
 
 ## Gotchas
 
+- `bridge/windows.ts` sends serializable snapshots and acknowledged commands between the windows; never create a Session or model client in `ControlsApp`. Closing controls hides it and clears dialogs; closing main exits the app. The game button/F2 reopens controls, I opens its inspector. Minimizing main pauses until explicit resume; losing focus does not. Browser development keeps the integrated layout.
+- Native self-tests are cache-only: `clef_run` refuses misses when `CCR_SELFTEST` is set. Inspect the controls DOM through `selftest-controls.ts`, not from the game webview.
 - `Session` is framework-free on purpose; `App.tsx` only subscribes to it. Real-time and step timing share the same loop.
 - In step timing the world waits for the model; in real-time it keeps running at 60 Hz and the action lands whenever the answer arrives.
 - The scene follows the hero with upstream's 3% per frame easing, expressed frame-rate independently (`followFactor`).

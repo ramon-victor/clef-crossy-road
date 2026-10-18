@@ -12,11 +12,11 @@ mod files;
 mod launch;
 mod ledger;
 mod logging;
+mod windows;
 
 use std::{collections::HashMap, path::PathBuf, sync::Mutex, time::Duration};
 
 use serde_json::Value;
-use tauri::Manager;
 
 const HTTP_TIMEOUT: Duration = Duration::from_secs(20);
 
@@ -59,14 +59,15 @@ pub fn run() {
             logging::console_log,
             launch::launch_options,
             launch::selftest_enabled,
-            launch::report_selftest
+            launch::report_selftest,
+            windows::show_controls,
+            launch::selftest_window_action
         ])
         .setup(|app| {
-            if let Some(window) = app.get_webview_window("main") {
-                let _ = window.set_title("Clef Crossy Road");
-            }
+            windows::setup(app)?;
             Ok(())
         })
+        .on_window_event(windows::on_event)
         .run(tauri::generate_context!())
         .expect("error while running the application");
 }

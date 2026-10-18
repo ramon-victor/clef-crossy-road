@@ -12,6 +12,7 @@ export interface GameCanvasProps {
   onFps?: (fps: number) => void;
   onRetry: () => void;
   onNewMap: () => void;
+  onShowControls?: (() => void) | undefined;
 }
 
 /** Owns the WebGL view and the animation loop; everything else is plain DOM on top of it. */
@@ -115,6 +116,36 @@ export function GameCanvas(props: GameCanvasProps) {
           rows · best {state.best} · seed {state.seed}
         </div>
       </div>
+
+      {props.onShowControls && (
+        <button
+          type="button"
+          class="open-controls"
+          onClick={props.onShowControls}
+          aria-label="Open controls window"
+          title="Open controls (F2)"
+        >
+          <svg
+            viewBox="0 0 24 24"
+            width="20"
+            height="20"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            aria-hidden="true"
+          >
+            <path d="M4 7h16M4 17h16" />
+            <circle cx="9" cy="7" r="3" fill="currentColor" stroke="none" />
+            <circle cx="15" cy="17" r="3" fill="currentColor" stroke="none" />
+          </svg>
+        </button>
+      )}
+
+      {state.paused && status === "ready" && state.alive && !state.stalled && (
+        <div class="paused-note" role="status">
+          Paused · Space to resume
+        </div>
+      )}
 
       <div ref={bubbleRef} class="bubble-anchor">
         {showBubble && last && (

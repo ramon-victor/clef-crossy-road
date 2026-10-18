@@ -1,15 +1,16 @@
 import type { GameView } from "@ccr/render";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useCallback, useEffect, useMemo, useRef, useState } from "preact/hooks";
 import { Sounds } from "./audio.ts";
 import { createBridge, createClefClient } from "./bridge/clef.ts";
 import type { BudgetStatus, CredentialStatus } from "./bridge/types.ts";
+import { hostControls, showControls, WINDOW_EVENTS } from "./bridge/windows.ts";
+import { ControlSurface } from "./ControlSurface.tsx";
 import { createConsoleLog, terminalWriter } from "./console-log.ts";
+import { type ControlCommand, type ControlsData, playerOption } from "./controls.ts";
 import { GameCanvas } from "./GameCanvas.tsx";
 import { commandForKey } from "./keymap.ts";
 import { readLaunchOptions } from "./launch.ts";
-import { Panel } from "./Panel.tsx";
-import { ConnectionDialog } from "./panel/ConnectionDialog.tsx";
-import { InputInspector } from "./panel/InputInspector.tsx";
 import {
   buildPolicyChoices,
   canonicalPlayerId,
@@ -20,13 +21,13 @@ import {
 } from "./policies.ts";
 import { randomSeed } from "./seed.ts";
 import { runSelfTest } from "./selftest.ts";
-import { Session, type SessionState, type Timing } from "./session.ts";
+import { Session, type SessionState } from "./session.ts";
 
 const DEFAULT_PLAYER = "clef-flash";
 /** Pause before an attract-mode game starts the next map, long enough to read the result card. */
 const RESTART_DELAY_MS = 2200;
 
-export function App() {
+export function App({ desktop = false }: { desktop?: boolean }) {
   const bridge = useMemo(createBridge, []);
   const client = useMemo(() => createClefClient(bridge), [bridge]);
   const standardChoices = useMemo(() => buildPolicyChoices(client), [client]);
@@ -54,12 +55,13 @@ export function App() {
   );
   const [budget, setBudget] = useState<BudgetStatus | null>(null);
   const [credentials, setCredentials] = useState<CredentialStatus | null>(null);
-  const [configuring, setConfiguring] = useState(false);
+  const [minimized, setMinimized] = useState(false);
   const [fps, setFps] = useState(60);
   const [soundOn, setSoundOn] = useState(true);
   const [autoRestart, setAutoRestart] = useState(true);
   const [inspecting, setInspecting] = useState(false);
   const viewRef = useRef<GameView | null>(null);
+  const minimizedRef = useRef(false);
 
   const refreshBudget = useCallback(() => {
     bridge
@@ -164,10 +166,143 @@ export function App() {
   const mayAutoRestart = autoRestart && selected !== undefined && !selected.usesApi && !state.human;
   const over = !state.alive || state.stalled;
   useEffect(() => {
-    if (!over || !mayAutoRestart) return;
+    if (!over || !mayAutoRestart || state.paused || minimized) return;
     const timer = setTimeout(newMap, RESTART_DELAY_MS);
     return () => clearTimeout(timer);
-  }, [over, state.seed, mayAutoRestart, newMap]);
+  }, [over, state.seed, state.paused, mayAutoRestart, newMap, minimized]);
+
+  const execute = useCallback(
+    async (command: ControlCommand) => {
+      switch (command.type) {
+        case "select":
+          select(command.id);
+          refreshBudget();
+          break;
+        case "timing":
+          session.setTiming(command.timing);
+          break;
+        case "speed":
+          session.setSpeed(command.speed);
+          break;
+        case "pause":
+          if (!minimizedRef.current) session.togglePause();
+          break;
+        case "pauseForSettings":
+          session.setPaused(true);
+          break;
+        case "step":
+          if (!minimizedRef.current) session.stepOnce();
+          break;
+        case "retry":
+          retry();
+          break;
+        case "newMap":
+          newMap();
+          break;
+        case "seed":
+          noteSeed(selectedId, command.seed);
+          session.start(command.seed);
+          break;
+        case "sound":
+          sounds.enabled = command.enabled;
+          setSoundOn(command.enabled);
+          break;
+        case "autoRestart":
+          setAutoRestart(command.enabled);
+          break;
+        case "credentialsSaved": {
+          setCredentials(await bridge.credentialStatus());
+          const current = session.state();
+          if (current.phase === "error" || current.phase === "thinking")
+            session.start(current.seed);
+          session.setPaused(true);
+          refreshBudget();
+          break;
+        }
+      }
+    },
+    [select, refreshBudget, session, retry, newMap, noteSeed, selectedId, sounds, bridge],
+  );
+
+  const controls: ControlsData = {
+    state,
+    choices: choices.map(playerOption),
+    selectedId,
+    budget,
+    credentials,
+    fps,
+    soundOn,
+    autoRestart,
+    bridgeKind: bridge.kind,
+    minimized,
+  };
+  const latest = useRef({ controls, execute });
+  latest.current = { controls, execute };
+
+  useEffect(() => {
+    if (!desktop) return;
+    let disposed = false;
+    let publishing = false;
+    let host: Awaited<ReturnType<typeof hostControls>> | null = null;
+    let stopMinimized = () => {};
+    const updateMinimized = (value: boolean) => {
+      if (minimizedRef.current === value) return;
+      minimizedRef.current = value;
+      setMinimized(value);
+      if (value) session.setPaused(true);
+    };
+    const setup = async () => {
+      const current = getCurrentWindow();
+      host = await hostControls(
+        (command) => latest.current.execute(command),
+        () => ({
+          ...latest.current.controls,
+          state: session.state(),
+          minimized: minimizedRef.current,
+        }),
+      );
+      stopMinimized = await current.listen<boolean>(WINDOW_EVENTS.minimized, ({ payload }) =>
+        updateMinimized(payload),
+      );
+      updateMinimized(await current.isMinimized());
+      if (disposed) {
+        host.dispose();
+        stopMinimized();
+      }
+    };
+    void setup().catch(() => {
+      host?.dispose();
+      stopMinimized();
+    });
+    // The native event handles minimizing immediately. Polling covers platforms which omit resize
+    // events on minimize, and recurring snapshots cover either webview finishing its startup first.
+    const timer = setInterval(() => {
+      if (disposed || publishing) return;
+      publishing = true;
+      void (async () => {
+        updateMinimized(await getCurrentWindow().isMinimized());
+        await host?.publish();
+      })()
+        .catch(() => {})
+        .finally(() => {
+          publishing = false;
+        });
+    }, 100);
+    return () => {
+      disposed = true;
+      clearInterval(timer);
+      host?.dispose();
+      stopMinimized();
+    };
+  }, [desktop, session]);
+
+  const openControls = useCallback(
+    (inspect = false) => {
+      if (desktop) void showControls(inspect).catch(() => {});
+      else setInspecting((open) => !open);
+    },
+    [desktop],
+  );
 
   useEffect(() => {
     const unlockSound = () => sounds.unlock();
@@ -183,6 +318,8 @@ export function App() {
       sounds.unlock();
       const command = commandForKey(event);
       if (!command) return;
+      if (command.type === "controls" && !desktop) return;
+      if (minimizedRef.current && command.type !== "controls" && command.type !== "inspect") return;
       event.preventDefault();
       switch (command.type) {
         case "move":
@@ -201,7 +338,10 @@ export function App() {
           newMap();
           break;
         case "inspect":
-          setInspecting((open) => !open);
+          openControls(true);
+          break;
+        case "controls":
+          openControls();
           break;
       }
     };
@@ -211,7 +351,7 @@ export function App() {
       window.removeEventListener("keydown", onKey);
       window.removeEventListener("pointerdown", unlockSound);
     };
-  }, [session, sounds, retry, newMap]);
+  }, [session, sounds, retry, newMap, desktop, openControls]);
 
   const onReady = useCallback(
     (view: GameView) => {
@@ -222,7 +362,7 @@ export function App() {
   );
 
   return (
-    <div class="shell">
+    <div class={`shell ${desktop ? "game-shell" : ""}`}>
       <GameCanvas
         session={session}
         state={state}
@@ -231,64 +371,15 @@ export function App() {
         onFps={setFps}
         onRetry={retry}
         onNewMap={newMap}
+        onShowControls={desktop ? () => openControls() : undefined}
       />
-      <Panel
-        state={state}
-        choices={choices}
-        selectedId={selectedId}
-        budget={budget}
-        credentials={credentials}
-        onConfigure={() => {
-          session.setPaused(true);
-          setConfiguring(true);
-        }}
-        fps={fps}
-        soundOn={soundOn}
-        autoRestart={autoRestart}
-        bridgeKind={bridge.kind}
-        onSelect={(id) => {
-          select(id);
-          refreshBudget();
-        }}
-        onTiming={(t: Timing) => session.setTiming(t)}
-        onSpeed={(s) => session.setSpeed(s)}
-        onPause={() => session.togglePause()}
-        onStep={() => session.stepOnce()}
-        onRetry={retry}
-        onNewMap={newMap}
-        onInspect={() => setInspecting(true)}
-        onSeed={(seed) => {
-          noteSeed(selectedId, seed);
-          session.start(seed);
-        }}
-        onSound={(on) => {
-          sounds.enabled = on;
-          setSoundOn(on);
-        }}
-        onAutoRestart={setAutoRestart}
-      />
-      {configuring && (
-        <ConnectionDialog
+      {!desktop && (
+        <ControlSurface
+          data={controls}
           bridge={bridge}
-          configured={credentials?.configured ?? false}
-          onClose={() => setConfiguring(false)}
-          onSaved={(status) => {
-            setCredentials(status);
-            // Recover a stopped authentication attempt without starting any API call automatically.
-            const current = session.state();
-            if (current.phase === "error" || current.phase === "thinking")
-              session.start(current.seed);
-            session.setPaused(true);
-            refreshBudget();
-            setConfiguring(false);
-          }}
-        />
-      )}
-      {inspecting && (
-        <InputInspector
-          history={state.history}
-          policyId={state.policyId}
-          onClose={() => setInspecting(false)}
+          send={execute}
+          inspectorOpen={inspecting}
+          onInspect={setInspecting}
         />
       )}
     </div>

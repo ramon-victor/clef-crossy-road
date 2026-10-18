@@ -56,6 +56,8 @@ No PowerShell, para abrir direto em outro jogador: `$env:CCR_PLAYER="lookahead"`
 `$env:CCR_PLAYER="clef-27b"` (sem mapa em cache) ou um id do benchmark como `clef:clef-flash:view-fx:choice:routing`,
 e `$env:CCR_SEED="1"`, antes de `.\play.cmd`.
 
+No desktop, jogo e menus abrem em janelas separadas. O botão no canto superior direito do jogo ou **F2** reabre o painel; **I** abre a inspeção nele. Fechar o painel o oculta; fechar o jogo encerra tudo. Minimizar o jogo pausa até você retomar.
+
 No app: setas ou WASD para você jogar, espaço pausa, `N` dá um passo, `R` repete o mapa, `M` abre outro. O painel mostra, a cada decisão, a ação, a probabilidade
 de cada ação, a latência, os tokens e quantos neurons do dia já foram usados.
 

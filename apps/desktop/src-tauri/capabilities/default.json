@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Capabilities of the main window. Only core defaults: the app commands (clef_run, cache_*, budget_status) are registered in lib.rs.",
-  "windows": ["main"],
+  "description": "Core events and window queries for the game and controls. Window lifecycle operations are native app commands.",
+  "windows": ["main", "controls"],
   "permissions": ["core:default"]
 }

@@ -2,23 +2,37 @@ import type { SessionState } from "../session.ts";
 
 export interface ControlsCardProps {
   state: SessionState;
+  minimized: boolean;
   onPause(): void;
   onStep(): void;
   onRetry(): void;
   onNewMap(): void;
 }
 
-export function ControlsCard({ state, onPause, onStep, onRetry, onNewMap }: ControlsCardProps) {
+export function ControlsCard({
+  state,
+  minimized,
+  onPause,
+  onStep,
+  onRetry,
+  onNewMap,
+}: ControlsCardProps) {
   return (
     <section class="controls" aria-label="Playback controls">
-      <button type="button" class="btn primary" onClick={onPause} title="Space">
+      <button
+        type="button"
+        class="btn primary"
+        onClick={onPause}
+        title="Space"
+        disabled={minimized}
+      >
         {state.paused ? "▶ Resume" : "⏸ Pause"}
       </button>
       <button
         type="button"
         class="btn"
         onClick={onStep}
-        disabled={state.human || state.timing !== "step" || !state.paused}
+        disabled={minimized || state.human || state.timing !== "step" || !state.paused}
         title="N: one decision while paused"
       >
         ⏭ Step

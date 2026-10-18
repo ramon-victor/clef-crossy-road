@@ -2,8 +2,11 @@ import { isBudgetRefusal } from "@ccr/clef";
 import { Game } from "@ccr/core";
 import type { GameView } from "@ccr/render";
 import { invoke } from "@tauri-apps/api/core";
+import { emitTo } from "@tauri-apps/api/event";
+import { getCurrentWindow, Window } from "@tauri-apps/api/window";
 import { isTauri } from "./bridge/tauri.ts";
 import type { Bridge } from "./bridge/types.ts";
+import { showControls } from "./bridge/windows.ts";
 import { CLEF_CACHED_SEEDS, CLEF_ID, type PolicyChoice } from "./policies.ts";
 
 /** The first map whose decisions the benchmark left in the cache for Clef-flash. */
@@ -66,6 +69,83 @@ function webglRenderer(): string {
 }
 
 type Report = Record<string, unknown>;
+
+async function controlsReport(action: string): Promise<Report> {
+  const id = crypto.randomUUID();
+  let stop = () => {};
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const result = new Promise<Report>((resolve, reject) => {
+    timer = setTimeout(() => reject(new Error("Controls self-test timed out")), 8000);
+    void getCurrentWindow()
+      .listen<{ id: string; report: Report }>("selftest:controls-result", ({ payload }) => {
+        if (payload.id === id) resolve(payload.report);
+      })
+      .then((unlisten) => {
+        stop = unlisten;
+        return emitTo("controls", "selftest:controls", { id, action });
+      })
+      .catch(reject);
+  });
+  try {
+    return await result;
+  } finally {
+    if (timer !== undefined) clearTimeout(timer);
+    stop();
+  }
+}
+
+async function checkWindows(ctx: Context): Promise<Report> {
+  ctx.select("human");
+  ctx.session.start(1);
+  ctx.session.setPaused(false);
+  await showControls();
+  await sleep(350);
+  const initial = await controlsReport("status");
+  const focusKeepsPlaying = !ctx.session.state().paused;
+  const settings = await controlsReport("settings");
+  const settingsPaused = ctx.session.state().paused;
+  const seed = ctx.session.state().seed;
+  await invoke("selftest_window_action", { action: "close-controls" });
+  await sleep(200);
+  const controls = await Window.getByLabel("controls");
+  const hidden = controls !== null && !(await controls.isVisible());
+  const button = document.querySelector<HTMLButtonElement>(".open-controls");
+  button?.click();
+  await sleep(250);
+  const reopened = await controlsReport("status");
+  const visible = controls !== null && (await controls.isVisible());
+  const sameSession = ctx.session.state().seed === seed && ctx.session.state().human;
+
+  ctx.session.setPaused(false);
+  await invoke("selftest_window_action", { action: "minimize" });
+  await sleep(1500);
+  const pausedOnMinimize = ctx.session.state().paused;
+  const tick = ctx.session.state().tick;
+  await sleep(300);
+  const stopped = ctx.session.state().tick === tick;
+  await invoke("selftest_window_action", { action: "restore" });
+  await sleep(250);
+  const stayedPaused = ctx.session.state().paused;
+  ctx.session.setPaused(false);
+
+  return {
+    windows: {
+      gameHasNoPanel: document.querySelector(".panel") === null,
+      initial,
+      focusKeepsPlaying,
+      settings,
+      settingsPaused,
+      hidden,
+      buttonPresent: !!button,
+      visible,
+      reopened,
+      sameSession,
+      pausedOnMinimize,
+      stopped,
+      stayedPaused,
+    },
+  };
+}
 
 /** Plays the free look-ahead, measures the frame rate and checks that the scene really rendered. */
 async function checkRendering(ctx: Context): Promise<Report> {
@@ -145,6 +225,9 @@ async function checkClefFromCache(ctx: Context): Promise<Report> {
       confidence: clef.last?.decision.confidence ?? null,
       // A manoeuvre's own steps are not model calls, so the test is that every answer came from the cache and cost nothing.
       allFromCache: clef.cacheHits > 0 && clef.neurons === 0,
+      ...(clef.decisions === 0 && clef.phase === "error"
+        ? { skipped: "Cached replay unavailable; self-test never uses the API" }
+        : {}),
     },
     budgetAfter: await ctx.bridge.budget(),
   };
@@ -222,47 +305,18 @@ async function checkInspector(ctx: Context): Promise<Report> {
   ctx.session.setSpeed(4);
   ctx.session.start(CACHED_SEED);
   const started = performance.now();
-  while (performance.now() - started < 12_000 && ctx.session.state().decisions < 1)
+  while (
+    performance.now() - started < 12_000 &&
+    ctx.session.state().decisions < 1 &&
+    ctx.session.state().phase !== "error"
+  )
     await sleep(100);
 
   const press = () =>
     window.dispatchEvent(new KeyboardEvent("keydown", { key: "i", bubbles: true }));
   press();
   await sleep(250);
-  const text = (selector: string) => document.querySelector(selector)?.textContent ?? "";
-  const opened = document.querySelector(".inspector") !== null;
-  const state = text(".inspector-pre");
-  const click = (label: string) =>
-    [...document.querySelectorAll<HTMLButtonElement>(".inspector-tabs button")]
-      .find((b) => b.textContent === label)
-      ?.click();
-  click("Question");
-  await sleep(100);
-  const question = text(".inspector-pre");
-  click("Options");
-  await sleep(100);
-  const options = text(".inspector-body");
-  press();
-  await sleep(150);
-  return {
-    inspector: {
-      opened,
-      // The route gameplay keys its state by the names of the manoeuvres (the rows are summed up in words).
-      stateHasRows: state.includes('"cross_ahead"') && state.includes('"detour_left"'),
-      stateChars: state.length,
-      questionHasRules: question.includes("chicken"),
-      optionsListMoves: [
-        "stand",
-        "no_stand",
-        "moving",
-        "still",
-        "detour_left",
-        "detour_right",
-        "wait_here",
-      ].every((m) => options.includes(m)),
-      closedAgain: document.querySelector(".inspector") === null,
-    },
-  };
+  return { inspector: await controlsReport("inspector") };
 }
 
 /**
@@ -283,6 +337,7 @@ export async function runSelfTest(ctx: Context): Promise<void> {
   try {
     for (const check of [
       checkRendering,
+      checkWindows,
       checkBudget,
       checkClefFromCache,
       checkInspector,

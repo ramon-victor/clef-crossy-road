@@ -1,5 +1,5 @@
 import { isBudgetRefusal } from "@ccr/clef";
-import type { BudgetStatus, CredentialStatus } from "./bridge/types.ts";
+import type { ControlsData } from "./controls.ts";
 import { BudgetCard } from "./panel/BudgetCard.tsx";
 import { ControlsCard } from "./panel/ControlsCard.tsx";
 import { DecisionCard } from "./panel/DecisionCard.tsx";
@@ -7,20 +7,12 @@ import { Footer } from "./panel/Footer.tsx";
 import { PlayerCard } from "./panel/PlayerCard.tsx";
 import { SetupCard } from "./panel/SetupCard.tsx";
 import { StatsCard } from "./panel/StatsCard.tsx";
-import type { PolicyChoice } from "./policies.ts";
-import type { SessionState, Timing } from "./session.ts";
+import type { Timing } from "./session.ts";
 
-export interface PanelProps {
-  state: SessionState;
-  choices: PolicyChoice[];
-  selectedId: string;
-  budget: BudgetStatus | null;
-  credentials: CredentialStatus | null;
+export interface PanelProps extends ControlsData {
+  controlError: string | null;
+  configuring: boolean;
   onConfigure(): void;
-  fps: number;
-  soundOn: boolean;
-  autoRestart: boolean;
-  bridgeKind: "tauri" | "http";
   onSelect(id: string): void;
   onTiming(timing: Timing): void;
   onSpeed(speed: number): void;
@@ -63,6 +55,7 @@ export function Panel(props: PanelProps) {
         />
         <ControlsCard
           state={state}
+          minimized={props.minimized}
           onPause={props.onPause}
           onStep={props.onStep}
           onRetry={props.onRetry}
@@ -74,6 +67,7 @@ export function Panel(props: PanelProps) {
           state={state}
           autoRestart={props.autoRestart}
           credentials={props.credentials}
+          configuring={props.configuring}
           onConfigure={props.onConfigure}
           onTiming={props.onTiming}
           onSpeed={props.onSpeed}
@@ -81,6 +75,16 @@ export function Panel(props: PanelProps) {
           onAutoRestart={props.onAutoRestart}
         />
         {state.error && <ErrorCard error={state.error} />}
+        {props.controlError && (
+          <p class="connection-error" role="alert">
+            {props.controlError}
+          </p>
+        )}
+        {props.minimized && (
+          <p class="hint" role="status">
+            Game minimized. Restore it before resuming.
+          </p>
+        )}
         {!state.human && <DecisionCard state={state} onInspect={props.onInspect} />}
         <StatsCard state={state} />
       </div>

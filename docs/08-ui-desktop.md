@@ -1,12 +1,18 @@
 # 08 · App desktop (Tauri v2) e painel da IA
 
-> **Status:** implementado e verificado (Fase 3) · **Verificado em:** 2026-10-15 · **ADRs:** [0007](adr/0007-desktop-tauri-token-no-rust.md), [0008](adr/0008-orcamento-diario-no-free-tier.md)
+> **Status:** implementado e verificado (Fase 3) · **Verificado em:** 2026-10-18 · **ADRs:** [0007](adr/0007-desktop-tauri-token-no-rust.md), [0008](adr/0008-orcamento-diario-no-free-tier.md)
 
 ## O que existe
 
-Uma janela Tauri v2 (WebView2) de 1180×800 (mínimo 980×660), com a cena Three.js à esquerda e o painel da IA sempre aberto à direita.
-O painel usa `clamp(264px, 24vw, 280px)`: 264 px na janela mínima e 280 px na janela padrão. Os modelos, texturas, fonte e sons
-são os do Expo-Crossy-Road, baixados localmente por `node scripts/fetch-assets.mjs` (ficam fora do git).
+Duas janelas Tauri v2 independentes e redimensionáveis: **Clef Crossy Road** contém o jogo e
+**Clef Crossy Road · Controls** contém menus, configurações e decisões da IA. O tamanho inicial desejado
+é 900×800 para o jogo (mínimo 640×480) e 360×800 para o painel (mínimo 320×480). A abertura considera
+a área útil do monitor e a escala: reduz os tamanhos para caber, posiciona lado a lado quando possível
+e permite sobreposição em telas estreitas. O jogo recebe o foco inicial.
+
+No navegador de desenvolvimento, o layout continua integrado: cena à esquerda e painel à direita,
+com `clamp(264px, 24vw, 280px)`. Os modelos, texturas, fonte e sons são os do Expo-Crossy-Road,
+baixados localmente por `node scripts/fetch-assets.mjs` (ficam fora do git).
 
 Para desenvolver no navegador: `pnpm install` e `pnpm run dev` na raiz, depois abrir
 **http://localhost:5173**. O comando prepara os assets e sobe o Vite na porta fixa 5173; Ctrl+C encerra.
@@ -20,22 +26,16 @@ e executa `tauri dev`, que inicia seu próprio Vite e compila/abre a janela com 
 Requer Rust, ferramentas de compilação C++ do Windows e WebView2. Não executar junto com `pnpm run dev`:
 os dois usam a porta 5173. Ctrl+C encerra o processo.
 
-```
-┌───────────────────────────────────────┬──────────────────────┐
-│ 86                                    │ QUEM JOGA [select] ⓘ │
-│ rows · best 86 · seed 824413          │ cache / aviso gasto  │
-│                                       │ [Pausa] [Passo]      │
-│       ┌───┐                           │ [Retry] [Novo mapa]  │
-│       │ → │  balão sobre a galinha    │ › Setup: Step/1×/seed│
-│       └─┬─┘  (ação + probabilidade)   │ ÚLTIMA DECISÃO       │
-│         🐔                            │ ação · cached        │
-│   (rio, toras, lírios, trilho,        │  ↑ ████████░░ 88%    │
-│    semáforo, caminhões)               │  ← ▌            2%   │
-│                                       │  ...                 │
-│                                       │ Rows · Decisões ·    │
-│                                       │ Latência · Tokens    │
-│                                       │ Neurons hoje / teto  │
-└───────────────────────────────────────┴──────────────────────┘
+```text
+┌─ Clef Crossy Road ───────────────┐   ┌─ Controls ─────────────────┐
+│ 86                         [☷]  │   │ QUEM JOGA [select] ⓘ       │
+│ rows · best 86 · seed 824413    │   │ [Pausa] [Passo]            │
+│                                │   │ [Retry] [Novo mapa]        │
+│           [ → 88% ]            │   │ › Setup                   │
+│               🐔               │   │ ÚLTIMA DECISÃO            │
+│   rio, toras, trilho, carros    │   │ probabilidades · métricas │
+│                                │   │ neurons · som · FPS       │
+└────────────────────────────────┘   └───────────────────────────┘
 ```
 
 | Recurso | Como funciona |
@@ -44,7 +44,7 @@ os dois usam a porta 5173. Ctrl+C encerra o processo.
 | Tempo | Em **Setup**: **Step**, em que o mundo espera o modelo, como no benchmark; **Real-time**, em que o mundo corre a 60 Hz e a ação vale quando a resposta chega. O modo atual aparece no resumo mesmo com Setup fechado |
 | Controles | Pausa (espaço), passo-a-passo (N, só em Step e pausado), retry da mesma seed (R) e mapa novo (M) ficam sempre no topo. **Setup**, inicialmente fechado, reúne tempo, velocidade 0,5× a 4×, seed editável e auto-restart; seu resumo mostra modo, velocidade e seed atuais |
 | Teclado | Setas ou WASD. Apertar mais rápido que o salto, ou segurar a tecla, deixa a jogada **na fila** (1 vaga, a última vence) e ela começa quando o salto pousa, depois de o pouso ser checado: não dá para atravessar água nem rua encadeando saltos ([04](04-game-core.md), D9) |
-| **O que o modelo leu** | Tecla **I** (ou o botão "What it read" no cartão da decisão) abre uma janela sobre o jogo com o pedido da decisão **exatamente como foi enviado**: **State** (o mundo, uma linha por linha), **Question** (as instruções), **Options** (as opções e o texto de cada uma) e **Answer** (probabilidades, tokens, neurons, latência, cache). Mostra a política, o que ela vê e como é perguntada, volta nas últimas 14 decisões e copia o pedido em JSON. Esc fecha |
+| **O que o modelo leu** | Tecla **I** (ou o botão "What it read" no cartão da decisão) abre o inspector na janela do painel (no navegador, sobre o jogo) com o pedido da decisão **exatamente como foi enviado**: **State** (o mundo, uma linha por linha), **Question** (as instruções), **Options** (as opções e o texto de cada uma) e **Answer** (probabilidades, tokens, neurons, latência, cache). Mostra a política, o que ela vê e como é perguntada, volta nas últimas 14 decisões e copia o pedido em JSON. Esc fecha |
 | Controlador | Os passos que o código dá dentro de uma manobra aparecem com a etiqueta **controller** e a nota do que ele faz ("cross_ahead: waiting for the cell (water) to clear, 3/15", "detour_right: hop 2, right (2 to go)"); no terminal, `-> wait (controller)  | ...`. O modelo escolhe a manobra; o controlador espera a casa ficar pisável e dá o salto, ou **caminha o desvio** (volta uma linha se precisar, desliza, avança), e devolve a decisão ao modelo se não há rota, se a galinha não pode ficar onde está, se uma tora a leva à borda ou depois de 3 s. A janela **What it read** (tecla I) mostra o último pedido ao modelo e quantos passos do controlador vieram depois |
 | Painel | Ação, tags **cached/controller**, barras com as `probabilities` **reais** quando fornecidas, histórico das últimas 14 jogadas em uma faixa e seis métricas em grade 3×2. **Details**, inicialmente fechado, mostra a nota completa e `confidence` rotulado como não documentado. O botão **What it read (I)** continua disponível durante passos do controlador se o histórico contém um pedido ao modelo |
 | Informações ⓘ | Botão ao lado do jogador: título completo do jogo, descrição do jogador selecionado, custo estimado, cache, participação do controlador e atalhos. É um popover nativo, aberto por clique, Enter ou Espaço; Esc, clique externo e o botão × fecham. O aviso de gasto continua visível junto ao seletor |
@@ -56,6 +56,32 @@ os dois usam a porta 5173. Ctrl+C encerra o processo.
 | Replays gratuitos | Para a jogabilidade atual, Clef-flash tem as seeds **6–8** em cache; Clef 27B não tem mapa em cache. **"Novo mapa" percorre as seeds em cache em ordem** antes de partir para um mapa aleatório (que gasta neurons) |
 | **Logs no terminal** | `.\play.cmd` abre o app **esperando por ele** no mesmo terminal e mostra, a cada decisão, o que foi mandado ao modelo e o que ele respondeu. `CCR_LOG=full` (o padrão do `play.cmd`): no início de cada partida a pergunta e as opções (uma vez, e de novo se mudarem), e por decisão o cabeçalho (`decision N, linha, cached, tokens, neurons, ms`), o **STATE exatamente como enviado** e a resposta com as probabilidades; no fim, a causa da morte, as linhas, as decisões e os neurons da partida. `CCR_LOG=brief`: uma linha por decisão. `CCR_LOG=off` (ou sem a variável, ao abrir o `.exe` direto): nada. As mesmas linhas vão para `runs\logs\play.log` (recriado a cada abertura; bom para colar numa conversa). Só ASCII, para o terminal não quebrar a codificação |
 | Atalhos de abertura | `CCR_PLAYER`, `CCR_SEED` e `CCR_LOG` (lidos pelo Rust; no navegador de desenvolvimento, `?player=...&seed=...&log=...`, e o log vai para o `console` do navegador) escolhem o jogador, o mapa e o log iniciais. `CCR_PLAYER` aceita `human`, `clef-flash` (e os antigos `clef` e `clef-words`), `clef-27b`, `lookahead`, `always-forward`, `random` ou um id de política do benchmark. `play.cmd` abre o modo normal com o log completo; `play-clef.cmd` abre o Clef-flash na seed 6 (do cache, sem custo). Um id que não existe (por exemplo os antigos `clef-flash-json`) cai no look-ahead gratuito |
+
+## Janelas independentes no desktop
+
+- O botão discreto **Open controls** no canto superior direito do jogo (36×36 px), ou **F2**,
+  mostra e foca o painel. **I** mostra o painel com o inspector aberto. O jogo mantém placar,
+  balão de ação, resultado e botões Retry/New map. As janelas mantêm bordas nativas e podem
+  ser movidas ou redimensionadas separadamente, sem ajuste automático posterior de posição.
+- Fechar o jogo encerra o aplicativo inteiro. Fechar o painel apenas o oculta: a sessão continua
+  e o mesmo webview é reutilizado ao reabrir. Diálogos são fechados ao ocultar e credenciais
+  digitadas são descartadas; valores salvos nunca preenchem o formulário.
+- Minimizar o jogo pausa a sessão e cancela passos pendentes. Restaurar não retoma: é preciso
+  Espaço ou Resume. O painel desabilita Resume e Step enquanto o jogo está minimizado.
+  Trocar o foco para o painel ou ocultá-lo não pausa a partida. Uma resposta em voo pode
+  concluir e é contabilizada; a pausa impede o início de outro turno. O auto-restart gratuito
+  também espera a retomada.
+- Só o webview do jogo cria `Session`, políticas, `ClefClient`, cena, áudio e log. O painel
+  recebe dados serializáveis por eventos direcionados do Tauri, a até 10 Hz, e envia comandos
+  confirmados pelo jogo. Reabrir ou recarregar o painel pede uma sincronização, sem reiniciar
+  a partida nem repetir comandos. As descrições dos jogadores têm disponibilidade explícita,
+  sem transportar as funções das políticas. Nenhuma credencial entra nesses eventos.
+- Configure só abre depois de o jogo confirmar a pausa. O formulário envia substituições
+  diretamente ao Rust; depois o jogo relê status e orçamento e continua pausado. Som é
+  produzido apenas pelo jogo, após o primeiro gesto nessa janela.
+- Inspector, formulário e popover ficam limitados à janela do painel, com rolagem e foco
+  acessível. Setas e atalhos de movimento pertencem à janela do jogo. O autoteste nativo
+  consulta o DOM do inspector no painel e recusa chamadas sem cache, mesmo num checkout novo.
 
 ## Organização compacta e acessibilidade
 
@@ -72,7 +98,7 @@ botões, expansões ou o inspector. Clicar ou focar o canvas devolve o teclado a
 foco para Close ao abrir e o devolve ao elemento de origem ao fechar.
 
 Setup e Details usam expansões nativas e permanecem abertos durante as atualizações da partida.
-O inspector usa a mesma variável de largura do painel; com viewport equivalente a zoom e menos de
+No navegador, o inspector usa a mesma variável de largura do painel; com viewport equivalente a zoom e menos de
 700 px de largura, ocupa a área disponível. O popover também fica limitado à viewport, com rolagem
 própria se necessário.
 
@@ -80,6 +106,35 @@ A organização segue [divulgação progressiva (NN/g)](https://www.nngroup.com/
 [ajuda contextual sem ocultar informação necessária (NN/g)](https://www.nngroup.com/articles/tooltip-guidelines/),
 [expansões acessíveis (W3C)](https://www.w3.org/WAI/ARIA/apg/patterns/disclosure/) e
 [alvos de interação (WCAG 2.2)](https://www.w3.org/WAI/WCAG22/Understanding/target-size-minimum.html).
+
+## Verificação das duas janelas (2026-10-18)
+
+- Typecheck e lint da raiz passaram; **563 testes TypeScript** (105 do app) e **35 testes Rust**
+  passaram. A sincronização cobre painel carregado antes/depois do jogo, reconexão, confirmação
+  da pausa, comandos sem repetição e remoção de assinaturas. A pausa cobre resposta em voo
+  contabilizada e cancelamento de passo pendente.
+- Autotestes dos binários nativos de debug e de release no Linux (GTK/WebKitGTK, X11): jogo sem painel, painel
+  sem canvas, foco no painel sem pausar, configuração após pausa confirmada, fechar/ocultar e
+  reabrir pelo botão sem reiniciar, formulário limpo, pausa na minimização, ticks parados e
+  restauração ainda pausada. Inspector aberto por I no painel e fechado; teclas humanas e
+  tecla segurada passaram. Orçamento antes/depois: **0 neurons**; raiz temporária isolada,
+  sem credenciais nem cache. O conteúdo de uma decisão real no inspector e o replay do Clef
+  foram explicitamente pulados por ausência do cache; nenhuma chamada externa foi enviada.
+- Fechamento pelo gerenciador de janelas: F2 reabriu o mesmo painel; fechar o jogo encerrou
+  ambos os webviews e o processo terminou com código 0. O build de release
+  `tauri build --no-bundle` também passou no Linux; o executável de release passou
+  no autoteste sem o servidor Vite em execução.
+- Chromium: layout integrado e atalhos preservados; painel separado em 360×800, 320×480,
+  225×500 (viewport reduzida para simular escala elevada) e 640×800. Inspector com conteúdo
+  de fixture declarado como tal, abas operáveis, corpo rolável e ausência de rolagem horizontal
+  da página. Formulário limpo ao ocultar/reabrir; falha na confirmação de pausa não abre
+  configuração. Nenhum erro JavaScript e nenhuma chamada de modelo.
+- O teste de falha na leitura de credenciais também revelou um travamento anterior no Linux
+  quando `.env` é um diretório: agora o Rust lê o arquivo uma vez antes de analisar, usando
+  o fallback de ambiente se o armazenamento estiver indisponível. O teste existente de falha
+  de gravação voltou a terminar e preserva o par anterior.
+- Capturas e relatório nativo em `reports/windows/` (gerados, fora do git). Esta rodada não
+  revalida o Windows/WebView2; as verificações anteriores nessa plataforma estão abaixo.
 
 ## Verificação do painel compacto (2026-10-15, Chromium)
 
@@ -129,6 +184,8 @@ apps/desktop/
 │  ├─ episode-stats.ts       # latência, tokens, neurons e acertos de cache de uma partida
 │  ├─ keymap.ts, seed.ts, launch.ts  # teclas, validação de seeds e opções de abertura: funções puras, testadas
 │  ├─ policies.ts            # a lista de jogadores (Clef-flash, Clef 27B, custom) e as seeds que já estão no cache
+│  ├─ ControlsApp.tsx, ControlSurface.tsx, controls.ts # painel nativo, apresentação compartilhada e comandos tipados
+│  ├─ bridge/windows.ts      # comandos confirmados e snapshots entre os dois webviews
 │  ├─ Panel.tsx, panel/      # o painel: um componente por cartão (jogador, controles, decisão, estatísticas, orçamento)
 │  ├─ bridge/                # tauri.ts (IPC), http.ts (só dev no navegador), clef.ts (Transport/Cache/Budget)
 │  └─ selftest.ts            # com CCR_SELFTEST=1: mede FPS, confere pixels e a recusa de orçamento, e sai
@@ -143,7 +200,7 @@ As credenciais **salvas nunca voltam ao webview**: o formulário só envia novos
 `credential_status` devolve `{ configured }`. Para jogar, a UI chama `clef_run`, e o Rust injeta as credenciais,
 aplica o teto do dia (constante) e grava o ledger. A ponte Vite oferece o mesmo fluxo no desenvolvimento.
 O log do terminal passa pelo comando `console_log`, que só imprime texto (o token não passa por ele) e é limitado em tamanho.
-O `ClefClient` roda no webview com um `Transport` que atravessa a ponte, mais cache e orçamento também atrás de IPC.
+O `ClefClient` roda somente no webview do jogo com um `Transport` que atravessa a ponte, mais cache e orçamento também atrás de IPC.
 O Rust só aceita `clef`, `clef-flash` e `clef-omni`, sem URL arbitrária.
 
 ## Verificação (2026-10-14, WebView2 real, RTX 3070)

@@ -13,6 +13,7 @@ export interface SetupCardProps {
   state: SessionState;
   autoRestart: boolean;
   credentials: CredentialStatus | null;
+  configuring: boolean;
   onConfigure(): void;
   onTiming(timing: Timing): void;
   onSpeed(speed: number): void;
@@ -24,6 +25,7 @@ export function SetupCard({
   state,
   autoRestart,
   credentials,
+  configuring,
   onConfigure,
   onTiming,
   onSpeed,
@@ -124,8 +126,8 @@ export function SetupCard({
                   : "Not configured"}
             </p>
           </div>
-          <button type="button" class="btn small" onClick={onConfigure}>
-            Configure
+          <button type="button" class="btn small" onClick={onConfigure} disabled={configuring}>
+            {configuring ? "Pausing…" : "Configure"}
           </button>
         </div>
       </div>

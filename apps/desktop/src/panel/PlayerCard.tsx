@@ -1,4 +1,5 @@
-import { type ChoiceKind, CLEF_27B_ID, CLEF_ID, type PolicyChoice } from "../policies.ts";
+import type { PlayerOption } from "../controls.ts";
+import { type ChoiceKind, CLEF_27B_ID, CLEF_ID } from "../policies.ts";
 
 const GROUPS: readonly { kind: ChoiceKind; label: string }[] = [
   { kind: "model", label: "Models (Workers AI)" },
@@ -7,7 +8,7 @@ const GROUPS: readonly { kind: ChoiceKind; label: string }[] = [
 ];
 
 export interface PlayerCardProps {
-  choices: readonly PolicyChoice[];
+  choices: readonly PlayerOption[];
   selectedId: string;
   bridgeKind: "tauri" | "http";
   onSelect(id: string): void;
@@ -44,7 +45,7 @@ export function PlayerCard({ choices, selectedId, bridgeKind, onSelect }: Player
               {choices
                 .filter((c) => c.kind === kind)
                 .map((c) => (
-                  <option value={c.id} key={c.id} disabled={kind === "model" && !c.factory}>
+                  <option value={c.id} key={c.id} disabled={!c.available}>
                     {c.label}
                   </option>
                 ))}
@@ -116,6 +117,12 @@ export function PlayerCard({ choices, selectedId, bridgeKind, onSelect }: Player
           <dd>Retry / new map</dd>
           <dt>I</dt>
           <dd>What the model read</dd>
+          {bridgeKind === "tauri" && (
+            <>
+              <dt>F2</dt>
+              <dd>Open controls window</dd>
+            </>
+          )}
         </dl>
         <p class="hint">Click the game to use its shortcuts. Esc closes this information.</p>
         <p class="hint">{bridgeKind === "tauri" ? "Desktop · Tauri" : "Browser development"}</p>

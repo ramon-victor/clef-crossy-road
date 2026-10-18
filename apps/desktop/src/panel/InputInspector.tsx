@@ -155,12 +155,13 @@ export function InputInspector({ history, policyId, onClose }: InputInspectorPro
         <div>
           <div class="inspector-title">What the model read</div>
           {facts && (
-            <div class="inspector-sub">
+            // biome-ignore lint/a11y/noNoninteractiveTabindex: Scrollable model details need keyboard access in narrow windows.
+            <section class="inspector-sub" aria-label="Model input details" tabIndex={0}>
               <code>{facts.id}</code>
               <br />
               sees {facts.sees}; question: {facts.style}
               {facts.executor && "; the model picks the manoeuvre, a controller picks the moment"}
-            </div>
+            </section>
           )}
         </div>
         <div class="inspector-actions">

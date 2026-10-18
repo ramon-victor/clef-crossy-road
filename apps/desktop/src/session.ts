@@ -187,6 +187,7 @@ export class Session {
 
   setPaused(paused: boolean): void {
     this.paused = paused;
+    if (paused) this.singleStep = false;
     this.emit();
   }
 
