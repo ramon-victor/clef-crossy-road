@@ -46,39 +46,26 @@ function data(): ControlsData {
     bridgeKind: "tauri",
     minimized: false,
     theaterOpen: true,
+    inspectVersion: 0,
     compassOn: true,
     pace: "relaxed",
   };
 }
 
 describe("detached control surface", () => {
-  it("routes conversation, compass and pace controls to the owner", () => {
+  it("keeps decisions out of controls and routes pace changes to the owner", () => {
     const send = vi.fn<SendControl>(async () => {});
     const view = render(
       <LanguageProvider initial={{ preference: "en", detected: "en" }}>
-        <ControlSurface
-          data={data()}
-          bridge={{} as Bridge}
-          send={send}
-          inspectorOpen={false}
-          onInspect={vi.fn()}
-        />
+        <ControlSurface data={data()} bridge={{} as Bridge} send={send} onInspect={vi.fn()} />
       </LanguageProvider>,
     );
     const setup = view.container.querySelector<HTMLDetailsElement>("details.setup");
     if (setup) setup.open = true;
     fireEvent.click(view.getByRole("button", { name: "Slow", exact: true }));
-    fireEvent.click(
-      view.container.querySelector<HTMLButtonElement>(".theater-tog") as HTMLButtonElement,
-    );
-    fireEvent.click(
-      view.container.querySelector<HTMLButtonElement>(".theater-close") as HTMLButtonElement,
-    );
-    expect(send.mock.calls.map(([command]) => command)).toEqual([
-      { type: "pace", pace: "slow" },
-      { type: "compass", enabled: false },
-      { type: "theater", enabled: false },
-    ]);
+    expect(view.container.querySelector(".theater")).toBeNull();
+    expect(view.container.querySelector(".inspector")).toBeNull();
+    expect(send.mock.calls.map(([command]) => command)).toEqual([{ type: "pace", pace: "slow" }]);
   });
 
   it("does not reopen credential input after hiding while pause confirmation is pending", async () => {
@@ -95,7 +82,6 @@ describe("detached control surface", () => {
           data={snapshot}
           bridge={{} as Bridge}
           send={send}
-          inspectorOpen={false}
           onInspect={inspect}
           hiddenVersion={hiddenVersion}
         />

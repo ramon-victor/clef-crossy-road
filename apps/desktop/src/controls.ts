@@ -22,6 +22,7 @@ export interface ControlsData {
   bridgeKind: "tauri" | "http";
   minimized: boolean;
   theaterOpen: boolean;
+  inspectVersion: number;
   compassOn: boolean;
   pace: Pace | null;
 }
@@ -56,6 +57,7 @@ export type ControlCommand =
   | { type: "sound"; enabled: boolean }
   | { type: "autoRestart"; enabled: boolean }
   | { type: "theater"; enabled: boolean }
+  | { type: "inspect" }
   | { type: "compass"; enabled: boolean }
   | { type: "pace"; pace: Pace }
   | { type: "credentialsSaved" };

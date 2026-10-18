@@ -4,11 +4,17 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "preact/hooks"
 import { Sounds } from "./audio.ts";
 import { createBridge, createClefClient } from "./bridge/clef.ts";
 import type { BudgetStatus, CredentialStatus } from "./bridge/types.ts";
-import { hostControls, showControls, WINDOW_EVENTS } from "./bridge/windows.ts";
+import {
+  hostControls,
+  setDecisionsVisible,
+  showControls,
+  WINDOW_EVENTS,
+} from "./bridge/windows.ts";
 import { ControlSurface } from "./ControlSurface.tsx";
 import { createConsoleLog, terminalWriter } from "./console-log.ts";
 import { type ControlCommand, type ControlsData, playerOption } from "./controls.ts";
 import { GameCanvas } from "./GameCanvas.tsx";
+import { useI18n } from "./i18n/provider.tsx";
 import { commandForKey } from "./keymap.ts";
 import { readLaunchOptions } from "./launch.ts";
 import {
@@ -38,6 +44,7 @@ const DEFAULT_PLAYER = "clef-flash";
 const RESTART_DELAY_MS = 2200;
 
 export function App({ desktop = false }: { desktop?: boolean }) {
+  const { t } = useI18n();
   const bridge = useMemo(createBridge, []);
   const client = useMemo(() => createClefClient(bridge), [bridge]);
   const standardChoices = useMemo(() => buildPolicyChoices(client), [client]);
@@ -69,7 +76,11 @@ export function App({ desktop = false }: { desktop?: boolean }) {
   const [fps, setFps] = useState(60);
   const [soundOn, setSoundOn] = useState(true);
   const [autoRestart, setAutoRestart] = useState(true);
-  const [inspecting, setInspecting] = useState(false);
+  const [inspectVersion, setInspectVersion] = useState(0);
+  const [launchReady, setLaunchReady] = useState(false);
+  const [windowsReady, setWindowsReady] = useState(false);
+  const [decisionsVisible, setDecisionsShown] = useState(false);
+  const [windowFailed, setWindowFailed] = useState(false);
   // What the person chose for the Theater, or null if they never did (then a model player opens it).
   const [theaterChoice, setTheaterChoice] = useState<boolean | null>(() => readFlag("theater"));
   const [compassChoice, setCompassChoice] = useState<boolean | null>(() => readFlag("compass"));
@@ -148,6 +159,7 @@ export function App({ desktop = false }: { desktop?: boolean }) {
       const seed = options.seed ?? freeSeedRange(wanted)?.min;
       if (seed !== undefined) noteSeed(wanted.id, seed);
       session.setPolicy(wanted.factory, seed);
+      setLaunchReady(true);
     });
     return () => {
       cancelled = true;
@@ -180,10 +192,29 @@ export function App({ desktop = false }: { desktop?: boolean }) {
   const mayAutoRestart = autoRestart && selected !== undefined && !selected.usesApi && !state.human;
   const over = !state.alive || state.stalled;
   const showTheater = openByDefault(theaterChoice, selected?.kind);
-  const setTheater = useCallback((on: boolean) => {
-    setTheaterChoice(on);
-    writeFlag("theater", on);
-  }, []);
+  const setTheater = useCallback(
+    (on: boolean) => {
+      setTheaterChoice(on);
+      writeFlag("theater", on);
+      // Browser hiding unmounts the conversation, so its consumed request must not replay on reopen.
+      if (!desktop && !on) setInspectVersion(0);
+    },
+    [desktop],
+  );
+  const openDecisions = useCallback(
+    async (inspect = false) => {
+      setTheater(true);
+      if (inspect) setInspectVersion((n) => n + 1);
+      if (desktop) await setDecisionsVisible(true, true);
+      setWindowFailed(false);
+    },
+    [desktop, setTheater],
+  );
+  useEffect(() => {
+    if (!desktop || !launchReady || !windowsReady) return;
+    void setDecisionsVisible(showTheater).catch(() => setWindowFailed(true));
+  }, [desktop, launchReady, windowsReady, showTheater]);
+  const theaterVisible = desktop ? decisionsVisible : showTheater;
   const showCompass = openByDefault(compassChoice, selected?.kind);
   const setCompass = useCallback((on: boolean) => {
     setCompassChoice(on);
@@ -242,7 +273,14 @@ export function App({ desktop = false }: { desktop?: boolean }) {
           setSoundOn(command.enabled);
           break;
         case "theater":
-          setTheater(command.enabled);
+          if (command.enabled) await openDecisions();
+          else {
+            setTheater(false);
+            if (desktop) await setDecisionsVisible(false);
+          }
+          break;
+        case "inspect":
+          await openDecisions(true);
           break;
         case "compass":
           setCompass(command.enabled);
@@ -265,6 +303,7 @@ export function App({ desktop = false }: { desktop?: boolean }) {
       }
     },
     [
+      desktop,
       select,
       refreshBudget,
       session,
@@ -275,6 +314,7 @@ export function App({ desktop = false }: { desktop?: boolean }) {
       sounds,
       bridge,
       setTheater,
+      openDecisions,
       setCompass,
       setPace,
     ],
@@ -291,7 +331,8 @@ export function App({ desktop = false }: { desktop?: boolean }) {
     autoRestart,
     bridgeKind: bridge.kind,
     minimized,
-    theaterOpen: showTheater,
+    theaterOpen: theaterVisible,
+    inspectVersion,
     compassOn: showCompass,
     pace: selected?.kind === "model" ? pace : null,
   };
@@ -303,7 +344,7 @@ export function App({ desktop = false }: { desktop?: boolean }) {
     let disposed = false;
     let publishing = false;
     let host: Awaited<ReturnType<typeof hostControls>> | null = null;
-    let stopMinimized = () => {};
+    const stops: (() => void)[] = [];
     const updateMinimized = (value: boolean) => {
       if (minimizedRef.current === value) return;
       minimizedRef.current = value;
@@ -320,18 +361,27 @@ export function App({ desktop = false }: { desktop?: boolean }) {
           minimized: minimizedRef.current,
         }),
       );
-      stopMinimized = await current.listen<boolean>(WINDOW_EVENTS.minimized, ({ payload }) =>
-        updateMinimized(payload),
+      stops.push(
+        await current.listen<boolean>(WINDOW_EVENTS.minimized, ({ payload }) =>
+          updateMinimized(payload),
+        ),
+      );
+      stops.push(await current.listen(WINDOW_EVENTS.decisionsClosed, () => setTheater(false)));
+      stops.push(
+        await current.listen<boolean>(WINDOW_EVENTS.decisionsVisible, ({ payload }) =>
+          setDecisionsShown(payload),
+        ),
       );
       updateMinimized(await current.isMinimized());
+      if (!disposed) setWindowsReady(true);
       if (disposed) {
         host.dispose();
-        stopMinimized();
+        for (const stop of stops) stop();
       }
     };
     void setup().catch(() => {
       host?.dispose();
-      stopMinimized();
+      for (const stop of stops) stop();
     });
     // The native event handles minimizing immediately. Polling covers platforms which omit resize
     // events on minimize, and recurring snapshots cover either webview finishing its startup first.
@@ -351,17 +401,21 @@ export function App({ desktop = false }: { desktop?: boolean }) {
       disposed = true;
       clearInterval(timer);
       host?.dispose();
-      stopMinimized();
+      for (const stop of stops) stop();
     };
-  }, [desktop, session]);
+  }, [desktop, session, setTheater]);
 
-  const openControls = useCallback(
-    (inspect = false) => {
-      if (desktop) void showControls(inspect).catch(() => {});
-      else setInspecting((open) => !open);
-    },
-    [desktop],
-  );
+  const openControls = useCallback(() => {
+    if (desktop)
+      void showControls()
+        .then(() => setWindowFailed(false))
+        .catch(() => setWindowFailed(true));
+  }, [desktop]);
+  const toggleDecisions = useCallback(() => {
+    void execute({ type: "theater", enabled: !theaterVisible })
+      .then(() => setWindowFailed(false))
+      .catch(() => setWindowFailed(true));
+  }, [theaterVisible, execute]);
 
   useEffect(() => {
     const unlockSound = () => sounds.unlock();
@@ -374,6 +428,20 @@ export function App({ desktop = false }: { desktop?: boolean }) {
           event.preventDefault();
           openControls();
         }
+        return;
+      }
+      if (
+        (command.type === "theater" || command.type === "inspect") &&
+        !(
+          event.target instanceof Element &&
+          event.target.closest(
+            'input, select, textarea, [contenteditable], dialog, [role="dialog"]',
+          )
+        )
+      ) {
+        event.preventDefault();
+        if (command.type === "inspect") void openDecisions(true).catch(() => setWindowFailed(true));
+        else toggleDecisions();
         return;
       }
       const target = event.target;
@@ -403,13 +471,7 @@ export function App({ desktop = false }: { desktop?: boolean }) {
         case "newMap":
           newMap();
           break;
-        case "inspect":
-          openControls(true);
-          break;
-        case "theater":
-          setTheater(!showTheater);
-          if (desktop && !showTheater) void showControls().catch(() => {});
-          break;
+
         case "compass":
           setCompass(!showCompass);
           break;
@@ -428,8 +490,8 @@ export function App({ desktop = false }: { desktop?: boolean }) {
     newMap,
     desktop,
     openControls,
-    setTheater,
-    showTheater,
+    openDecisions,
+    toggleDecisions,
     setCompass,
     showCompass,
   ]);
@@ -454,14 +516,18 @@ export function App({ desktop = false }: { desktop?: boolean }) {
         onNewMap={newMap}
         compass={{
           on: showCompass && selected?.kind === "model",
-          conversationOpen: showTheater,
-          onConversation: () => {
-            setTheater(true);
-            if (desktop) void showControls().catch(() => {});
-          },
+          conversationOpen: theaterVisible,
+          onConversation: () => void openDecisions().catch(() => setWindowFailed(true)),
         }}
-        onShowControls={desktop ? () => openControls() : undefined}
+        onShowControls={desktop ? openControls : undefined}
+        onToggleDecisions={desktop ? toggleDecisions : undefined}
+        decisionsVisible={theaterVisible}
       />
+      {windowFailed && (
+        <p class="window-error" role="alert">
+          {t("windows.unreachable")}
+        </p>
+      )}
       {!desktop && showTheater && (
         <Theater
           state={state}
@@ -469,7 +535,9 @@ export function App({ desktop = false }: { desktop?: boolean }) {
           compassOn={showCompass}
           onCompass={() => setCompass(!showCompass)}
           onClose={() => setTheater(false)}
-          onInspect={() => setInspecting(true)}
+          inspectVersion={inspectVersion}
+          onPause={() => void execute({ type: "pause" })}
+          minimized={minimized}
         />
       )}
       {!desktop && (
@@ -477,8 +545,7 @@ export function App({ desktop = false }: { desktop?: boolean }) {
           data={controls}
           bridge={bridge}
           send={execute}
-          inspectorOpen={inspecting}
-          onInspect={setInspecting}
+          onInspect={() => void openDecisions(true)}
         />
       )}
     </div>

@@ -4,15 +4,13 @@ import type { ControlCommand, ControlsData, SendControl } from "./controls.ts";
 import { useI18n } from "./i18n/provider.tsx";
 import { Panel } from "./Panel.tsx";
 import { ConnectionDialog } from "./panel/ConnectionDialog.tsx";
-import { InputInspector } from "./panel/InputInspector.tsx";
-import { Theater } from "./theater/Theater.tsx";
 
 interface Props {
   data: ControlsData;
   bridge: Bridge;
   send: SendControl;
-  inspectorOpen: boolean;
-  onInspect(open: boolean): void;
+  onInspect(): void;
+  externalError?: string | null;
   /** Changes when the native panel is hidden, so write-only forms are discarded. */
   hiddenVersion?: number;
 }
@@ -22,9 +20,9 @@ export function ControlSurface({
   data,
   bridge,
   send,
-  inspectorOpen,
   onInspect,
   hiddenVersion,
+  externalError,
 }: Props) {
   const { t } = useI18n();
   const [configuring, setConfiguring] = useState(false);
@@ -39,8 +37,7 @@ export function ControlSurface({
     hidden.current = hiddenVersion;
     setConfiguring(false);
     setError(null);
-    onInspect(false);
-  }, [hiddenVersion, onInspect]);
+  }, [hiddenVersion]);
 
   const dispatch = (command: ControlCommand) => {
     setError(null);
@@ -51,7 +48,7 @@ export function ControlSurface({
     <>
       <Panel
         {...data}
-        controlError={error ? t(error) : null}
+        controlError={error ? t(error) : (externalError ?? null)}
         configuring={opening}
         onConfigure={() => {
           if (opening) return;
@@ -73,21 +70,9 @@ export function ControlSurface({
         onStep={() => dispatch({ type: "step" })}
         onRetry={() => dispatch({ type: "retry" })}
         onNewMap={() => dispatch({ type: "newMap" })}
-        onInspect={() => onInspect(true)}
+        onInspect={onInspect}
         onTheater={() => dispatch({ type: "theater", enabled: true })}
         onPace={(pace) => dispatch({ type: "pace", pace })}
-        conversation={
-          data.bridgeKind === "tauri" && data.theaterOpen ? (
-            <Theater
-              state={data.state}
-              kind={data.choices.find((choice) => choice.id === data.selectedId)?.kind}
-              compassOn={data.compassOn}
-              onCompass={() => dispatch({ type: "compass", enabled: !data.compassOn })}
-              onClose={() => dispatch({ type: "theater", enabled: false })}
-              onInspect={() => onInspect(true)}
-            />
-          ) : undefined
-        }
         onSeed={(seed) => dispatch({ type: "seed", seed })}
         onSound={(enabled) => dispatch({ type: "sound", enabled })}
         onAutoRestart={(enabled) => dispatch({ type: "autoRestart", enabled })}
@@ -101,13 +86,6 @@ export function ControlSurface({
             setConfiguring(false);
             dispatch({ type: "credentialsSaved" });
           }}
-        />
-      )}
-      {inspectorOpen && (
-        <InputInspector
-          history={data.state.history}
-          policyId={data.state.policyId}
-          onClose={() => onInspect(false)}
         />
       )}
     </>

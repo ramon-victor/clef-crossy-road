@@ -62,6 +62,7 @@ pub fn run() {
             launch::selftest_enabled,
             launch::report_selftest,
             windows::show_controls,
+            windows::set_decisions_visible,
             launch::selftest_window_action
         ])
         .setup(|app| {

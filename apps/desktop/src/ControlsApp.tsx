@@ -15,9 +15,9 @@ export function ControlsApp() {
   const [connection, setConnection] = useState<Awaited<ReturnType<typeof connectControls>> | null>(
     null,
   );
-  const [inspecting, setInspecting] = useState(false);
   const [hiddenVersion, setHiddenVersion] = useState(0);
   const [failed, setFailed] = useState(false);
+  const [syncFailed, setSyncFailed] = useState(false);
   const latest = useRef({ data, connection });
   latest.current = { data, connection };
 
@@ -26,23 +26,24 @@ export function ControlsApp() {
     const stops: (() => void)[] = [];
     const setup = async () => {
       const current = getCurrentWindow();
-      const connection = await connectControls(setData);
+      const connection = await connectControls((next) => {
+        setData(next);
+        setSyncFailed(false);
+      });
       stops.push(connection.dispose);
       stops.push(
-        await current.listen<boolean>(WINDOW_EVENTS.shown, ({ payload }) => {
-          if (payload) setInspecting(true);
-          void connection.sync().catch(() => setFailed(true));
+        await current.listen(WINDOW_EVENTS.shown, () => {
+          void connection.sync().catch(() => setSyncFailed(true));
         }),
       );
       stops.push(
         await current.listen(WINDOW_EVENTS.hidden, () => {
-          setInspecting(false);
           setHiddenVersion((n) => n + 1);
         }),
       );
       stops.push(
         await current.onFocusChanged(({ payload }) => {
-          if (payload) void connection.sync().catch(() => setFailed(true));
+          if (payload) void connection.sync().catch(() => setSyncFailed(true));
         }),
       );
       stops.push(await runControlsSelfTest());
@@ -52,11 +53,11 @@ export function ControlsApp() {
       }
       setConnection(connection);
       // The game's recurring publication also covers either window loading first.
-      void connection.sync().catch(() => setFailed(true));
+      void connection.sync().catch(() => setSyncFailed(true));
     };
     void setup().catch(() => {
       for (const stop of stops) stop();
-      if (!disposed) setFailed(true);
+      if (!disposed) setSyncFailed(true);
     });
     return () => {
       disposed = true;
@@ -70,17 +71,17 @@ export function ControlsApp() {
       if (!command) return;
       if (
         event.target instanceof Element &&
-        event.target.closest(
-          'input, select, textarea, button, summary, dialog, a[href], [contenteditable], [role="dialog"]',
-        )
+        event.target.closest('input, select, textarea, dialog, [contenteditable], [role="dialog"]')
       )
         return;
       const { data, connection } = latest.current;
       if (command.type === "inspect") {
         event.preventDefault();
-        setInspecting((open) => !open);
+        setFailed(false);
+        void connection?.send({ type: "inspect" }).catch(() => setFailed(true));
       } else if (data && connection && (command.type === "theater" || command.type === "compass")) {
         event.preventDefault();
+        setFailed(false);
         void connection
           .send({
             type: command.type,
@@ -99,14 +100,20 @@ export function ControlsApp() {
         <ControlSurface
           data={data}
           bridge={tauriBridge}
-          send={connection.send}
-          inspectorOpen={inspecting}
-          onInspect={setInspecting}
+          send={(command) => {
+            setFailed(false);
+            return connection.send(command);
+          }}
+          onInspect={() => {
+            setFailed(false);
+            void connection.send({ type: "inspect" }).catch(() => setFailed(true));
+          }}
           hiddenVersion={hiddenVersion}
+          externalError={failed || syncFailed ? t("windows.unreachable") : null}
         />
       ) : (
         <p class="connection-status" role="status">
-          {failed ? t("windows.reconnect") : t("windows.connecting")}
+          {failed || syncFailed ? t("windows.reconnect") : t("windows.connecting")}
         </p>
       )}
     </div>

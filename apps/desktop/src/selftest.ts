@@ -73,19 +73,22 @@ function webglRenderer(): string {
 
 type Report = Record<string, unknown>;
 
-async function controlsReport(action: string): Promise<Report> {
+async function controlsReport(
+  action: string,
+  target: "controls" | "decisions" = "controls",
+): Promise<Report> {
   const id = crypto.randomUUID();
   let stop = () => {};
   let timer: ReturnType<typeof setTimeout> | undefined;
   const result = new Promise<Report>((resolve, reject) => {
     timer = setTimeout(() => reject(new Error("Controls self-test timed out")), 8000);
     void getCurrentWindow()
-      .listen<{ id: string; report: Report }>("selftest:controls-result", ({ payload }) => {
+      .listen<{ id: string; report: Report }>(`selftest:${target}-result`, ({ payload }) => {
         if (payload.id === id) resolve(payload.report);
       })
       .then((unlisten) => {
         stop = unlisten;
-        return emitTo("controls", "selftest:controls", { id, action });
+        return emitTo(target, `selftest:${target}`, { id, action });
       })
       .catch(reject);
   });
@@ -119,6 +122,45 @@ async function checkWindows(ctx: Context): Promise<Report> {
   const visible = controls !== null && (await controls.isVisible());
   const sameSession = ctx.session.state().seed === seed && ctx.session.state().human;
 
+  const decisions = await Window.getByLabel("decisions");
+  const decisionsButton = document.querySelector<HTMLButtonElement>(".toggle-decisions");
+  ctx.session.setPaused(false);
+  const gameBeforeDecisions = ctx.session.game;
+  if (decisions && (await decisions.isVisible())) {
+    decisionsButton?.click();
+    await sleep(250);
+  }
+  decisionsButton?.click();
+  await sleep(300);
+  const decisionsOpened = decisions !== null && (await decisions.isVisible());
+  const openingKeepsPlaying = !ctx.session.state().paused;
+  const controlsStillVisible = controls !== null && (await controls.isVisible());
+  await invoke("selftest_window_action", { action: "close-decisions" });
+  await sleep(250);
+  const decisionsClosed = decisions !== null && !(await decisions.isVisible());
+  decisionsButton?.click();
+  await sleep(300);
+  const decisionsReopened = decisions !== null && (await decisions.isVisible());
+  await invoke("selftest_window_action", { action: "minimize-decisions" });
+  await sleep(300);
+  const minimizedButtonOff = decisionsButton?.getAttribute("aria-pressed") === "false";
+  decisionsButton?.click();
+  await sleep(300);
+  const decisionsRestored = decisions !== null && !(await decisions.isMinimized());
+  const pause = await controlsReport("pause", "decisions");
+  const manualPause = pause.paused === true && ctx.session.state().paused;
+  await controlsReport("pause", "decisions");
+  const manualResume = !ctx.session.state().paused;
+  const sameGameAfterDecisions = gameBeforeDecisions === ctx.session.game;
+  const menuBounds = button?.getBoundingClientRect();
+  const decisionsBounds = decisionsButton?.getBoundingClientRect();
+  const decisionsBelowControls =
+    !!menuBounds &&
+    !!decisionsBounds &&
+    decisionsBounds.top >= menuBounds.bottom &&
+    decisionsBounds.width === menuBounds.width &&
+    decisionsBounds.height === menuBounds.height;
+
   const originalLanguage = document.documentElement.lang;
   const originalGame = ctx.session.game;
   let language: Report;
@@ -128,7 +170,10 @@ async function checkWindows(ctx: Context): Promise<Report> {
     language = {
       controls: changed.language,
       game: document.documentElement.lang,
-      synchronized: changed.language === document.documentElement.lang,
+      decisions: (await controlsReport("status", "decisions")).language,
+      synchronized:
+        changed.language === document.documentElement.lang &&
+        changed.language === (await controlsReport("status", "decisions")).language,
       sameGame: ctx.session.game === originalGame && ctx.session.state().seed === seed,
     };
   } finally {
@@ -161,6 +206,19 @@ async function checkWindows(ctx: Context): Promise<Report> {
       visible,
       reopened,
       sameSession,
+      decisions: {
+        decisionsOpened,
+        openingKeepsPlaying,
+        controlsStillVisible,
+        decisionsClosed,
+        decisionsReopened,
+        minimizedButtonOff,
+        decisionsRestored,
+        manualPause,
+        manualResume,
+        sameGameAfterDecisions,
+        decisionsBelowControls,
+      },
       language,
       pausedOnMinimize,
       stopped,
@@ -338,7 +396,7 @@ async function checkInspector(ctx: Context): Promise<Report> {
     window.dispatchEvent(new KeyboardEvent("keydown", { key: "i", bubbles: true }));
   press();
   await sleep(250);
-  return { inspector: await controlsReport("inspector") };
+  return { inspector: await controlsReport("inspector", "decisions") };
 }
 
 /** What the person had chosen, to put back after a check that presses the keys that save a choice. */
@@ -390,7 +448,7 @@ async function checkTheater(ctx: Context): Promise<Report> {
   const compassByDefault = count(".compass-anchor") === 1;
   if (!compassByDefault) await press("c");
   const conversation = async () =>
-    (await controlsReport("status")).conversation as {
+    (await controlsReport("status", "decisions")).conversation as {
       shown: boolean;
       bubbles: number;
       questions: number;
@@ -409,6 +467,11 @@ async function checkTheater(ctx: Context): Promise<Report> {
   const lit = count(".compass .cb.win");
   const caption = document.querySelector(".cap-main")?.textContent ?? "";
   const { bubbles, picks, questions } = await conversation();
+  await invoke("selftest_window_action", { action: "small-decisions" });
+  await sleep(250);
+  const smallWindow = await controlsReport("status", "decisions");
+  await invoke("selftest_window_action", { action: "restore-decisions-size" });
+  await sleep(250);
   await press("c");
   const compassHiddenWithC = count(".compass-anchor") === 0;
   await press("c");
@@ -433,6 +496,7 @@ async function checkTheater(ctx: Context): Promise<Report> {
         shownAgain: compassShownAgain,
       },
       conversation: {
+        smallWindow,
         bubbles,
         questions,
         picks,
@@ -458,6 +522,7 @@ export async function runSelfTest(ctx: Context): Promise<void> {
   }
   if (!enabled) return;
 
+  const preferences = savePreferences();
   const report: Report = { startedAt: new Date().toISOString() };
   // Full speed, as before the pace existed: the checks wait on the game, not on a person reading.
   ctx.setPace("live", false);
@@ -476,6 +541,8 @@ export async function runSelfTest(ctx: Context): Promise<void> {
     }
   } catch (error) {
     report.error = error instanceof Error ? error.message : String(error);
+  } finally {
+    restorePreferences(preferences);
   }
   report.finishedAt = new Date().toISOString();
   await invoke("report_selftest", { report });

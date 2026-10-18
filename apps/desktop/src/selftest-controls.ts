@@ -13,43 +13,8 @@ export async function runControlsSelfTest(): Promise<() => void> {
     "selftest:controls",
     ({ payload }) => {
       void (async () => {
-        const text = (selector: string) => document.querySelector(selector)?.textContent ?? "";
         let report: Record<string, unknown> = {};
-        if (payload.action === "inspector") {
-          const opened = document.querySelector(".inspector") !== null;
-          const state = text(".inspector-pre");
-          const click = (tab: string) =>
-            document.querySelector<HTMLButtonElement>(`[data-tab="${tab}"]`)?.click();
-          click("question");
-          await sleep(100);
-          const question = text(".inspector-pre");
-          click("options");
-          await sleep(100);
-          const options = text(".inspector-body");
-          const close = document.querySelector<HTMLButtonElement>(
-            '[data-action="close-inspector"]',
-          );
-          close?.click();
-          await sleep(100);
-          report = {
-            opened,
-            inControlsWindow: getCurrentWindow().label === "controls",
-            stateHasRows: state.includes('"cross_ahead"') && state.includes('"detour_left"'),
-            stateChars: state.length,
-            questionHasRules: question.includes("chicken"),
-            optionsListMoves: [
-              "stand",
-              "no_stand",
-              "moving",
-              "still",
-              "detour_left",
-              "detour_right",
-              "wait_here",
-            ].every((m) => options.includes(m)),
-            closedAgain: document.querySelector(".inspector") === null,
-            ...(state ? {} : { contentSkipped: "No model request in the local cache" }),
-          };
-        } else if (payload.action === "language" || payload.action === "restore-language") {
+        if (payload.action === "language" || payload.action === "restore-language") {
           const select = document.querySelector<HTMLSelectElement>("#language");
           if (!select) throw new Error("Language selector is unavailable");
           if (payload.action === "language") {
@@ -92,12 +57,7 @@ export async function runControlsSelfTest(): Promise<() => void> {
             player: document.querySelector<HTMLSelectElement>("#player")?.value,
             paused:
               document.querySelector(".controls button")?.getAttribute("aria-pressed") === "true",
-            conversation: {
-              shown: document.querySelector(".theater") !== null,
-              bubbles: document.querySelectorAll(".theater .bub.model").length,
-              questions: document.querySelectorAll(".theater .turn:not(.old) .qa-row").length,
-              picks: document.querySelectorAll(".theater .turn:not(.old) .pill.win").length,
-            },
+            conversationAbsent: document.querySelector(".theater") === null,
             language: document.documentElement.lang,
           };
         }

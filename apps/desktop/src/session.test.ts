@@ -451,7 +451,7 @@ describe("Session: following the question the model is reading", () => {
     const before = told;
 
     s.frame(FRAME);
-    expect(s.state().asking).toEqual({ input: INPUT, since: 1234 });
+    expect(s.state().asking).toEqual({ input: INPUT, since: 1234, row: s.game.heroRow });
     expect(told).toBeGreaterThan(before); // no waiting for a poll
 
     await policy.answer(MODEL_ANSWER);

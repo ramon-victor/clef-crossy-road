@@ -1,12 +1,13 @@
 import { ACTION_GLYPH } from "../format.ts";
+import { actionLabel } from "../i18n/presentation.ts";
 import { type Translator, translator } from "../i18n/translate.ts";
-import type { SessionState, Turn } from "../session.ts";
+import type { DecisionLog, SessionState, Turn } from "../session.ts";
 import { controllerSays, controllerStep, foldWaits, waitsForGap } from "./controller.ts";
 import { decisionLabel, type SceneView, sceneOf } from "./labels.ts";
 import { asText, type QuestionView, questionsOf } from "./view.ts";
 
 /** How many rounds of the conversation are kept on screen. */
-export const TURNS_SHOWN = 5;
+export const TURNS_SHOWN = 7;
 
 export interface TurnFacts {
   model: string;
@@ -20,6 +21,13 @@ export interface TurnFacts {
 export interface TurnView {
   /** The number of the decision, to tell one round from the next. */
   index: number;
+  row: number;
+  log: DecisionLog | null;
+  controller: boolean;
+  pending: boolean;
+  firstStep: string | null;
+  /** Original records of this round only, including its model answer. */
+  history: readonly DecisionLog[];
   scene: SceneView | null;
   questions: QuestionView[];
   /** The model has not answered yet. */
@@ -38,16 +46,22 @@ export interface TurnView {
   summary: string[];
 }
 
+function stepText(log: DecisionLog, translation: Translator): string {
+  const action = actionLabel(log.action, translation);
+  const detail = controllerSays(log.decision, translation);
+  return detail ? `${action} · ${detail}` : action;
+}
+
 function stepsOf(turn: Turn, translation: Translator): TurnView["steps"] {
   return foldWaits(
     turn.steps,
     (step) => controllerStep(step.decision)?.kind === "wait",
     (step) => ({
       glyph: ACTION_GLYPH[step.action],
-      note: controllerSays(step.decision, translation) ?? "",
+      note: stepText(step, translation),
       count: 1,
     }),
-    (item, step) => ({ ...item, note: controllerSays(step.decision, translation) ?? item.note }),
+    (item, step) => ({ ...item, note: stepText(step, translation) }),
   );
 }
 
@@ -59,6 +73,12 @@ function answered(turn: Turn, translation: Translator): TurnView | null {
   const move = decisionLabel(asText(log.decision.extra?.maneuver), log.action, translation);
   return {
     index: log.index,
+    row: log.row,
+    log,
+    controller: controllerStep(log.decision) !== null,
+    pending: false,
+    firstStep: stepText(log, translation),
+    history: [log, ...turn.steps],
     scene: sceneOf(input.state, translation),
     questions,
     reading: false,
@@ -91,6 +111,12 @@ function reading(state: SessionState, translation: Translator): TurnView | null 
   if (!asking) return null;
   return {
     index: state.decisions,
+    row: asking.row ?? state.last?.row ?? state.score,
+    log: null,
+    controller: false,
+    pending: false,
+    firstStep: null,
+    history: [],
     scene: sceneOf(asking.input.state, translation),
     questions: questionsOf(asking.input, null, translation),
     reading: true,
@@ -125,7 +151,9 @@ export function buildFeed(
     live && turn.model.index >= live.index ? [] : (answered(turn, translation) ?? []),
   );
   if (live) rounds.push(live);
-  return rounds
-    .slice(-TURNS_SHOWN)
-    .map((round, i, shown) => ({ ...round, old: i < shown.length - 1 }));
+  return rounds.slice(-TURNS_SHOWN).map((round, i, shown) => ({
+    ...round,
+    old: i < shown.length - 1,
+    pending: state.phase === "reading" && round.index === state.last?.index,
+  }));
 }

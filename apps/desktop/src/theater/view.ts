@@ -84,7 +84,7 @@ export function questionsOf(
         label: words.label,
         short: words.short,
         rule: ruleOf.get(option) ?? "",
-        p: answer ? (answer.probabilities[option] ?? 0) : null,
+        p: answer ? (answer.probabilities[option] ?? null) : null,
         chosen: answer?.choice === option,
       };
     });

@@ -3,7 +3,7 @@
 use std::fs;
 
 use serde_json::{json, Value};
-use tauri::{AppHandle, Manager, State};
+use tauri::{AppHandle, LogicalSize, Manager, State};
 
 use crate::{
     error::{CommandError, CommandResult},
@@ -30,7 +30,7 @@ pub fn selftest_requested() -> bool {
     std::env::var("CCR_SELFTEST").is_ok()
 }
 
-/// Native lifecycle actions used only by the dual-window self-test.
+/// Native lifecycle actions used only by the three-window self-test.
 #[tauri::command]
 pub fn selftest_window_action(app: AppHandle, action: &str) -> CommandResult<()> {
     if !selftest_requested() {
@@ -44,6 +44,26 @@ pub fn selftest_window_action(app: AppHandle, action: &str) -> CommandResult<()>
             app.get_webview_window("controls")
                 .ok_or_else(|| CommandError::new("controls missing"))?
                 .close()?;
+        }
+        "close-decisions" => {
+            app.get_webview_window("decisions")
+                .ok_or_else(|| CommandError::new("decisions missing"))?
+                .close()?;
+        }
+        "minimize-decisions" => {
+            app.get_webview_window("decisions")
+                .ok_or_else(|| CommandError::new("decisions missing"))?
+                .minimize()?;
+        }
+        "small-decisions" | "restore-decisions-size" => {
+            let (width, height) = if action == "small-decisions" {
+                (400.0, 480.0)
+            } else {
+                (520.0, 800.0)
+            };
+            app.get_webview_window("decisions")
+                .ok_or_else(|| CommandError::new("decisions missing"))?
+                .set_size(LogicalSize::new(width, height))?;
         }
         "minimize" => game.minimize()?,
         "restore" => {

@@ -1,6 +1,6 @@
 # Desktop app
 
-How to run Clef Crossy Road in the browser or its two Tauri windows, who can play, what the panel shows, and the launch options.
+How to run Clef Crossy Road in the browser or its three Tauri windows, who can play, what the panel shows, and the launch options.
 
 ## Run it
 
@@ -13,9 +13,9 @@ How to run Clef Crossy Road in the browser or its two Tauri windows, who can pla
 
 **Platform.** The desktop app needs Node 24+, pnpm 12.14.0 and Rust with the [Tauri prerequisites](https://v2.tauri.app/start/prerequisites/) for the platform (MSVC C++ build tools and WebView2 on Windows). Desktop launch has been verified on Windows, and backend tests have also run on Linux. CI checks TypeScript and the web build on Windows, Linux and macOS; this does not establish native UI support on every platform. The launchers are Windows scripts.
 
-Desktop uses two independent native windows: the game starts at 900×800 (minimum 640×480), controls at 360×800 (minimum 320×480). Each can be moved and resized separately. Browser development keeps the game and panel together.
+Desktop uses three independent native windows: the game starts at 900×800 (minimum 640×480), controls at 360×800 (minimum 320×480), and decisions at 520×800 (minimum 400×480). Each can be moved and resized separately; initial placement stays inside the monitor work area, overlapping when necessary. Browser development keeps the game and panel together.
 
-Closing controls hides it and discards open dialogs and unsaved credential input; the game continues. **Open controls** or **F2** reopens it, and **I** opens its inspector. Closing the game exits both windows. Minimizing the game pauses it; restoring requires an explicit resume. Changing focus or hiding controls does not pause play. Only the game window owns a session and model client; reopening controls never starts another game.
+Closing controls hides it and discards open dialogs and unsaved credential input; the game continues. **Open controls** or **F2** reopens it. The matching conversation button immediately below the game's controls button shows or hides the decisions window (**T**); **I** shows its latest answered request as inline technical details. Closing decisions hides it and remembers that preference, keeping its current reading position. Closing the game exits all windows. Minimizing the game pauses it; restoring requires an explicit resume. Changing focus, hiding either auxiliary window or reading the conversation does not pause play. Decisions has its own **Pause/Resume** control. Only the game window owns a session and model client; reopening controls never starts another game.
 
 ## pnpm setup
 
@@ -51,7 +51,7 @@ The ceiling is 10,000 neurons per UTC day and is enforced by the Rust process be
 
 ## Keys
 
-Keys are ignored while a field, button, expander or dialog has focus; click the game to give them back. Combinations with Ctrl, Alt or Meta are never game input.
+Movement and timing keys are ignored while a field, button, expander or dialog has focus; click the game to give them back. Window and inspection shortcuts remain available from focused buttons. Combinations with Ctrl, Alt or Meta are never game input.
 
 | Key | Action |
 |---|---|
@@ -61,9 +61,9 @@ Keys are ignored while a field, button, expander or dialog has focus; click the 
 | R | Repeat the same map |
 | M | New map |
 | F2 | Show and focus native controls |
-| I | Open the input inspector in native controls; toggle it in browser development |
+| I | Show the latest answered request in the conversation’s inline technical details |
 | C | Toggle the compass around the chicken |
-| T | Toggle the model conversation |
+| T | Show or hide the independent decisions window (conversation column in browser development) |
 | Esc | Close the inspector, the info popover or the Cloudflare dialog |
 
 ## The panel
@@ -76,14 +76,14 @@ Keys are ignored while a field, button, expander or dialog has focus; click the 
 | Counters | Rows, Decisions, Latency, Tokens, Invalid, Cached. |
 | Budget | Neurons used today (UTC) against the limit, a meter, the cost of the current game, and a notice once the limit is reached. A cached decision costs 0. |
 | Footer | Sound toggle and frames per second. |
-| **What it read** (I) | The request exactly as the policy sent it: **State**, **Question**, **Options** and **Answer** (probabilities, tokens, neurons, latency, cache). It goes back 14 decisions and copies the request as JSON. After controller steps it still shows the last model request. |
+| **What it read** (I) | The request exactly as the policy sent it: **State**, **Question**, **Options** and **Answer** (probabilities, tokens, neurons, latency, cache). Open a round’s **Technical details** to inspect or copy its exact request as JSON. Details include only that round’s controller steps. After controller steps it still shows the last model request. |
 | End of game | Cause of death, rows crossed, best of the session, **Retry same map** and **New map**. An AI player that goes 60 decisions without a new row is stopped and stops spending. |
 
 **Auto-restart** starts a new map 2.2 s after a game ends, but only for free reference players. A player that calls the model never restarts by itself, so a forgotten window cannot use up the day's budget.
 
-The compass marks the model's maneuver separately from the controller's actual hop or wait. A countdown on the chicken shows how soon a moving platform carries it past the world edge. The conversation shows every question, answer and following controller step; in desktop it lives inside controls. Reading pace delays applying a model answer only in step timing, where the world is already paused; controller steps are never held for reading.
+The compass marks the model's maneuver separately from the controller's actual hop or wait. A countdown on the chicken shows how soon a moving platform carries it past the world edge. The conversation lives in its own desktop window. Each round separates the game’s description, the model’s answers and chosen maneuver, and the controller’s actual actions. A held answer is marked as waiting for reading time before its action is sent to the game. Earlier rounds are expandable; alternative answers and their probabilities are collapsed by default. Percentages describe answers to questions, not survival chances. The session retains six model consultations plus the current request. Scrolling up, expanding an old round or opening technical details freezes a bounded reading snapshot; **Back to live** resumes following new rounds. The original request remains available while reading even after it leaves the live buffer. Starting a new game clears the snapshot. The window opens for a model player unless a saved preference says otherwise; automatic opening keeps focus on the game. Reading pace delays applying a model answer only in step timing, where the world is already paused; controller steps are never held for reading.
 
-**Setup → Language** selects English, Brazilian Portuguese, Spanish, French, German, Japanese or Simplified Chinese. Automatic selection follows the system/browser, with English fallback. Changes reach both windows without restarting the session. Prompts, inspector JSON, CLI and logs stay in English. See [internationalization.md](internationalization.md).
+**Setup → Language** selects English, Brazilian Portuguese, Spanish, French, German, Japanese or Simplified Chinese. Automatic selection follows the system/browser, with English fallback. Changes reach all three windows without restarting the session. Prompts, inspector JSON, CLI and logs stay in English. See [internationalization.md](internationalization.md).
 
 ## Launch options
 
@@ -99,7 +99,7 @@ The compass marks the model's maneuver separately from the controller's actual h
 
 ## Self-test
 
-`CCR_SELFTEST=1` makes the desktop app measure FPS and check rendering, keyboard, controls lifecycle, the inspector, budget refusal and the cached Clef pipeline, write `runs/selftest.json` and exit. Native self-tests are cache-only: Rust refuses cache misses without sending a request, even when credentials are configured.
+`CCR_SELFTEST=1` makes the desktop app measure FPS and check rendering, keyboard, controls and decisions lifecycle, the inline inspector, budget refusal and the cached Clef pipeline, write `runs/selftest.json` and exit. Native self-tests are cache-only: Rust refuses cache misses without sending a request, even when credentials are configured.
 
 ## Open questions
 

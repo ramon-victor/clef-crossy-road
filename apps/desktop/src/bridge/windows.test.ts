@@ -13,6 +13,7 @@ vi.mock("@tauri-apps/api/window", () => ({
   getCurrentWindow: () => {
     const label = bus.label;
     return {
+      label,
       listen: async (event: string, handler: (event: { payload: unknown }) => void) => {
         const key = `${label}:${event}`;
         const listeners = bus.listeners.get(key) ?? new Set();
@@ -45,6 +46,7 @@ function fixture(): ControlsData {
     bridgeKind: "tauri",
     minimized: false,
     theaterOpen: false,
+    inspectVersion: 0,
     compassOn: false,
     pace: null,
   };
@@ -57,6 +59,38 @@ afterEach(() => {
 });
 
 describe("desktop controls synchronization", () => {
+  it("serves controls and decisions together and acknowledges each sender independently", async () => {
+    const execute = vi.fn(async (command) => {
+      if (command.type === "inspect") throw new Error("Cannot inspect");
+    });
+    bus.label = "main";
+    const host = await hostControls(execute, fixture);
+    bus.label = "controls";
+    const controlsState = vi.fn();
+    const controls = await connectControls(controlsState);
+    bus.label = "decisions";
+    const decisionsState = vi.fn();
+    const decisions = await connectControls(decisionsState);
+    await Promise.all([controls.sync(), decisions.sync()]);
+    expect(controlsState).toHaveBeenCalledTimes(2);
+    expect(decisionsState).toHaveBeenCalledTimes(2);
+    await Promise.all([
+      controls.send({ type: "pace", pace: "slow" }),
+      expect(decisions.send({ type: "inspect" })).rejects.toThrow(),
+    ]);
+    expect(execute.mock.calls.map(([command]) => command)).toEqual([
+      { type: "pace", pace: "slow" },
+      { type: "inspect" },
+    ]);
+    controls.dispose();
+    await decisions.sync();
+    expect(controlsState).toHaveBeenCalledTimes(4);
+    expect(decisionsState).toHaveBeenCalledTimes(5);
+    decisions.dispose();
+    host.dispose();
+    expect([...bus.listeners.values()].every((listeners) => listeners.size === 0)).toBe(true);
+  });
+
   it("keeps the real elapsed reading time after reloading the panel's clock", () => {
     const source = fixture();
     source.state.asking = { since: 8900, input: { model: "clef-flash", state: {}, questions: {} } };

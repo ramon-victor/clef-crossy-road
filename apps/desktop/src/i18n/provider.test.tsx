@@ -71,6 +71,7 @@ function renderPanel(source: LanguageEnvironment) {
     onNewMap: vi.fn(),
     onInspect: vi.fn(),
     theaterOpen: false,
+    inspectVersion: 0,
     onTheater: vi.fn(),
     pace: "relaxed" as const,
     onPace: vi.fn(),
@@ -87,7 +88,7 @@ function renderPanel(source: LanguageEnvironment) {
 }
 
 describe("language changes in the app", () => {
-  it("synchronizes both window providers without saving twice or changing the session", async () => {
+  it("synchronizes all three window providers without saving twice or changing the session", async () => {
     const listeners = new Set<(preference: LanguagePreference) => void>();
     const source: LanguageEnvironment = {
       ...sources(),
@@ -119,11 +120,15 @@ describe("language changes in the app", () => {
         <LanguageProvider initial={{ preference: "system", detected: "pt-BR" }} source={source}>
           <WindowLabel name="controls" />
         </LanguageProvider>
+        <LanguageProvider initial={{ preference: "system", detected: "pt-BR" }} source={source}>
+          <WindowLabel name="decisions" />
+        </LanguageProvider>
       </>,
     );
     fireEvent.click(view.getByTestId("controls"));
     await waitFor(() => expect(view.getByTestId("game").textContent).toBe("ja"));
     expect(view.getByTestId("controls").textContent).toBe("ja");
+    expect(view.getByTestId("decisions").textContent).toBe("ja");
     expect(source.save).toHaveBeenCalledOnce();
     expect(session.state()).toEqual(before);
     act(() => {

@@ -15,10 +15,16 @@ export const WINDOW_EVENTS = {
   shown: "controls:shown",
   hidden: "controls:hidden",
   minimized: "game:minimized",
+  decisionsShown: "decisions:shown",
+  decisionsClosed: "decisions:closed",
+  decisionsVisible: "decisions:visible",
 } as const;
+
+export type AuxiliaryWindow = "controls" | "decisions";
 
 interface Request {
   id: string;
+  sender: AuxiliaryWindow;
   command: ControlCommand | { type: "sync" };
 }
 
@@ -32,17 +38,27 @@ interface RemoteSnapshot {
   timeOrigin: number;
 }
 
-export const showControls = (inspect = false): Promise<void> =>
-  invoke("show_controls", { inspect });
+export const showControls = (): Promise<void> => invoke("show_controls");
+
+export const setDecisionsVisible = (visible: boolean, focus = false): Promise<void> =>
+  invoke("set_decisions_visible", { visible, focus });
 
 /** Register before publishing; a late/reloaded panel can always request a fresh snapshot. */
 export async function hostControls(execute: SendControl, snapshot: () => ControlsData) {
-  const publish = () =>
-    emitTo("controls", WINDOW_EVENTS.state, {
+  const publish = () => {
+    const payload = {
       data: snapshot(),
       timeOrigin: performance.timeOrigin,
-    } satisfies RemoteSnapshot);
+    } satisfies RemoteSnapshot;
+    // One unavailable presentation must not block replies to the other.
+    return Promise.allSettled(
+      (["controls", "decisions"] as const).map((target) =>
+        emitTo(target, WINDOW_EVENTS.state, payload),
+      ),
+    );
+  };
   const stop = await getCurrentWindow().listen<Request>(WINDOW_EVENTS.request, ({ payload }) => {
+    if (payload.sender !== "controls" && payload.sender !== "decisions") return;
     void (async () => {
       let ok = true;
       try {
@@ -51,7 +67,7 @@ export async function hostControls(execute: SendControl, snapshot: () => Control
         ok = false;
       }
       await publish();
-      await emitTo("controls", WINDOW_EVENTS.reply, { id: payload.id, ok } satisfies Reply);
+      await emitTo(payload.sender, WINDOW_EVENTS.reply, { id: payload.id, ok } satisfies Reply);
     })().catch(() => {});
   });
   return { publish, dispose: stop };
@@ -59,6 +75,9 @@ export async function hostControls(execute: SendControl, snapshot: () => Control
 
 /** No commands are retried: retrying a map or a single step would change the game twice. */
 export async function connectControls(onState: (data: ControlsData) => void) {
+  const label = getCurrentWindow().label;
+  if (label !== "controls" && label !== "decisions") throw new Error("Unknown auxiliary window");
+  const sender: AuxiliaryWindow = label;
   const pending = new Map<string, { finish(ok: boolean): void }>();
   const instance = crypto.randomUUID();
   let sequence = 0;
@@ -92,8 +111,8 @@ export async function connectControls(onState: (data: ControlsData) => void) {
         else reject(new Error("Game did not acknowledge the command"));
       };
       pending.set(id, { finish });
-      void emitTo("main", WINDOW_EVENTS.request, { id, command } satisfies Request).catch(() =>
-        finish(false),
+      void emitTo("main", WINDOW_EVENTS.request, { id, sender, command } satisfies Request).catch(
+        () => finish(false),
       );
     });
   };

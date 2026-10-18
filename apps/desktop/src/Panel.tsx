@@ -1,4 +1,3 @@
-import type { ComponentChildren } from "preact";
 import type { ErrorInfo } from "./bridge/errors.ts";
 import type { ControlsData } from "./controls.ts";
 import { useI18n } from "./i18n/provider.tsx";
@@ -16,7 +15,6 @@ import type { Pace } from "./theater/preference.ts";
 export interface PanelProps extends ControlsData {
   controlError: string | null;
   configuring: boolean;
-  conversation?: ComponentChildren;
   onConfigure(): void;
   onSelect(id: string): void;
   onTiming(timing: Timing): void;
@@ -80,7 +78,6 @@ export function Panel(props: PanelProps) {
           onSeed={props.onSeed}
           onAutoRestart={props.onAutoRestart}
         />
-        {props.conversation}
         {props.controlError && (
           <p class="connection-error" role="alert">
             {props.controlError}
@@ -98,6 +95,7 @@ export function Panel(props: PanelProps) {
           <DecisionCard
             state={state}
             theaterOpen={props.theaterOpen}
+            detached={props.bridgeKind === "tauri"}
             onInspect={props.onInspect}
             onTheater={props.onTheater}
           />

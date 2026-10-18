@@ -104,12 +104,17 @@ function AnswerTab({ log }: { log: DecisionLog }) {
           value: decision.inputTokens === undefined ? "?" : number(decision.inputTokens),
         })}{" "}
         ·{" "}
-        {t("inspect.neurons", {
-          value: decision.neurons ?? 0,
-          minimumFractionDigits: 2,
-          maximumFractionDigits: 2,
-        })}{" "}
-        · {ms(decision.latencyMs)}
+        {decision.neurons === undefined && !decision.cached
+          ? t("theater.unavailable")
+          : t("inspect.neurons", {
+              value: decision.cached ? 0 : (decision.neurons ?? 0),
+              minimumFractionDigits: 2,
+              maximumFractionDigits: 2,
+            })}{" "}
+        ·{" "}
+        {decision.cached
+          ? t("theater.originalLatency", { time: ms(decision.latencyMs) })
+          : ms(decision.latencyMs)}
       </p>
       {decision.confidence !== undefined && (
         <p class="hint">
@@ -130,12 +135,10 @@ export function InputInspector({ history, policyId, onClose }: InputInspectorPro
   const closeRef = useRef<HTMLButtonElement>(null);
   const copyRequest = useRef(0);
   const copyTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-  const [picked, setPicked] = useState<number | null>(null);
   const [tab, setTab] = useState<Tab>("state");
   const [copyStatus, setCopyStatus] = useState<"idle" | "copied" | "error">("idle");
   const facts = policyFacts(policyId);
-  const asked = history.filter((entry) => entry.decision.sent);
-  const log = asked.find((entry) => entry.index === picked) ?? asked[asked.length - 1];
+  const log = history.find((entry) => entry.decision.sent);
   const sent = log?.decision.sent;
   const controllerSince = log
     ? history.filter((entry) => entry.index > log.index && entry.decision.source === "executor")
@@ -171,14 +174,13 @@ export function InputInspector({ history, policyId, onClose }: InputInspectorPro
   };
 
   return (
-    <div class="inspector" role="dialog" aria-label={t("inspect.title")}>
+    <section class="inspector" aria-label={t("inspect.title")}>
       <header class="inspector-head">
         <div>
           <div class="inspector-title">{t("inspect.title")}</div>
           <p class="hint">{t("language.original")}</p>
           {facts && (
-            // biome-ignore lint/a11y/noNoninteractiveTabindex: Scrollable model details need keyboard access in narrow windows.
-            <section class="inspector-sub" aria-label={t("windows.modelDetails")} tabIndex={0}>
+            <section class="inspector-sub" aria-label={t("windows.modelDetails")}>
               <code>{facts.id}</code>
               <br />
               {t("inspect.sees", { sees: t(`perception.${facts.level}`, { seconds: 0.2 }) })}
@@ -213,28 +215,6 @@ export function InputInspector({ history, policyId, onClose }: InputInspectorPro
       ) : (
         <>
           <div class="inspector-chips" title={t("decision.recent")}>
-            {asked.map((entry) => (
-              <button
-                type="button"
-                key={entry.index}
-                class={`chip ${entry.index === log.index ? "on" : ""}`}
-                title={t("inspect.decisionTitle", {
-                  index: entry.index + 1,
-                  action: actionLabel(entry.action, translation),
-                  row: entry.row,
-                })}
-                onClick={() => setPicked(entry.index)}
-              >
-                {ACTION_GLYPH[entry.action]}
-              </button>
-            ))}
-            <button
-              type="button"
-              class={`btn small ${picked === null ? "primary" : ""}`}
-              onClick={() => setPicked(null)}
-            >
-              {t("inspect.latest")}
-            </button>
             <span class="hint">
               {t("inspect.decision", {
                 index: log.index + 1,
@@ -266,6 +246,6 @@ export function InputInspector({ history, policyId, onClose }: InputInspectorPro
           </div>
         </>
       )}
-    </div>
+    </section>
   );
 }

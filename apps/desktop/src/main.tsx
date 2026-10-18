@@ -9,7 +9,15 @@ const root = document.getElementById("app");
 if (!root) throw new Error("#app is missing");
 const desktop = isTauri();
 const initial = await initialLanguage();
-if (desktop && getCurrentWindow().label === "controls") {
+if (desktop && getCurrentWindow().label === "decisions") {
+  const { DecisionsApp } = await import("./DecisionsApp.tsx");
+  render(
+    <LanguageProvider initial={initial}>
+      <DecisionsApp />
+    </LanguageProvider>,
+    root,
+  );
+} else if (desktop && getCurrentWindow().label === "controls") {
   const { ControlsApp } = await import("./ControlsApp.tsx");
   render(
     <LanguageProvider initial={initial}>

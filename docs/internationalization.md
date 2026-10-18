@@ -20,7 +20,7 @@ Tauri obtains the system BCP 47 locale through the OS plugin with only `os:allow
 
 Automatic mode detects again on focus and `languagechange`. A late response cannot override a manual selection made while it was pending. The document's `lang` follows the selection; all current catalogs use left-to-right direction.
 
-The game and controls windows have separate providers. Native `language:changed` events synchronize their preference; browser tabs use `storage`. Receiving a preference neither writes it again nor broadcasts it back. Reopening controls restores the preference without creating another session.
+The game, controls and decisions windows have separate providers. Native `language:changed` events synchronize their preference; browser tabs use `storage`. Receiving a preference neither writes it again nor broadcasts it back. Reopening either auxiliary window restores the preference without creating another session.
 
 ## Presentation boundary
 

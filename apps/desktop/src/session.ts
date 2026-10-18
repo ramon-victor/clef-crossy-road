@@ -44,6 +44,8 @@ export interface DecisionLog {
 
 /** A request on its way to the model: what it was sent, and when (in the session's clock). */
 export interface Asking {
+  /** Player row when the request was sent (display only). */
+  row?: number;
   input: ModelInput;
   since: number;
 }
@@ -55,6 +57,8 @@ export interface Turn {
 }
 
 export interface SessionState {
+  /** Generation of this episode, including retries of the same seed. Display identity only. */
+  episode: number;
   seed: number;
   tick: number;
   score: number;
@@ -306,6 +310,7 @@ export class Session {
 
   state(): SessionState {
     return {
+      episode: this.epoch,
       seed: this.seed,
       tick: this.game.tick,
       score: this.game.score,
@@ -402,7 +407,7 @@ export class Session {
         : policy.decide(observe(this.game), this.memory, {
             onAsk: (input) => {
               if (epoch !== this.epoch) return;
-              this.asking = { input, since: this.now() };
+              this.asking = { input, since: this.now(), row: this.game.heroRow };
               this.emit();
             },
           });

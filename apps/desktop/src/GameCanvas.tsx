@@ -19,6 +19,8 @@ export interface GameCanvasProps {
   onRetry: () => void;
   onNewMap: () => void;
   onShowControls?: (() => void) | undefined;
+  onToggleDecisions?: (() => void) | undefined;
+  decisionsVisible?: boolean;
   /** The model's decision drawn around the chicken. It replaces the thought bubble while it is on. */
   compass: { on: boolean; conversationOpen: boolean; onConversation(): void };
 }
@@ -137,7 +139,7 @@ export function GameCanvas(props: GameCanvasProps) {
       {props.onShowControls && (
         <button
           type="button"
-          class="open-controls"
+          class="game-tool open-controls"
           onClick={props.onShowControls}
           aria-label={t("windows.openControls")}
           title={t("windows.openControlsHelp")}
@@ -154,6 +156,29 @@ export function GameCanvas(props: GameCanvasProps) {
             <path d="M4 7h16M4 17h16" />
             <circle cx="9" cy="7" r="3" fill="currentColor" stroke="none" />
             <circle cx="15" cy="17" r="3" fill="currentColor" stroke="none" />
+          </svg>
+        </button>
+      )}
+      {props.onToggleDecisions && (
+        <button
+          type="button"
+          class="game-tool toggle-decisions"
+          onClick={props.onToggleDecisions}
+          aria-pressed={props.decisionsVisible ?? false}
+          aria-label={t(props.decisionsVisible ? "theater.hide" : "theater.show")}
+          title={t(props.decisionsVisible ? "theater.hide" : "theater.show")}
+        >
+          <svg
+            viewBox="0 0 24 24"
+            width="20"
+            height="20"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            aria-hidden="true"
+          >
+            <path d="M5 4h14a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H9l-6 4V6a2 2 0 0 1 2-2Z" />
+            <path d="M7 9h10M7 13h6" />
           </svg>
         </button>
       )}

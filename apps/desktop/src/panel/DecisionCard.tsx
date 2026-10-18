@@ -11,11 +11,18 @@ import { decisionLabel } from "../theater/labels.ts";
 export interface DecisionCardProps {
   state: SessionState;
   theaterOpen: boolean;
+  detached?: boolean;
   onInspect(): void;
   onTheater(): void;
 }
 
-export function DecisionCard({ state, theaterOpen, onInspect, onTheater }: DecisionCardProps) {
+export function DecisionCard({
+  state,
+  theaterOpen,
+  detached = false,
+  onInspect,
+  onTheater,
+}: DecisionCardProps) {
   const translation = useI18n();
   const { t, percent } = translation;
   const action = (value: (typeof ACTION_ORDER)[number]) => actionLabel(value, translation);
@@ -107,9 +114,9 @@ export function DecisionCard({ state, theaterOpen, onInspect, onTheater }: Decis
           </div>
           <div class="decision-actions">
             <span class="decision-buttons">
-              {!theaterOpen && (
+              {(detached || !theaterOpen) && (
                 <button type="button" class="text-button" onClick={onTheater}>
-                  {t("theater.watch")}
+                  {t(detached ? "theater.title" : "theater.watch")}
                 </button>
               )}
               {canInspect && (
