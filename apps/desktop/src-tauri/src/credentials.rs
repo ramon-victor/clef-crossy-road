@@ -42,9 +42,10 @@ pub fn load(root: &Path) -> Credentials {
 
 /// Saved GUI settings take precedence; environment variables remain a startup fallback.
 fn load_with(root: &Path, account: Option<String>, token: Option<String>) -> Credentials {
-    let saved: HashMap<String, String> = dotenvy::from_path_iter(root.join(".env"))
-        .into_iter()
-        .flatten()
+    // Reading a directory succeeds as File::open on Unix, but dotenvy's iterator then repeats
+    // the same I/O error forever. Read once before parsing so unavailable storage uses the fallback.
+    let contents = fs::read_to_string(root.join(".env")).unwrap_or_default();
+    let saved: HashMap<String, String> = dotenvy::from_read_iter(contents.as_bytes())
         .filter_map(Result::ok)
         .collect();
     Credentials {
