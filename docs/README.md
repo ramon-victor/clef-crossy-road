@@ -1,48 +1,53 @@
-# Documentação
+# Documentation
 
-> **Idioma:** português (BR). Código, identificadores e `AGENTS.md` ficam em inglês.
-> **Convenção:** toda página começa com um cabeçalho de *Status* e *Verificado em*. O que não se sabe fica em
-> "Perguntas abertas"; nada é chutado. Números só entram se vierem de uma fonte (ver [references.md](references.md))
-> ou de uma execução real.
+Start with the [project README](../README.md) for what this is and how to run it. These pages go deeper, grouped by what you are
+trying to do.
 
-## Índice
+## Understand
 
-| # | Página | Conteúdo |
-|---|---|---|
-| 00 | [Viabilidade](00-viabilidade.md) | Veredito, checagem de fatos do texto original, riscos |
-| 01 | [Visão e escopo](01-visao-e-escopo.md) | Objetivos, não-objetivos, métricas de sucesso |
-| 02 | [Arquitetura](02-arquitetura.md) | Camadas, fluxo de dados, regras de dependência |
-| 03 | [Stack](03-stack.md) | Escolhas e alternativas descartadas |
-| 04 | [Núcleo do jogo](04-game-core.md) | Simulador determinístico e regras portadas do Evan |
-| 05 | [Integração com o Clef](05-integracao-clef.md) | Contrato da API, armadilhas, custo, smoke test |
-| 06 | [Observação e prompts](06-observacao-e-prompts.md) | Encoders, perguntas, regra de justiça |
-| 07 | [Experimentos](07-experimentos.md) | Protocolo do benchmark e estatística |
-| 08 | [UI desktop](08-ui-desktop.md) | App Tauri e painel da IA |
-| 09 | [Roadmap](09-roadmap.md) | Fases e critérios de saída |
-| 10 | [Segurança e licenças](10-seguranca-e-licencas.md) | Token, Tauri, MIT, IP dos assets |
-| 11 | [Lições dos 13 jogos do Jev](11-licoes-dos-jogos-do-jev.md) | O que os outros jogos controlados pelo Jev fazem e o que levamos |
-| — | [Referências](references.md) | Fontes com URL e data |
-| — | [ADRs](adr/) | Decisões de arquitetura registradas |
-
-## ADRs
-
-| ADR | Decisão |
+| Page | What you get |
 |---|---|
-| [0001](adr/0001-core-headless-e-port-das-regras.md) | Núcleo headless + port das regras do Evan |
-| [0002](adr/0002-workers-ai-rest-sem-deploy.md) | Workers AI só via REST, sem deploy |
-| [0003](adr/0003-typescript-pnpm-monorepo.md) | TypeScript + pnpm workspaces |
-| [0004](adr/0004-simulacao-deterministica.md) | Seed, passo fixo de 60 Hz, sem alocação |
-| [0005](adr/0005-regra-de-justica-da-observacao.md) | Observação só com fatos físicos |
-| [0006](adr/0006-sem-fine-tuning-nem-self-host.md) | Sem fine-tuning nem self-host por ora |
-| [0007](adr/0007-desktop-tauri-token-no-rust.md) | Desktop em Tauri, token no Rust |
-| [0008](adr/0008-orcamento-diario-no-free-tier.md) | Orçamento diário no free tier, imposto antes da chamada |
-| [0009](adr/0009-percepcao-memoria-e-julgamento.md) | Percepção e memória entram na vista do modelo; julgamento não |
-| [0010](adr/0010-palavras-regras-e-executor-de-manobras.md) | Palavras, regras nas opções e executor de manobras: níveis de ajuda rotulados |
-| [0011](adr/0011-controlador-com-rota-e-tres-consultas.md) | Controlador com rota, vista de cena e três consultas: o nível "assistido na navegação" |
+| [Results](results.md) | What worked and what did not, with the tables, and what is still open |
+| [Architecture](architecture.md) | Layers, packages and their dependency rules, the life of one decision, run modes |
+| [Decision records](adr/) | Why each significant choice was made (index below) |
 
-## Como manter
+## Use
 
-- Mudou um contrato (API, regra do jogo, schema da observação)? Atualize a página e a data de verificação.
-- Decisão nova ou revertida? Crie ou altere um ADR; não edite a história em silêncio.
-- O Clef tem pouco tempo de vida e a documentação dele já mudou uma vez (contexto de 64K para 24K).
-  Reverifique [05-integracao-clef.md](05-integracao-clef.md) antes de cada fase.
+| Page | What you get |
+|---|---|
+| [Desktop app](desktop-app.md) | Running the app, keys, the AI panel, launch variables |
+| [Benchmark](benchmark.md) | Running and extending the benchmark: commands, player ids, rules, latency injection, the spend budget |
+
+## Reference
+
+| Page | What you get |
+|---|---|
+| [Game rules](game-rules.md) | The ported rules of Expo-Crossy-Road, deliberate deviations, the simulation API |
+| [Observation and prompts](observation-and-prompts.md) | The fairness rule, what the model is shown, encoders, strategies, prompts |
+| [Clef API](clef-api.md) | The Workers AI REST contract, gotchas, cost, latency, error policy |
+| [References](references.md) | Sources and related work |
+
+## Decision records
+
+| ADR | Decision |
+|---|---|
+| [0001](adr/0001-headless-core-and-rules-port.md) | Headless core and a port of the original rules |
+| [0002](adr/0002-workers-ai-rest-no-deploy.md) | Workers AI over REST only, nothing deployed |
+| [0003](adr/0003-typescript-pnpm-monorepo.md) | TypeScript and pnpm workspaces |
+| [0004](adr/0004-deterministic-simulation.md) | Seeded, fixed-step deterministic simulation |
+| [0005](adr/0005-observation-fairness-rule.md) | The observation holds measured physical facts only |
+| [0006](adr/0006-no-fine-tuning-no-self-host.md) | No fine-tuning or self-hosting for now |
+| [0007](adr/0007-tauri-desktop-token-in-rust.md) | Tauri desktop app, credentials held by Rust |
+| [0008](adr/0008-daily-budget-free-tier.md) | Daily spend ceiling inside the free tier, enforced before the call |
+| [0009](adr/0009-perception-memory-judgement.md) | Perception and memory may reach the model; judgement may not |
+| [0010](adr/0010-words-rules-maneuver-executor.md) | Words, rules in the options and a maneuver executor, with labelled help levels |
+| [0011](adr/0011-route-controller-three-lookups.md) | Route controller and three one-field lookups |
+
+## Conventions
+
+- Numbers appear only if they come from a real run or a cited source; unknowns go under "Open questions", not guessed.
+- Changed a contract (API behaviour, a game rule, the observation schema)? Update its page. Made or reversed a decision? Add or
+  amend an ADR instead of editing history silently.
+- The Clef service is young and its documentation has already changed once (context window 64K → 24K). Re-check
+  [clef-api.md](clef-api.md) against the Cloudflare docs before relying on it.
+- Docs, code, identifiers and commits are in English.

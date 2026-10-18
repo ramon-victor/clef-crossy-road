@@ -1,28 +1,30 @@
-# ADR-0003 · TypeScript + pnpm workspaces
+# ADR-0003 · TypeScript and a pnpm monorepo
 
-- **Status:** aceito · **Data:** 2026-10-14
+- **Status:** accepted · **Date:** 2026-10-14
 
-## Contexto
+## Context and problem statement
 
-O projeto tem um núcleo, um cliente de API, agentes, um renderer e dois apps (CLI e desktop). O repo do Evan já é TypeScript (~5.9) com Three r182.
+The project has a game core, an API client, agents, a renderer and two apps (the benchmark CLI and the desktop app). The upstream reference is TypeScript with Three.js, and the same core must be usable from tests, the CLI and the UI. We need one language, fast iteration and a way to keep the package dependency direction honest (see [architecture](../architecture.md)).
 
-## Decisão
+## Considered options
 
-TypeScript estrito em ESM, monorepo com **pnpm workspaces**, Vitest e Biome. Node 24 e pnpm 10 já estão instalados.
-Os pacotes são consumidos como código-fonte TS (`exports` aponta para `src/index.ts`), sem etapa de build; imports usam a extensão `.ts` e só sintaxe TypeScript apagável (`erasableSyntaxOnly`), para o Node 24 executar os arquivos direto.
+- TypeScript with pnpm workspaces, Vitest and Biome.
+- Turborepo or Nx on top of a workspace: more machinery than a handful of packages needs.
+- bun (upstream's package manager): pnpm's strict layout is what enforces package boundaries here, and it behaves more predictably on Windows.
 
-A direção das dependências é imposta pelo **layout estrito do `node_modules` do pnpm**: um pacote só consegue importar o que declara no `package.json`. Cada pacote tem seu próprio `typecheck`. (A ideia inicial de *TS project references* foi trocada por isso: sem emissão de arquivos, as references acrescentam configuração e não impõem nada além do que o pnpm já impõe.) O core ainda ganha uma camada extra: o `tsconfig` dele não carrega tipos de DOM nem de Node, e um teste de pureza varre o código.
+## Decision outcome
 
-Versões fixadas em 2026-10-14: TypeScript 7.0.2, Vitest 5.0.4, Biome 2.5.15.
+Chosen option: "TypeScript with pnpm workspaces, Vitest and Biome", because a single language covers core, client, UI and CLI and the package manager itself enforces the boundaries.
 
-## Consequências
+- TypeScript in `strict` mode, ESM only.
+- Packages are consumed as TypeScript source: `exports` points at `src/index.ts` and there is no build step. Imports use the explicit `.ts` extension (`allowImportingTsExtensions`) and only erasable syntax is allowed (`erasableSyntaxOnly`), so Node can run the files directly.
+- The dependency direction between packages is enforced by pnpm's strict `node_modules` layout: a package can import only what its `package.json` declares. Each package has its own `typecheck`.
+- The core is stricter still: its `tsconfig` loads no DOM or Node types, and a purity test scans its source ([ADR-0004](0004-deterministic-simulation.md)).
+- Tests run on Vitest, lint and format on Biome.
 
-- (+) Um idioma para core, cliente, UI e CLI; sem build intermediário.
-- (+) A fronteira entre pacotes é verificada pelo gerenciador de pacotes e o determinismo do core por teste.
-- (−) Importar `.ts` com extensão exige `allowImportingTsExtensions`; ferramentas de empacotamento (Vite) precisam aceitá-lo, o que já fazem.
-- (−) O Tauri adiciona Rust, mas isolado no comando `clef_run`.
+### Consequences
 
-## Alternativas
-
-- Turborepo/Nx: exagero para poucos pacotes.
-- bun: o lockfile do Evan é bun, mas pnpm é mais previsível no Windows.
+- Good, because one language and no intermediate build cover core, client, UI and CLI.
+- Good, because package boundaries are checked by the package manager and core determinism by a test.
+- Bad, because importing `.ts` files needs `allowImportingTsExtensions`, and bundlers (Vite) must accept it; they do.
+- Bad, because the desktop app adds Rust, which stays confined to `apps/desktop/src-tauri` ([desktop app](../desktop-app.md)).

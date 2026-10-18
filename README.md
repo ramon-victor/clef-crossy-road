@@ -1,99 +1,202 @@
+<div align="center">
+
 # Clef Crossy Road
 
-Experimento: o modelo **Clef-flash** da Cloudflare (Workers AI) joga uma versão determinística do
-[Expo-Crossy-Road](https://github.com/EvanBacon/Expo-Crossy-Road) do Evan Bacon, tomando 100% das decisões de movimento.
-Um app desktop (Tauri) mostra a galinha cruzando as ruas com um painel da IA: a ação escolhida, a probabilidade de cada ação, a latência
-e quantas ruas ele atravessou. Um benchmark em CLI compara modelos nas mesmas seeds. Nada é publicado na Cloudflare: só se chama a API REST do Workers AI.
+**A decision-model experiment with visible choices, probabilities and controller steps.**
 
-## Onde estamos (2026-10-15)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Node](https://img.shields.io/badge/node-%E2%89%A5%2024-339933?logo=nodedotjs&logoColor=white)](#quick-start)
+[![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178C6?logo=typescript&logoColor=white)](#repository-layout)
+[![Tauri](https://img.shields.io/badge/Tauri-v2-FFC131?logo=tauri&logoColor=black)](https://v2.tauri.app/)
+[![Workers AI](https://img.shields.io/badge/Cloudflare-Workers%20AI-F38020?logo=cloudflare&logoColor=white)](https://developers.cloudflare.com/workers-ai/)
 
-- **Construído e testado:** núcleo determinístico, cliente do Clef com orçamento por conta, agentes, benchmark com IC de 95% e diagnóstico, app desktop a 180 fps.
-- **Resultado:** as **12 primeiras condições não superam "sempre em frente"** (~3,8 ruas; o teto de referência exato faz ~45). Depois de estudar os 13 jogos controlados pelo Jev de outros projetos ([docs/11](docs/11-licoes-dos-jogos-do-jev.md)), o código passou a dar **palavras** em vez de números, as opções viram **consultas de um campo com exemplos resolvidos** e um **controlador** dá os saltos e **caminha os desvios** ([ADR-0010](docs/adr/0010-palavras-regras-e-executor-de-manobras.md), [ADR-0011](docs/adr/0011-controlador-com-rota-e-tres-consultas.md)). A versão anterior (10,05 ruas, 58% estagnadas) virou a atual: o Clef-flash faz **22,4 ruas em 7 partidas** (contra 4,4 da anterior nas mesmas seeds), estagnou em 2 de 7, e o modelo concorda com o escolhedor ideal das regras em 94% dos estados de uma sonda. É o conjunto todo (palavras, regras, roteamento, rota e instante são nossos), rotulado nos relatórios; o portão de 100 seeds ainda está pendente. Com este controlador, o escolhedor ideal sem modelo (`exec-route`) faz 48,3 ruas: é o teto contra o qual o Clef se compara. As 12 primeiras: Clef-flash em JSON, grade, colunas relativas à galinha, manual mínimo
-  ou com **a vista de um jogador** (a tela inteira, onde as coisas estarão em 0,2 s e a memória das últimas jogadas) empata; com imagem é pior; o Clef 27B escolheu avançar em todas as partidas.
-  A causa medida: 72% a 96% dos saltos para a água são fatais e o modelo põe a maior probabilidade em avançar mesmo com a plataforma escrita na frente dele. Jogadores roteirizados que leem
-  as mesmas vistas fazem 13 a 19 ruas: a informação está lá, o modelo não a usa. Leia [docs/07-experimentos.md](docs/07-experimentos.md).
-- **Para ver o que o modelo recebe:** no app, a tecla **I** abre uma janela com o estado, a pergunta, as opções e a resposta de cada decisão; na linha de comando, `pnpm bench show-input --seed 4 --actions hop_forward`. A revisão mostrou que os dados estão certos e que o texto das opções é o que mais move a escolha do modelo ([docs/06](docs/06-observacao-e-prompts.md), [docs/07](docs/07-experimentos.md)).
-- **O app tem dois modelos no "Who plays"**: **Clef-flash** e **Clef (27B)**, os dois com a jogabilidade nova (palavras, três consultas e controlador de desvio). No navegador, abre no look-ahead gratuito. O desktop abre no Clef-flash na seed 6; esse replay só é gratuito quando o cache local está presente (seeds 6 a 8). Qualquer outra combinação abre por `CCR_PLAYER`. Um jogador de IA que passa 40 decisões sem uma linha nova (por exemplo, batendo numa árvore) encerra a partida com o cartão "Preso" e para de gastar.
-- **Regra do projeto:** ficar no free tier (10.000 neurons por dia UTC, por conta). O código recusa chamadas além disso ([ADR-0008](docs/adr/0008-orcamento-diario-no-free-tier.md)).
+<img src="docs/images/panel.png" alt="The AI panel: who plays, the last decision, rows crossed, decisions, latency and tokens" width="300">
 
-## Rodar em localhost
+<sub>The AI panel with the free look-ahead reference (it reports no probabilities).<br>The default Clef player also shows action probabilities derived from its lookup answers, latency and tokens.</sub>
 
-Na raiz do projeto:
+</div>
+
+## What is this?
+
+Clef Crossy Road tests Cloudflare's **Clef-flash** decision model (Workers AI, REST only) in a deterministic, headless
+TypeScript port of the rules of Evan Bacon's [Expo-Crossy-Road](https://github.com/EvanBacon/Expo-Crossy-Road). The default
+player asks the model three lookups about the scene, then a route controller executes the hops, waits and detours. Other
+conditions ask the model to choose each move directly.
+
+A [Tauri v2](https://v2.tauri.app/) desktop app, or your browser, renders the game with Three.js next to a panel showing
+actions, probabilities, controller steps, latency, tokens and rows crossed. A Node benchmark CLI compares players on
+identical seeds with paired confidence intervals.
+
+Nothing is deployed to Cloudflare. The project only calls the Workers AI REST API and checks a daily free-tier ceiling
+(10,000 neurons per UTC day) before each uncached call.
+
+## Results so far
+
+| Player | Games | Rows crossed (mean) |
+|---|---:|---|
+| `random` | 100 | 1.84 |
+| `always-forward` | 100 | 3.78 |
+| Clef-flash, plain prompts (JSON, ASCII grid, the player's view of the screen) | 100 | 3.67 – 3.73 (no better than always forward) |
+| Clef-flash, top-down image of the observation | 100 | 3.36 (worse) |
+| **Clef-flash + route controller** (`scene` · `route` · `lookup`, the app default) | 7 | **22.4** [10.9, 35.7] |
+| Same controller, scripted, **no model** (`exec-route`) | 100 | 48.3 |
+| `lookahead` (reads the simulator, no model) | 100 | 44.75 |
+
+Given the game state and a plain question, Clef-flash plays like "always forward": it puts its highest probability on advancing
+even when a platform is elsewhere and the forward hop drowns the chicken. Describing the scene in words,
+turning each option into a one-field lookup with solved examples, and letting a controller do the hopping and walk detours
+moved it a long way (on a 90-state probe it agrees with the ideal follower of the lookups in 94% of the states).
+
+Read the numbers with these caveats:
+
+- **The controller is our code.** It does the hopping, the timing and the detours; the model only answers three one-field
+  lookups. The fair comparison for the headline row is the scripted ceiling with the same controller (48.3), not
+  `always-forward`. Every condition is labelled with how much help the code gives.
+- **The headline row is 7 games**, hence the wide interval. The 100-seed gate is still pending: roughly 25,000–30,000 neurons,
+  several days on the free tier. These seven games span two controller revisions and are not a matched comparison with
+  the 100-game scripted references.
+
+Full tables, method and open questions: [docs/results.md](docs/results.md).
+
+## How it works
+
+```mermaid
+flowchart LR
+    G["<b>@ccr/core</b><br/>deterministic game<br/>seeded, fixed 60 Hz"]
+    E["<b>Encoder</b><br/>words · JSON · grid"]
+    C["<b>ClefClient</b><br/>retry · cache · spend ceiling"]
+    W[("Workers AI<br/>Clef-flash")]
+    P["<b>Controller</b><br/>route search · timing"]
+
+    G -- "Observation<br/>(physical facts only)" --> E
+    E -- "state + question + options" --> C
+    C -- REST --> W
+    W -- "choices + probabilities" --> P
+    P -- "hop or wait" --> G
+```
+
+- **Deterministic core.** `@ccr/core` uses seeded randomness and fixed simulation ticks: same seed and same actions give an identical
+  snapshot hash. Each ported rule cites the upstream file it comes from ([docs/game-rules.md](docs/game-rules.md)).
+- **Fairness rule.** The model sees measured physical facts and what a player could perceive (the whole screen, where things will
+  be in 0.2 s, its last moves). It never sees a judgement such as "safe", "reachable" or a list of valid moves
+  ([ADR-0005](docs/adr/0005-observation-fairness-rule.md), [ADR-0009](docs/adr/0009-perception-memory-judgement.md)).
+- **Spend guard.** A daily ceiling is enforced before every API call, in the TypeScript client and again in the Rust process;
+  cache hits are free ([ADR-0008](docs/adr/0008-daily-budget-free-tier.md)).
+- **Benchmark CLI.** Many seeds × many players, resumable runs, bootstrap confidence intervals and a diagnostic that scores the
+  model's probabilities against the real outcome of each move ([docs/benchmark.md](docs/benchmark.md)).
+
+## Quick start
+
+| Needs | For | Version |
+|---|---|---|
+| Node.js | everything | 24 or newer |
+| pnpm | everything | 10 |
+| Git and an internet connection | first run (downloads the game assets) | any |
+| Rust, MSVC C++ build tools, WebView2 | desktop app only | stable Rust |
 
 ```bash
+git clone https://github.com/ramon-victor/clef-crossy-road.git
+cd clef-crossy-road
 pnpm install
 pnpm run dev
 ```
 
-Abra **http://localhost:5173**. O comando baixa os assets ausentes e inicia o servidor com atualização
-automática. Na primeira vez, o download precisa de internet e Git. Para encerrar, pressione **Ctrl+C** no terminal.
-Se a porta 5173 estiver ocupada, encerre o servidor anterior; a porta permanece fixa para compatibilidade com o Tauri.
+Open **http://localhost:5173**. The first run downloads Evan Bacon's 3D models, audio and font from the pinned upstream revision
+(see [Credits and legal](#credits-and-legal)). The browser starts with the **free look-ahead player**, so no token, cache or
+Rust is needed. Pick **You** in **Who plays** to play with the arrow keys or WASD. Stop the server with <kbd>Ctrl</kbd>+<kbd>C</kbd>.
 
-O navegador começa com o **look-ahead gratuito**, sem precisar de token, cache ou Rust.
-Para jogar manualmente, escolha **You** em **Who plays**. Para testar um modelo, configure as credenciais
-em **Setup → Cloudflare → Configure** e selecione Clef-flash ou Clef (27B).
-
-## Ver o app desktop rodando
-
-Na raiz, para abrir a janela desktop em modo de desenvolvimento:
+The desktop window:
 
 ```bash
-pnpm run dev:desktop
+pnpm run dev:desktop      # Tauri dev mode, hot reload; first build is slow
 ```
 
-O comando prepara os assets, inicia o Vite e compila/abre o Tauri com recarga automática.
-Requer Rust, as ferramentas de compilação C++ do Windows e WebView2. A primeira compilação pode demorar.
-Use **Ctrl+C** no terminal para encerrar. Encerre antes qualquer `pnpm run dev`, pois ambos usam a porta 5173.
+Stop any `pnpm run dev` first: both use port 5173. For a release build, run `pnpm --filter @ccr/desktop build`, then
+`pnpm tauri build --no-bundle` inside `apps/desktop`, and double-click `play.cmd`, which also prints what the model is sent.
+Keys, the **I** input inspector and the `CCR_*` variables are in [docs/desktop-app.md](docs/desktop-app.md).
 
-Depois de construir uma vez (comandos abaixo), basta dar **duplo clique**:
+> **Platform.** Developed and tested on Windows 11. The `.cmd` launchers and WebView2 are Windows-specific. Browser mode only
+> needs Node and pnpm, but it has not been verified on macOS or Linux.
 
-| Arquivo | O que abre |
-|---|---|
-| `play.cmd` | O app no modo normal: Clef-flash na seed 6 (replay gratuito se o cache local estiver presente). Troque o jogador no seletor (Clef-flash, Clef 27B, você, referências). **Roda no terminal e mostra os logs do que é mandado ao modelo** a cada decisão (`CCR_LOG=full`, padrão; `brief` ou `off` para mudar); o mesmo texto vai para `runs/logs/play.log` |
-| `play-clef.cmd` | O **Clef-flash jogando a seed 6**, com as probabilidades reais no painel e os logs no terminal. Com o cache local completo, **não gasta neurons**; a tecla `M` abre o próximo mapa em cache |
+## Using a model
 
-No PowerShell, para abrir direto em outro jogador: `$env:CCR_PLAYER="lookahead"` (gratuito),
-`$env:CCR_PLAYER="clef-27b"` (sem mapa em cache) ou um id do benchmark como `clef:clef-flash:view-fx:choice:routing`,
-e `$env:CCR_SEED="1"`, antes de `.\play.cmd`.
+1. Create a Cloudflare API token with **only** the *Workers AI* permission and an expiry date.
+2. In the app, open **Setup → Cloudflare → Configure**, enter your **Account ID** and the **API token**, and save. They are
+   written to the local `.env` and applied without a restart; saving never calls the API. Alternatively copy `.env.example`
+   to `.env` and fill in `CF_ACCOUNT_ID` and `CF_API_TOKEN` (the benchmark reads that file too).
+3. Choose **Clef-flash** or **Clef (27B)** in **Who plays**.
 
-No app: setas ou WASD para você jogar, espaço pausa, `N` dá um passo, `R` repete o mapa, `M` abre outro. O painel mostra, a cada decisão, a ação, a probabilidade
-de cada ação, a latência, os tokens e quantos neurons do dia já foram usados.
+`.env` is gitignored; never commit it or paste its contents into an issue or pull request.
 
-## Outros comandos
+**Mind the budget.** The project's rule is to stay inside the free tier: 10,000 neurons per UTC day per account. The default Clef-flash
+request costs roughly 6 neurons and a game takes tens of requests; the 27B model costs about 6.3 times more. Run
+`pnpm bench plan` before any benchmark that calls a model: it estimates the cost and splits a run into days that fit.
+
+**Replays are free only with a local cache.** The decision cache lives in `runs/` (gitignored), so a fresh clone has none. The
+desktop app opens on Clef-flash at seed 6, which then calls the API and needs credentials. Use the look-ahead player to stay at
+zero cost.
+
+## Benchmark
 
 ```bash
-pnpm install
-node scripts/fetch-assets.mjs          # baixa os modelos do Evan (não vão para o git)
-pnpm typecheck && pnpm lint && pnpm test
-
-pnpm --filter @ccr/desktop build
-cd apps/desktop && pnpm tauri build --no-bundle && cd ../..   # gera o .exe de release (precisa do Rust: rustup)
-pnpm run dev:desktop                 # ou: abre o app em modo de desenvolvimento
-pnpm bench plan --policies lookahead,always-forward --seeds 1..100
-pnpm bench run  --run minha-execucao --policies always-forward,random,lookahead --seeds 1..100
-pnpm bench report --run minha-execucao
+pnpm bench plan   --policies always-forward,lookahead --seeds 1..100          # estimate cost, split over days
+pnpm bench run    --run my-run --policies always-forward,random,lookahead --seeds 1..100
+pnpm bench report --run my-run                                                # means, paired deltas, 95% CIs
+pnpm bench diagnose --run my-run                                              # AUC of P(forward) vs. real safety
+pnpm bench show-input --seed 4 --actions hop_forward                          # the exact request a model would get
 ```
 
-Antes de qualquer execução com modelo, rode `pnpm bench plan`: ele estima os neurons e divide a execução em dias que cabem no free tier.
+Model players are named `clef:<model>:<encoder>:<strategy>[:<manual>]`, for example `clef:clef-flash:scene:route:lookup`.
+The grammar, the reference players, the stall rule and latency injection are in [docs/benchmark.md](docs/benchmark.md).
+Spending commands refuse to start once the day's ceiling is reached; `--daily-neurons` can only lower it.
 
-## Configuração
+## Repository layout
 
-1. No app desktop ou no navegador de desenvolvimento, abra **Setup → Cloudflare → Configure**, informe **Account ID** (`CF_ACCOUNT_ID`) e **API token** (`CF_API_TOKEN`) e clique em **Save credentials**. O backend salva no `.env` local e aplica sem reiniciar. O jogo fica pausado e salvar não chama a API. Como alternativa, copie `.env.example` para `.env` e preencha os dois campos manualmente (o benchmark também lê esse arquivo).
-2. O token deve ter **só** a permissão *Workers AI* e uma data de expiração.
-3. O `.env` é ignorado pelo git. Nunca o publique nem o cole em conversas.
-
-Requisitos: Node 24, pnpm 10 e Git para o localhost. Rust e WebView2 (já vem no Windows 11) são necessários para o app desktop.
-
-## Por onde ler
-
-| Quero… | Leia |
+| Path | What it is |
 |---|---|
-| Saber se a ideia deu certo | [docs/00-viabilidade.md](docs/00-viabilidade.md) e [docs/07-experimentos.md](docs/07-experimentos.md) |
-| Entender a arquitetura | [docs/02-arquitetura.md](docs/02-arquitetura.md) |
-| Ver como o jogo foi portado | [docs/04-game-core.md](docs/04-game-core.md) |
-| Ver como o Clef é chamado e quanto custa | [docs/05-integracao-clef.md](docs/05-integracao-clef.md) |
-| Usar o app | [docs/08-ui-desktop.md](docs/08-ui-desktop.md) |
-| Saber o que fazer a seguir | [docs/09-roadmap.md](docs/09-roadmap.md) |
-| Índice completo | [docs/README.md](docs/README.md) |
+| `packages/core` | Deterministic game simulation, zero dependencies |
+| `packages/clef` | Workers AI client: schema, retry, cache, spend budget, `Transport` interface |
+| `packages/agent` | Players and baselines, encoders, prompts, route controller, episode runner |
+| `packages/render` | Three.js scene built from a read-only snapshot |
+| `apps/bench` | Benchmark CLI (no window, no GPU) |
+| `apps/desktop` | Tauri v2 app: Preact UI plus the Rust side that holds the credentials |
+| `docs/` | Architecture, rules, API notes, results, decision records |
 
-Instruções para agentes de IA: [AGENTS.md](AGENTS.md).
+Dependency direction: `core` imports nothing; `clef` imports nothing of ours; `render` imports `core`; `agent` imports `core`
+and `clef`; the apps wire everything together ([docs/architecture.md](docs/architecture.md)).
+
+## Documentation
+
+| I want to… | Read |
+|---|---|
+| See what worked and what did not | [docs/results.md](docs/results.md) |
+| Understand the design | [docs/architecture.md](docs/architecture.md) |
+| See how the game rules were ported | [docs/game-rules.md](docs/game-rules.md) |
+| Know what the model is shown | [docs/observation-and-prompts.md](docs/observation-and-prompts.md) |
+| Call the Clef API or estimate cost | [docs/clef-api.md](docs/clef-api.md) |
+| Run or extend the benchmark | [docs/benchmark.md](docs/benchmark.md) |
+| Use the app | [docs/desktop-app.md](docs/desktop-app.md) |
+| Know why a decision was made | [docs/adr/](docs/adr/) |
+| Find sources and related work | [docs/references.md](docs/references.md) |
+
+## Development
+
+```bash
+pnpm typecheck && pnpm lint && pnpm test       # TypeScript
+cd apps/desktop/src-tauri && cargo test --lib  # Rust
+```
+
+`pnpm --filter @ccr/core test` runs the simulation tests alone, with no network, in a few seconds. See
+[CONTRIBUTING.md](CONTRIBUTING.md) before opening a pull request; [AGENTS.md](AGENTS.md) holds the working rules for AI coding
+agents. Security notes and how to report a problem: [SECURITY.md](SECURITY.md).
+
+## Credits and legal
+
+- Code and documentation: [MIT](LICENSE).
+- The game rules are ported from Evan Bacon's [Expo-Crossy-Road](https://github.com/EvanBacon/Expo-Crossy-Road) (MIT; pinned
+  revision in [NOTICE](NOTICE)). Its 3D models, audio and font replicate the original Crossy Road. **They are not in this
+  repository**: `scripts/fetch-assets.mjs` downloads them locally and they are gitignored. Release builds embed them, so do not
+  distribute binaries without replacing the assets and the name.
+- This project is not affiliated with or endorsed by Hipster Whale (makers of Crossy Road), Evan Bacon or Cloudflare.
+  "Crossy Road", "Cloudflare" and "Workers AI" belong to their owners.
+- The app icon is original art, generated by `scripts/make-icon.mjs`.
