@@ -40,3 +40,6 @@ e build web, sem credenciais. O lockfile também registra a distribuição do pn
 O workflow `.github/workflows/ci.yml` repete essas verificações nos três sistemas e executa os testes Rust
 no Windows. As actions usam revisões imutáveis e a permissão do workflow é somente leitura.
 O workflow só poderá ser validado no GitHub depois de publicado; o teste local cobre Windows.
+
+Em 2026-10-18, uma cópia limpa dos arquivos versionados, sem `.env`, `node_modules` ou assets prévios,
+passou na instalação congelada, em `pnpm check`, no download dos assets e no build web no Windows.

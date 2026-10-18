@@ -104,7 +104,7 @@ Antes de qualquer execução com modelo, rode `pnpm bench plan`: ele estima os n
 Requisitos: Node 24+, pnpm 12.14.0 e Git para o localhost, que pode ser usado em Windows, Linux e macOS.
 Para o desktop, instale também os [pré-requisitos do Tauri v2](https://v2.tauri.app/start/prerequisites/)
 da sua plataforma; no Windows, Rust, ferramentas C++ e WebView2 (já vem no Windows 11).
-O desktop foi verificado no Windows; os outros sistemas ainda precisam de validação da janela nativa.
+A inicialização nativa com pnpm 12 foi verificada localmente no Windows.
 
 O GitHub Actions executa a instalação com lockfile congelado, `pnpm check` e o build web em Windows,
 Linux e macOS; no Windows, também executa os testes Rust. A CI não precisa de `.env` ou credenciais Cloudflare.
