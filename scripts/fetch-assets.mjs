@@ -1,5 +1,5 @@
 // Downloads the 3D models, textures, audio and font from EvanBacon/Expo-Crossy-Road (MIT code;
-// assets replicate the original Crossy Road, see NOTICE and docs/10) into apps/desktop/public/assets.
+// assets replicate the original Crossy Road, see NOTICE and SECURITY.md) into apps/desktop/public/assets.
 // The repository does not redistribute them: this script fetches them locally, and they are gitignored.
 
 import { execFileSync } from "node:child_process";

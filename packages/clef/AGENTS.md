@@ -1,6 +1,6 @@
 # AGENTS.md: packages/clef
 
-Applies to everything under `packages/clef`. The root `AGENTS.md` still applies. Contract and findings: `docs/05-integracao-clef.md`.
+Applies to everything under `packages/clef`. The root `AGENTS.md` still applies. Contract and findings: `docs/clef-api.md`.
 
 ## What this package is
 

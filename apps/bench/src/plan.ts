@@ -4,7 +4,7 @@ import { code, markdownTable } from "./format.ts";
 import { isClefPolicy } from "./registry.ts";
 
 /**
- * Budget planning. The owner's rule is to stay inside the free tier (10,000 neurons per UTC day),
+ * Budget planning. The project's rule is to stay inside the free tier (10,000 neurons per UTC day),
  * so before spending anything we estimate what a run costs and how many days it needs.
  */
 export interface Estimate {

@@ -52,7 +52,7 @@ const COLUMNS = Array.from({ length: 2 * MAX_ABS_X + 1 }, (_, i) => i - MAX_ABS_
  * and with `forecast` the map one hop ahead) and plays the way a careful person would: hop forward when
  * the cell ahead is open, otherwise slide along the row towards the nearest open cell, otherwise wait.
  * It is a reference, not a model. It answers "is that view enough to play well?" before anything is
- * spent on the API (docs/07).
+ * spent on the API (docs/results.md).
  */
 function decideFrom(obs: Observation, forecast: boolean): Decision {
   const col = obs.player.col;

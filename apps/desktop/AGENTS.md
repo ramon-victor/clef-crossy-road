@@ -1,6 +1,6 @@
 # AGENTS.md: apps/desktop
 
-Applies to everything under `apps/desktop`. The root `AGENTS.md` still applies. UI spec: `docs/08-ui-desktop.md`.
+Applies to everything under `apps/desktop`. The root `AGENTS.md` still applies. User guide: `docs/desktop-app.md`.
 
 ## What this app is
 

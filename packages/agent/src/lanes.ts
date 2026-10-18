@@ -5,8 +5,8 @@ import { outcomeText } from "./view.ts";
 
 /**
  * The `lanes` view (ADR-0010): the world already compared, in words. The model is weak at arithmetic
- * and at comparing magnitudes (the notes of the model it shares with the other Jev games, and our own
- * probes), so the code does the subtraction and reports what fills each cell, in a closed vocabulary
+ * and at comparing magnitudes in our probes (docs/results.md), so the code does the subtraction and
+ * reports what fills each cell, in a closed vocabulary
  * with no digits. It says what is THERE when the hop ends; it never says what that means for the
  * chicken. Nothing here depends on a candidate move except which cell is named.
  */

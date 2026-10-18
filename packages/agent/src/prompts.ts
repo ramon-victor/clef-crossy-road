@@ -18,8 +18,7 @@ export const PROMPT_VERSION = "p1";
  * that say when each one applies. The rules and the options are the same for every state: general
  * knowledge of how the game is played, nothing worked out from the state (ADR-0009).
  * rules: for the `lanes` view only. The rules of the game plus options that name the fields of that view
- * and the words they can hold, the way the Doom player of the other Jev projects writes its threshold into
- * the option text. It measures whether the model applies a written policy to words, and is labelled so
+ * and the words they can hold. It measures whether the model applies a written policy to words, and is labelled so
  * (ADR-0010). The same for every state.
  * ordered: for the `moves` view only. Short options, each one a single rule about its own entry of the
  * state, to be tried in a stated order, the first that is true wins (the options of `rules` measured too
@@ -27,9 +26,9 @@ export const PROMPT_VERSION = "p1";
  * once in most states, and the model took a later one instead of the first (`hop_left` when everything was
  * free, `hop_back` where `stay` was right).
  * exclusive: for the `moves` view only. The same game text and the same short options, but each one also
- * states the cases that rule it out, so exactly one is true in any state (what the Doom `rule` options do:
+ * states the cases that rule it out, so exactly one is true in any state (options of the form
  * "do not pick this if...").
- * lookup: for the `scene` view and the `route` strategy only. The game text and the two questions with one
+ * lookup: for the `scene` view and the `route` strategy only. The game text and the three questions with one
  * lookup each and solved examples (route-prompts.ts), the same for every state (ADR-0011).
  */
 export const MANUAL_IDS = [

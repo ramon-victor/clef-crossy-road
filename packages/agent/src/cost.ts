@@ -12,7 +12,7 @@ export interface DecisionCost {
 
 /**
  * Input tokens per `choice` decision on Clef-flash, read from `usage.input_tokens` on 2026-10-14
- * (docs/05). `json-fx` comes from 100 full games; `view` and `view-fx` from the 90 probe states, which
+ * (docs/clef-api.md). `json-fx` comes from 100 full games; `view` and `view-fx` from the 90 probe states, which
  * sit deeper in a game than a typical decision, so they may be a little high for a short game.
  */
 const CHOICE_TOKENS: Readonly<Record<EncoderId, { tokens: number; measured: boolean }>> = {
@@ -37,12 +37,12 @@ export function decisionCost(config: {
   encoder: EncoderId;
   strategy: StrategyId;
 }): DecisionCost {
-  // Two questions in one request, each with the game text: about 1.5 times a choice with the moves view.
   if (config.strategy === "route") {
-    // Two questions with their examples and the scene state in one request, an estimate until a probe reads it.
+    // Three lookups with examples and the scene state; the planner still uses an estimate.
     return { tokens: 1650, measured: false, neurons: neuronsForTokens(config.model, 1650) };
   }
   if (config.strategy === "graph" || config.strategy === "graph-maneuver") {
+    // Two questions with the game text: about 1.5 times a choice with the moves view.
     return { tokens: 1250, measured: false, neurons: neuronsForTokens(config.model, 1250) };
   }
   const critic = config.strategy === "critic" || config.strategy === "critic-go";

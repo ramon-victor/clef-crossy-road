@@ -1,6 +1,6 @@
 //! The daily neuron budget: what a call costs, what has been spent, and the refusal when it is spent.
 //!
-//! The limit is a constant on purpose. The owner's rule is to stay inside the free tier, and the
+//! The limit is a constant on purpose. The project's rule is to stay inside the free tier, and the
 //! webview must not be able to talk this process into spending more.
 
 use std::{fs, path::Path};

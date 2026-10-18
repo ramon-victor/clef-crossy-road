@@ -4,7 +4,7 @@ import { type Mover, moverX, trainLightOn } from "./mover.ts";
 import type { RowKind, RowSpec } from "./worldgen.ts";
 
 /**
- * What an agent is allowed to see (docs/adr/0005 "fairness rule").
+ * What an agent is allowed to see (docs/adr/0005-observation-fairness-rule.md).
  *
  * Only measured physical facts: terrain, positions, hit-zone half-widths, velocities and the
  * signal phase. Nothing here depends on the candidate actions: no "safe/unsafe" flags, no list

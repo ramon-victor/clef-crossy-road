@@ -10,7 +10,7 @@ import {
 import { replayer } from "./replay.ts";
 
 /**
- * Reinforcement-learning trajectories (ADR-0006, Phase 5): every recorded decision becomes a
+ * Reinforcement-learning trajectories (ADR-0006): every recorded decision becomes a
  * (observation, action, reward, done) step, re-created by replaying the stored actions on the
  * deterministic simulator. Nothing here calls any API: it only re-reads decisions already on disk.
  *

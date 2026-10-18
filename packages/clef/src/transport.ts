@@ -17,7 +17,7 @@ export interface TransportResponse {
 
 /**
  * How a request reaches Workers AI. Two implementations exist: Node (`@ccr/clef/node`, uses the
- * REST API with a token from `.env`) and Tauri (Phase 3, `invoke("clef_run")`, token held by Rust).
+ * REST API with a token from `.env`) and Tauri (`invoke("clef_run")`, token held by Rust).
  * Implementations throw only for network-level failures; HTTP errors are returned as responses.
  */
 export interface Transport {

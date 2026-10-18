@@ -48,9 +48,9 @@ import { routePolicy } from "./route-policy.ts";
  *            routing: go means hop_forward, hold means the answer of the second question. Only with the
  *            `moves` view and the `ordered` manual (ADR-0010).
  * graph-maneuver: the same two questions about manoeuvres, with the executor of `maneuver` doing the hopping.
- * route:     two small lookups in one request (`ahead`: open, passing or closed; `around`: left, right or
- *            wait) and a controller that crosses, waits for a gap, or walks a detour (route.ts). Only with the
- *            `scene` view and the `lookup` manual (ADR-0011).
+ * route:     three one-field lookups in one request (`cell`: stand or no_stand; `moving`: moving or still;
+ *            `around`: detour_left, detour_right or wait_here) and a controller that crosses, waits for a gap,
+ *            or walks a detour (route.ts). Only with the `scene` view and the `lookup` manual (ADR-0011).
  */
 export const STRATEGY_IDS = [
   "choice",
@@ -76,7 +76,7 @@ export interface ClefPolicyConfig {
  * the screen into words (`scene`), three small lookups with solved examples ask the model (`route`, `lookup`),
  * and a controller does the hopping and the detours. The report labels it "words + rules + graph + route
  * executor". The first twelve conditions, which show the model the world and leave the hopping to it, played
- * like "always forward" (docs/07); they stay in the benchmark as controls and open in the app as `Custom`.
+ * like "always forward" (docs/results.md); they stay in the benchmark as controls and open in the app as `Custom`.
  */
 export const DEFAULT_CLEF: ClefPolicyConfig = {
   model: "clef-flash",

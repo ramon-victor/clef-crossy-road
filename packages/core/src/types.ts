@@ -1,6 +1,6 @@
 import type { MoverKind } from "./mover.ts";
 
-/** The five actions a policy can take. Names are model-facing option IDs (see docs/05). */
+/** The five actions a policy can take. Names are model-facing option IDs (see docs/clef-api.md). */
 export type Action = "hop_forward" | "hop_back" | "hop_left" | "hop_right" | "stay";
 
 export const ACTIONS: readonly Action[] = [

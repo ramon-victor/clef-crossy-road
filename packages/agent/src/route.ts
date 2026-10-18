@@ -9,7 +9,7 @@ import { type SceneState, type SideName, sceneState } from "./scene.ts";
  * Manoeuvres with a detour (ADR-0011). The model says WHAT to do about the row in front of it: cross,
  * go round by one side, or wait. The controller says HOW: for a detour it walks the way round (back one
  * row if it must, along the row, forward onto the first row not yet reached), checking the world at
- * every hop, the way the Doom, Tetris and Minecraft projects leave the path to code. It never swaps the
+ * every hop. It never swaps the
  * side the model chose, and gives the decision back, with the reason, when it cannot go on.
  */
 export const ROUTE_IDS = ["cross_ahead", "detour_left", "detour_right", "wait_here"] as const;

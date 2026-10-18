@@ -5,10 +5,8 @@ import type { Decision, ObservationPolicy, PolicyFactory } from "./policy.ts";
 
 /**
  * Manoeuvres and their executor (ADR-0010). The model says WHAT to do about the row in front of it; the
- * code says WHEN, reading the world live at every step, the way the Dino, Tetris and Doom players of
- * the other Jev projects split the work ("choose only the manoeuvre, the controller handles the
- * timing"). The executor never swaps the manoeuvre for another one: it either carries it out or gives
- * the decision back to the model and says why.
+ * code says WHEN, reading the world live at every step. The executor never swaps the manoeuvre for
+ * another one: it either carries it out or gives the decision back to the model and says why.
  */
 export const MANEUVER_IDS = [
   "cross_ahead",

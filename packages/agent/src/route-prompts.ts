@@ -4,9 +4,9 @@ import { STANDABLE } from "./lanes.ts";
 /**
  * The `lookup` manual of the `route` strategy (ADR-0011). Three small questions in one request, each a
  * single lookup of a single field of the state (the model read a two-field rule as one field: still water
- * came out as "passing" in 12 of 12 probe states, 2026-10-15), each with solved examples (the way the Mario
- * project writes "dx 79 -> false, dx 35 -> true" into its instructions). The same for every state; nothing in
- * the text is worked out from the state in front of the model. Putting the answers together is code:
+ * came out as "passing" in 12 of 12 probe states, 2026-10-15), each with solved examples. The text is the
+ * same for every state; nothing in it is worked out from the state in front of the model.
+ * Putting the answers together is code:
  * a cell the chicken can stand on, or things that keep moving, mean "cross"; otherwise the third
  * question picks a side.
  */

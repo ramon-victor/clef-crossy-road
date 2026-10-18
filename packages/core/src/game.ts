@@ -173,7 +173,7 @@ export class Game {
    * An input that arrives mid-hop waits in a one-slot queue (the last one wins) and starts on the
    * tick that hop lands, after the landing was checked. Upstream instead teleports the hero to the
    * end of the hop and keeps it "moving", so a fast key press skipped the water, car and train
-   * checks of every row it chained through (docs/04, D9).
+   * checks of every row it chained through (docs/game-rules.md, D9).
    */
   act(action: Action): MoveOutcome {
     if (this.ended) return "ignored";
