@@ -3,6 +3,8 @@ name = "clef-crossy-road"
 version = "0.1.0"
 description = "Clef plays a deterministic port of Expo Crossy Road"
 edition = "2021"
+license = "MIT"
+repository = "https://github.com/ramon-victor/clef-crossy-road"
 publish = false
 
 [lib]

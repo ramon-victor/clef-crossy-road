@@ -2,6 +2,12 @@
   "name": "@ccr/clef",
   "version": "0.0.0",
   "private": true,
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ramon-victor/clef-crossy-road.git",
+    "directory": "packages/clef"
+  },
   "type": "module",
   "description": "Workers AI client for the Clef decision models (REST). Transport-agnostic.",
   "exports": {

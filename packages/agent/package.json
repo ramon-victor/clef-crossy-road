@@ -2,6 +2,12 @@
   "name": "@ccr/agent",
   "version": "0.0.0",
   "private": true,
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ramon-victor/clef-crossy-road.git",
+    "directory": "packages/agent"
+  },
   "type": "module",
   "description": "Policies (baselines and Clef), observation encoders, prompts and the episode runner.",
   "exports": {

@@ -1,9 +1,9 @@
 Clef Crossy Road
 ================
 
-Parts of this project are a derivative work of Expo-Crossy-Road:
-game rules, constants, row-generation logic and (in later phases) 3D models,
-textures and audio.
+Parts of this project are a derivative work of Expo-Crossy-Road: the game
+rules, constants and row-generation logic in packages/core are a TypeScript
+port of the upstream code.
 
   Expo-Crossy-Road
   https://github.com/EvanBacon/Expo-Crossy-Road
@@ -37,8 +37,19 @@ SOFTWARE.
 
 ----------------------------------------------------------------------------
 
-Note on assets: the upstream README states that its game assets are used for
-educational purposes under a fair-use rationale and that the author is not
-associated with Hipster Whale, the makers of the original Crossy Road. The MIT
-license above covers the upstream source code; it does not by itself grant
-rights to the original game's branding or art. See docs/10-seguranca-e-licencas.md.
+Note on assets: the 3D models, textures, audio and font used by the app come
+from the same upstream repository. This repository does NOT contain or
+redistribute them: scripts/fetch-assets.mjs downloads them locally from the
+pinned revision above, and apps/desktop/public/assets/ is gitignored.
+
+The upstream README states that its game assets are used for educational
+purposes under a fair-use rationale and that its author is not associated with
+Hipster Whale, the makers of the original Crossy Road. The MIT license above
+covers the upstream source code; it does not by itself grant rights to the
+original game's branding or art. Release builds and the web bundle embed the
+assets, so do not distribute them without replacing the assets and the name.
+
+This project is not affiliated with or endorsed by Hipster Whale, Evan Bacon or
+Cloudflare. "Crossy Road" is a trademark of its owner; "Workers AI" and
+"Cloudflare" are trademarks of Cloudflare, Inc. See SECURITY.md for the
+security notes.

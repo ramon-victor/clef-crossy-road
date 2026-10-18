@@ -2,6 +2,12 @@
   "name": "@ccr/render",
   "version": "0.0.0",
   "private": true,
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ramon-victor/clef-crossy-road.git",
+    "directory": "packages/render"
+  },
   "type": "module",
   "description": "Three.js view of a @ccr/core Snapshot, using the voxel models of Expo-Crossy-Road.",
   "exports": {

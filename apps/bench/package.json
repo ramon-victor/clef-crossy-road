@@ -2,6 +2,12 @@
   "name": "@ccr/bench",
   "version": "0.0.0",
   "private": true,
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ramon-victor/clef-crossy-road.git",
+    "directory": "apps/bench"
+  },
   "type": "module",
   "description": "Headless benchmark CLI: N seeds x policies, resumable NDJSON runs, paired bootstrap report.",
   "scripts": {

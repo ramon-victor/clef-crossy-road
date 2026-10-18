@@ -2,6 +2,12 @@
   "name": "@ccr/desktop",
   "version": "0.1.0",
   "private": true,
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ramon-victor/clef-crossy-road.git",
+    "directory": "apps/desktop"
+  },
   "type": "module",
   "description": "Tauri desktop app: watch Clef play (or play yourself), with a live decision panel.",
   "scripts": {
