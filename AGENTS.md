@@ -19,10 +19,12 @@ Language: code, identifiers, commits, docs and this file in English.
 ## Status
 
 Research prototype. **Plain-prompt conditions do not beat "always forward"** (~3.7 rows).
-`DEFAULT_CLEF` (`scene` + `route` + `lookup`, ADR-0011) makes 22.4 rows over 7 games spanning two controller revisions,
+An earlier `DEFAULT_CLEF` (`scene` + `route` + `lookup`, ADR-0011) made 22.4 rows over 7 games spanning two controller revisions,
 against 2.7 for always-forward on those seeds. The scripted ceiling with the same controller (`exec-route`, no model)
-makes 48.3 over 100 games; that is not a matched comparison. Every report must distinguish controller and model help
-(`helpLabel`). **The 100-seed gate is pending** (about 25,000-30,000 neurons over several days on the free tier).
+makes 48.3 over 100 games; that is not a matched comparison. Current gameplay adds a platform clock and fourth lookup on platforms,
+retries failed sides and uses longer detours with stall limit 60; `exec-route` now makes 61.6 rows. Old results used 40.
+Every report must distinguish controller and model help
+(`helpLabel`). **The 100-seed gate is pending**; the earlier 25,000-30,000-neuron estimate needs replanning for current gameplay.
 Numbers, method and open work: `docs/results.md`.
 The app's "Who plays" lists You, **Clef-flash**, **Clef (27B)** and the three references; both Clef play the gameplay above
 (`DEFAULT_CLEF`, `CLEF_27B_CONFIG`), the app opens on Clef-flash at the first cached map (`CLEF_CACHED_SEEDS`, now 6-8), and every
@@ -39,16 +41,18 @@ the owner's say-so. `.env` holds the real `CF_API_TOKEN` and `CF_ACCOUNT_ID`: ne
 - `pnpm run dev` at the root prepares assets and serves `http://localhost:5173`, starting with the free look-ahead player.
 - `pnpm run dev:desktop` prepares assets and launches Tauri development (Rust/C++ tools/WebView2 required); stop browser dev first (same port).
 - `pnpm typecheck` / `pnpm lint` / `pnpm test`: run all three before declaring work done
+- `pnpm check` runs all three. Keep pnpm pinned in `packageManager` (12.14.0), validate upgrades with a frozen install and use the official installer if an older global binary cannot load the pinned version. CI checks Windows, Linux and macOS without credentials or API calls.
 - `pnpm --filter @ccr/core test`: core only, no network, ~3 s
 - `pnpm bench plan --policies <ids> --seeds 1..100`: estimates neurons and splits a run over days. **Run it before any `run` or `probe-run` that uses a model.**
+  From another worktree, use `--root <main checkout>` and `node --env-file=<main checkout>/.env` to share the app's ledger, cache and runs. Do not copy the ledger: separate copies undercount spending. Restart a dev server after recording new cache entries because it keeps its loaded cache in memory.
   To read credentials from another env file, pass it after `.env` (the last file wins): `node --env-file=.env --env-file=<file> apps/bench/src/cli.ts <command>`.
 - `pnpm bench run --run <name> --policies <ids> --seeds 1..100 [--latency fixed:300:pipelined]`, `pnpm bench report --run <name>`,
   `pnpm bench diagnose --run <name>` (AUC of the model's P(forward) against real safety) and
   `pnpm bench export --run <name> [--policy id] [--min-score n]` (RL trajectories as NDJSON). Both read files only, no API call.
 - `pnpm bench show-input --seed 4 --actions hop_forward [--policy <id>]` prints the exact request a model would get for a state (no network, no key). In the app, the **I** key opens
   a window with what the model read for each decision (state, question, options, answer): use it before guessing why the chicken does something.
-- `pnpm bench probe-sample` (90 labelled decision points from the free players' games, no API call), `probe-run --run <name> --policies <ids> --max-calls n`
-  (one question per policy and state, same client, cache and ledger as `run`) and `probe-report --run <name>` (no API call): about a tenth of the cost of whole games.
+- `pnpm bench probe-sample` (up to 114 labelled decision points from free games, including 24 platform states; no API call), `probe-run --run <name> --policies <ids> --max-calls n`
+  (one policy decision per state, with the same client, cache and ledger as `run`) and `probe-report --run <name>` (no API call).
 - `play.cmd` opens the release app **and shows in its terminal what the model is sent** (`CCR_LOG=full` by default; `brief` or `off`; the same text goes to
   `runs/logs/play.log`); `play-clef.cmd` opens it on Clef-flash, seed 6 (cached, free). `CCR_PLAYER` (`clef-flash`, `clef-27b`, a benchmark policy id...) and
   `CCR_SEED` pick the starting player and map.
@@ -148,4 +152,4 @@ Typecheck, lint and tests pass; determinism test passes if `core` changed; docs 
 ## Docs index
 
 `docs/README.md` (index) · `architecture` · `game-rules` · `clef-api` · `observation-and-prompts` · `benchmark` ·
-`results` (what worked, open work) · `desktop-app` · `references` · `adr/` (0001-0011). Security notes: `SECURITY.md`.
+`results` (what worked, open work) · `desktop-app` · `internationalization` · `references` · `adr/` (0001-0011). Security notes: `SECURITY.md`.

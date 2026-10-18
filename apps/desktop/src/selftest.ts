@@ -2,14 +2,18 @@ import { isBudgetRefusal } from "@ccr/clef";
 import { Game } from "@ccr/core";
 import type { GameView } from "@ccr/render";
 import { invoke } from "@tauri-apps/api/core";
+import { emitTo } from "@tauri-apps/api/event";
+import { getCurrentWindow, Window } from "@tauri-apps/api/window";
 import { isTauri } from "./bridge/tauri.ts";
 import type { Bridge } from "./bridge/types.ts";
+import { showControls } from "./bridge/windows.ts";
 import { CLEF_CACHED_SEEDS, CLEF_ID, type PolicyChoice } from "./policies.ts";
 
 /** The first map whose decisions the benchmark left in the cache for Clef-flash. */
 const CACHED_SEED = Number(CLEF_CACHED_SEEDS.split("-")[0]);
 
 import type { Session } from "./session.ts";
+import { type Pace, PREFERENCE_KEYS } from "./theater/preference.ts";
 
 interface Context {
   session: Session;
@@ -17,6 +21,8 @@ interface Context {
   bridge: Bridge;
   choices: PolicyChoice[];
   select(id: string): void;
+  /** `persist: false` is for this run only, so a check never leaves its own choice as the person's. */
+  setPace(pace: Pace, persist?: boolean): void;
 }
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -66,6 +72,102 @@ function webglRenderer(): string {
 }
 
 type Report = Record<string, unknown>;
+
+async function controlsReport(action: string): Promise<Report> {
+  const id = crypto.randomUUID();
+  let stop = () => {};
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const result = new Promise<Report>((resolve, reject) => {
+    timer = setTimeout(() => reject(new Error("Controls self-test timed out")), 8000);
+    void getCurrentWindow()
+      .listen<{ id: string; report: Report }>("selftest:controls-result", ({ payload }) => {
+        if (payload.id === id) resolve(payload.report);
+      })
+      .then((unlisten) => {
+        stop = unlisten;
+        return emitTo("controls", "selftest:controls", { id, action });
+      })
+      .catch(reject);
+  });
+  try {
+    return await result;
+  } finally {
+    if (timer !== undefined) clearTimeout(timer);
+    stop();
+  }
+}
+
+async function checkWindows(ctx: Context): Promise<Report> {
+  ctx.select("human");
+  ctx.session.start(1);
+  ctx.session.setPaused(false);
+  await showControls();
+  await sleep(350);
+  const initial = await controlsReport("status");
+  const focusKeepsPlaying = !ctx.session.state().paused;
+  const settings = await controlsReport("settings");
+  const settingsPaused = ctx.session.state().paused;
+  const seed = ctx.session.state().seed;
+  await invoke("selftest_window_action", { action: "close-controls" });
+  await sleep(200);
+  const controls = await Window.getByLabel("controls");
+  const hidden = controls !== null && !(await controls.isVisible());
+  const button = document.querySelector<HTMLButtonElement>(".open-controls");
+  button?.click();
+  await sleep(250);
+  const reopened = await controlsReport("status");
+  const visible = controls !== null && (await controls.isVisible());
+  const sameSession = ctx.session.state().seed === seed && ctx.session.state().human;
+
+  const originalLanguage = document.documentElement.lang;
+  const originalGame = ctx.session.game;
+  let language: Report;
+  try {
+    const changed = await controlsReport("language");
+    await sleep(200);
+    language = {
+      controls: changed.language,
+      game: document.documentElement.lang,
+      synchronized: changed.language === document.documentElement.lang,
+      sameGame: ctx.session.game === originalGame && ctx.session.state().seed === seed,
+    };
+  } finally {
+    await controlsReport("restore-language");
+    await sleep(200);
+  }
+  language.restored = document.documentElement.lang === originalLanguage;
+
+  ctx.session.setPaused(false);
+  await invoke("selftest_window_action", { action: "minimize" });
+  await sleep(1500);
+  const pausedOnMinimize = ctx.session.state().paused;
+  const tick = ctx.session.state().tick;
+  await sleep(300);
+  const stopped = ctx.session.state().tick === tick;
+  await invoke("selftest_window_action", { action: "restore" });
+  await sleep(250);
+  const stayedPaused = ctx.session.state().paused;
+  ctx.session.setPaused(false);
+
+  return {
+    windows: {
+      gameHasNoPanel: document.querySelector(".panel") === null,
+      initial,
+      focusKeepsPlaying,
+      settings,
+      settingsPaused,
+      hidden,
+      buttonPresent: !!button,
+      visible,
+      reopened,
+      sameSession,
+      language,
+      pausedOnMinimize,
+      stopped,
+      stayedPaused,
+    },
+  };
+}
 
 /** Plays the free look-ahead, measures the frame rate and checks that the scene really rendered. */
 async function checkRendering(ctx: Context): Promise<Report> {
@@ -145,6 +247,9 @@ async function checkClefFromCache(ctx: Context): Promise<Report> {
       confidence: clef.last?.decision.confidence ?? null,
       // A manoeuvre's own steps are not model calls, so the test is that every answer came from the cache and cost nothing.
       allFromCache: clef.cacheHits > 0 && clef.neurons === 0,
+      ...(clef.decisions === 0 && clef.phase === "error"
+        ? { skipped: "Cached replay unavailable; self-test never uses the API" }
+        : {}),
     },
     budgetAfter: await ctx.bridge.budget(),
   };
@@ -222,45 +327,119 @@ async function checkInspector(ctx: Context): Promise<Report> {
   ctx.session.setSpeed(4);
   ctx.session.start(CACHED_SEED);
   const started = performance.now();
-  while (performance.now() - started < 12_000 && ctx.session.state().decisions < 1)
+  while (
+    performance.now() - started < 12_000 &&
+    ctx.session.state().decisions < 1 &&
+    ctx.session.state().phase !== "error"
+  )
     await sleep(100);
 
   const press = () =>
     window.dispatchEvent(new KeyboardEvent("keydown", { key: "i", bubbles: true }));
   press();
   await sleep(250);
-  const text = (selector: string) => document.querySelector(selector)?.textContent ?? "";
-  const opened = document.querySelector(".inspector") !== null;
-  const state = text(".inspector-pre");
-  const click = (label: string) =>
-    [...document.querySelectorAll<HTMLButtonElement>(".inspector-tabs button")]
-      .find((b) => b.textContent === label)
-      ?.click();
-  click("Question");
-  await sleep(100);
-  const question = text(".inspector-pre");
-  click("Options");
-  await sleep(100);
-  const options = text(".inspector-body");
-  press();
-  await sleep(150);
+  return { inspector: await controlsReport("inspector") };
+}
+
+/** What the person had chosen, to put back after a check that presses the keys that save a choice. */
+function savePreferences(): Array<[string, string | null]> {
+  return PREFERENCE_KEYS.map((key): [string, string | null] => {
+    try {
+      return [key, localStorage.getItem(key)];
+    } catch {
+      return [key, null];
+    }
+  });
+}
+
+function restorePreferences(saved: ReadonlyArray<readonly [string, string | null]>): void {
+  try {
+    for (const [key, value] of saved) {
+      if (value === null) localStorage.removeItem(key);
+      else localStorage.setItem(key, value);
+    }
+  } catch {
+    // Storage is not available; nothing was kept either.
+  }
+}
+
+/**
+ * What shows the model deciding, in the real window: the compass around the chicken (five moves, one lit, a
+ * caption) and the conversation column (a CLEF bubble whose options carry the model's pick). C and T hide
+ * and bring them back.
+ */
+async function checkTheater(ctx: Context): Promise<Report> {
+  const saved = savePreferences();
+  ctx.setPace("live", false);
+  ctx.select(CLEF_ID);
+  ctx.session.setSpeed(4);
+  ctx.session.start(CACHED_SEED);
+  const count = (selector: string) => document.querySelectorAll(selector).length;
+  const press = async (key: string) => {
+    window.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true }));
+    await sleep(250);
+  };
+  const started = performance.now();
+  while (
+    performance.now() - started < 12_000 &&
+    ctx.session.state().decisions < 1 &&
+    ctx.session.state().phase !== "error"
+  )
+    await sleep(100);
+  // A choice saved by an earlier session may have hidden one of them; the check is about the views themselves.
+  const compassByDefault = count(".compass-anchor") === 1;
+  if (!compassByDefault) await press("c");
+  const conversation = async () =>
+    (await controlsReport("status")).conversation as {
+      shown: boolean;
+      bubbles: number;
+      questions: number;
+      picks: number;
+    };
+  const conversationByDefault = (await conversation()).shown;
+  if (!conversationByDefault) await press("t");
+  // The cached game keeps going: wait for a moment when an answer, not a question, is on screen.
+  while (
+    performance.now() - started < 20_000 &&
+    count(".compass.answered .cb.win") === 0 &&
+    ctx.session.state().phase !== "error"
+  )
+    await sleep(50);
+  const buttons = count(".compass .cb");
+  const lit = count(".compass .cb.win");
+  const caption = document.querySelector(".cap-main")?.textContent ?? "";
+  const { bubbles, picks, questions } = await conversation();
+  await press("c");
+  const compassHiddenWithC = count(".compass-anchor") === 0;
+  await press("c");
+  const compassShownAgain = count(".compass-anchor") === 1;
+  await press("t");
+  const conversationHiddenWithT = !(await conversation()).shown;
+  await press("t");
+  const conversationShownAgain = (await conversation()).shown;
+  // The checks that follow run against the window as it started: both views end up shown, so hide what was hidden.
+  if (!compassByDefault) await press("c");
+  if (!conversationByDefault) await press("t");
+  restorePreferences(saved);
   return {
-    inspector: {
-      opened,
-      // The route gameplay keys its state by the names of the manoeuvres (the rows are summed up in words).
-      stateHasRows: state.includes('"cross_ahead"') && state.includes('"detour_left"'),
-      stateChars: state.length,
-      questionHasRules: question.includes("chicken"),
-      optionsListMoves: [
-        "stand",
-        "no_stand",
-        "moving",
-        "still",
-        "detour_left",
-        "detour_right",
-        "wait_here",
-      ].every((m) => options.includes(m)),
-      closedAgain: document.querySelector(".inspector") === null,
+    theater: {
+      compassByDefault,
+      conversationByDefault,
+      compass: {
+        buttons,
+        lit,
+        caption,
+        hiddenWithC: compassHiddenWithC,
+        shownAgain: compassShownAgain,
+      },
+      conversation: {
+        bubbles,
+        questions,
+        picks,
+        everyQuestionHasAPick: questions > 0 && picks === questions,
+        hiddenWithT: conversationHiddenWithT,
+        shownAgain: conversationShownAgain,
+      },
     },
   };
 }
@@ -280,12 +459,16 @@ export async function runSelfTest(ctx: Context): Promise<void> {
   if (!enabled) return;
 
   const report: Report = { startedAt: new Date().toISOString() };
+  // Full speed, as before the pace existed: the checks wait on the game, not on a person reading.
+  ctx.setPace("live", false);
   try {
     for (const check of [
       checkRendering,
+      checkWindows,
       checkBudget,
       checkClefFromCache,
       checkInspector,
+      checkTheater,
       checkHumanKeys,
       checkHeldKey,
     ]) {

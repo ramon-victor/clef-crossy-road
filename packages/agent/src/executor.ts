@@ -1,6 +1,7 @@
 import type { Action, Observation } from "@ccr/core";
 import { canStand, isPermanent, type LanesState, lanesState } from "./lanes.ts";
 import type { Memory } from "./memory.ts";
+import type { DecisionNotice } from "./notice.ts";
 import type { Decision, ObservationPolicy, PolicyFactory } from "./policy.ts";
 
 /**
@@ -42,11 +43,14 @@ export interface Act {
   plan: Plan | null;
   /** In a sentence, for the log and the inspector. */
   note: string;
+  notice: DecisionNotice;
   /** Set when the manoeuvre ends with this step: how it went, for the model's memory. */
   result?: string;
 }
 
-export type Step = ({ kind: "act" } & Act) | { kind: "handback"; why: string };
+export type Step =
+  | ({ kind: "act" } & Act)
+  | { kind: "handback"; why: string; reason: DecisionNotice };
 
 const HOP_OF: Readonly<Record<Exclude<Maneuver, "wait_here">, Action>> = {
   cross_ahead: "hop_forward",
@@ -81,7 +85,14 @@ function swept(state: LanesState): boolean {
 export function stepPlan(plan: Plan, state: LanesState): Step {
   const { maneuver } = plan;
   if (maneuver === "wait_here") {
-    return { kind: "act", action: "stay", plan: null, note: "waiting one step", result: "waited" };
+    return {
+      kind: "act",
+      action: "stay",
+      plan: null,
+      note: "waiting one step",
+      notice: { kind: "wait" },
+      result: "waited",
+    };
   }
   const cell = targetOf(maneuver, state);
   if (canStand(cell)) {
@@ -91,19 +102,35 @@ export function stepPlan(plan: Plan, state: LanesState): Step {
       action: HOP_OF[maneuver],
       plan: null,
       note: `${maneuver}: the cell is clear, hopping`,
+      notice: { kind: "clear", maneuver },
       result: `${maneuver}: hopped${after}`,
     };
   }
-  if (isPermanent(cell)) return { kind: "handback", why: `${cell} does not go away` };
+  if (isPermanent(cell))
+    return {
+      kind: "handback",
+      why: `${cell} does not go away`,
+      reason: { kind: "permanent", cell },
+    };
   if (!canStand(state.chicken.stays_on)) {
     return {
       kind: "handback",
       why: `the chicken cannot stay where it stands (${state.chicken.stays_on})`,
+      reason: { kind: "cannot_stay", cell: state.chicken.stays_on },
     };
   }
-  if (swept(state)) return { kind: "handback", why: "a platform is carrying it to the edge" };
+  if (swept(state))
+    return {
+      kind: "handback",
+      why: "a platform is carrying it to the edge",
+      reason: { kind: "drift" },
+    };
   if (plan.waited >= MAX_WAIT_STEPS) {
-    return { kind: "handback", why: `the cell (${cell}) did not clear in ${plan.waited} steps` };
+    return {
+      kind: "handback",
+      why: `the cell (${cell}) did not clear in ${plan.waited} steps`,
+      reason: { kind: "timeout", cell, count: plan.waited },
+    };
   }
   const waited = plan.waited + 1;
   return {
@@ -111,6 +138,7 @@ export function stepPlan(plan: Plan, state: LanesState): Step {
     action: "stay",
     plan: { maneuver, waited },
     note: `${maneuver}: waiting for the cell (${cell}) to clear, ${waited}/${MAX_WAIT_STEPS}`,
+    notice: { kind: "waiting", maneuver, cell, waited, limit: MAX_WAIT_STEPS },
   };
 }
 
@@ -145,7 +173,12 @@ export class Executor {
     if (step.kind === "handback") {
       this.plan = null;
       this.last = `${maneuver}: refused, ${step.why}`;
-      return { action: "stay", plan: null, note: `${maneuver}: refused, ${step.why}` };
+      return {
+        action: "stay",
+        plan: null,
+        note: `${maneuver}: refused, ${step.why}`,
+        notice: { kind: "refused", maneuver, reason: step.reason },
+      };
     }
     return this.accept(step);
   }
@@ -207,7 +240,7 @@ export function executorPolicy(id: string, choose: Chooser): PolicyFactory {
         async decide(obs: Observation, memory?: Memory): Promise<Decision> {
           const state = lanesState(obs, memory);
           const act = executor.next(state) ?? executor.start(choose(state), state);
-          return { action: act.action, source: "executor", note: act.note };
+          return { action: act.action, source: "executor", note: act.note, notice: act.notice };
         },
       };
       return policy;

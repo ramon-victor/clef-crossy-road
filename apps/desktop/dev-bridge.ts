@@ -17,6 +17,7 @@ import {
 } from "@ccr/clef/node";
 import type { Plugin } from "vite";
 import { CredentialsStore, CredentialValidationError } from "./credentials.ts";
+import type { BridgeFailure } from "./src/bridge/errors.ts";
 
 /**
  * DEV-ONLY stand-in for the Rust commands, so the UI can be developed and tested in a normal
@@ -40,6 +41,12 @@ export function devBridge(
     }
     return budget;
   };
+
+  const failure = (
+    code: BridgeFailure["code"],
+    message: string,
+    params?: Record<string, number>,
+  ): BridgeFailure => ({ code, message, ...(params ? { params } : {}) });
 
   const send = (res: ServerResponse, status: number, body: unknown) => {
     res.statusCode = status;
@@ -81,25 +88,26 @@ export function devBridge(
         const origin = req.headers.origin;
         const host = req.headers.host;
         if (!host || !/^(?:localhost|127\.0\.0\.1|\[::1\])(?::\d+)?$/.test(host)) {
-          return send(res, 403, { error: "bad host" });
+          return send(res, 403, { error: failure("bridge", "bad host") });
         }
         try {
           if (origin && new URL(origin).host !== host)
-            return send(res, 403, { error: "bad origin" });
+            return send(res, 403, { error: failure("bridge", "bad origin") });
         } catch {
-          return send(res, 403, { error: "bad origin" });
+          return send(res, 403, { error: failure("bridge", "bad origin") });
         }
         if (req.headers["sec-fetch-site"] && req.headers["sec-fetch-site"] !== "same-origin") {
-          return send(res, 403, { error: "bad fetch site" });
+          return send(res, 403, { error: failure("bridge", "bad fetch site") });
         }
 
         try {
           const url = new URL(req.url ?? "/", "http://localhost");
           if (url.pathname === "/credentials") {
             if (req.method === "GET") return send(res, 200, credentials.status());
-            if (req.method !== "POST") return send(res, 405, { error: "method not allowed" });
+            if (req.method !== "POST")
+              return send(res, 405, { error: failure("bridge", "method not allowed") });
             if (!req.headers["content-type"]?.startsWith("application/json")) {
-              return send(res, 415, { error: "JSON required" });
+              return send(res, 415, { error: failure("bridge", "JSON required") });
             }
             try {
               return send(res, 200, credentials.save(await readJson(req, 8192)));
@@ -107,8 +115,8 @@ export function devBridge(
               return send(res, error instanceof CredentialValidationError ? 400 : 500, {
                 error:
                   error instanceof CredentialValidationError
-                    ? error.message
-                    : "Could not save local Cloudflare credentials.",
+                    ? failure(error.code, error.message)
+                    : failure("credentials_save", "Could not save local Cloudflare credentials."),
               });
             }
           }
@@ -124,7 +132,8 @@ export function devBridge(
               day: new Date().toISOString().slice(0, 10),
             });
           }
-          if (req.method !== "POST") return send(res, 405, { error: "method not allowed" });
+          if (req.method !== "POST")
+            return send(res, 405, { error: failure("bridge", "method not allowed") });
           const body = await readJson(req);
 
           if (url.pathname === "/cache/get") {
@@ -137,16 +146,23 @@ export function devBridge(
           if (url.pathname === "/run") {
             const model = String(body.model) as ClefModel;
             if (!CLEF_MODELS.includes(model))
-              return send(res, 400, { error: `model not allowed: ${model}` });
+              return send(res, 400, {
+                error: failure("model_not_allowed", `model not allowed: ${model}`),
+              });
             if (!ledger.canSpend()) {
               return send(res, 429, {
-                error: budgetRefusal(ledger.spentToday(), FREE_NEURONS_PER_DAY),
+                error: failure("quota", budgetRefusal(ledger.spentToday(), FREE_NEURONS_PER_DAY), {
+                  spent: ledger.spentToday(),
+                  limit: FREE_NEURONS_PER_DAY,
+                }),
               });
             }
             if (!current.accountId || !current.apiToken) {
               return send(res, 400, {
-                error:
+                error: failure(
+                  "credentials_missing",
                   "CF_API_TOKEN and CF_ACCOUNT_ID are required. Open Setup and configure Cloudflare.",
+                ),
               });
             }
             const transport = createNodeTransport({
@@ -167,11 +183,11 @@ export function devBridge(
             }
             return send(res, 200, response);
           }
-          return send(res, 404, { error: "not found" });
+          return send(res, 404, { error: failure("bridge", "not found") });
         } catch {
           // Never echo anything that could contain credentials.
           return send(res, 500, {
-            error: "Local bridge request failed.",
+            error: failure("bridge", "Local bridge request failed."),
           });
         }
       });

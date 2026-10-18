@@ -15,7 +15,7 @@ The ADR-0010 condition (`graph-maneuver`) often stalled. Replaying the recorded 
 
 ## Decision outcome
 
-Chosen option: the last one, a new help level labelled `words + rules + graph + route executor` (`helpLabel`) and shown in every report. All code is in `packages/agent/src`.
+Chosen option: a labelled route-controller condition. The current help label is `words + rules + graph + platform clock + route executor` (`helpLabel`). All code is in `packages/agent/src`. The original three-question design is summarized here; the 2026-10-17 changes are recorded below.
 
 | Part | What it is | Where |
 |---|---|---|
@@ -31,6 +31,16 @@ The controller plans the route and code picks the moment: **the model only choos
 - The agreement with the ideal chooser (`bench probe-report`) measures obedience to the rules, not skill.
 
 Numbers are in [results](../results.md).
+
+## Current controller and platform lookup
+
+The following changes were added on 2026-10-17; the table above describes the original controller:
+
+- On a platform, a fourth lookup asks whether `chicken.edge_in` is `a_moment` (`ride`: `leaving` or `staying`). `leaving` selects `leave_platform` before the scene answers. The controller searches up to 8 hops for an exit; urgent edge handling remains a labelled controller fallback, independently of the model's answer ([ADR-0009](0009-perception-memory-judgement.md#platform-clock)).
+- Failed sides expire after 4 decisions. Detours search 24 hops and run up to 40 steps, ending on the selected side. Still water is refused immediately instead of consuming a crossing wait.
+- When a maneuver cannot start, the policy tries the other detours in the model's `around` probability order, without a new request. Waiting is already the refusal behavior and is excluded; `wait_here` and `leave_platform` do not enter this queue. `extra.fallback` and typed controller notices distinguish the model's initial answer from the maneuver actually begun.
+- The stall limit is now 60. The historical results used 40; compare controller versions and episode limits as well as seeds. Current scripted `exec-route` makes 61.6 rows over 100 seeds; there is no corresponding 100-seed model result.
+- A platform request's recorded probabilities include the `leaving` mass on the first actual action. The panel and compass show the selected routing branch, separately from the benchmark's joint distribution. Conversation, notices and localization are presentation metadata and do not enter observations or benchmark trajectories.
 
 ### Consequences
 

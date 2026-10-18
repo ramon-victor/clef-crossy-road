@@ -20,10 +20,10 @@
 
 Clef Crossy Road tests Cloudflare's **Clef-flash** decision model (Workers AI, REST only) in a deterministic, headless
 TypeScript port of the rules of Evan Bacon's [Expo-Crossy-Road](https://github.com/EvanBacon/Expo-Crossy-Road). The default
-player asks the model three lookups about the scene, then a route controller executes the hops, waits and detours. Other
+player asks the model three lookups about the scene, plus a fourth while riding a platform, then a route controller executes the hops, waits and detours. Other
 conditions ask the model to choose each move directly.
 
-A [Tauri v2](https://v2.tauri.app/) desktop app, or your browser, renders the game with Three.js next to a panel showing
+A [Tauri v2](https://v2.tauri.app/) desktop app renders the game with Three.js in one window and its controls in another. Browser development keeps an integrated layout. The panel shows
 actions, probabilities, controller steps, latency, tokens and rows crossed. A Node benchmark CLI compares players on
 identical seeds with paired confidence intervals.
 
@@ -38,8 +38,9 @@ Nothing is deployed to Cloudflare. The project only calls the Workers AI REST AP
 | `always-forward` | 100 | 3.78 |
 | Clef-flash, plain prompts (JSON, ASCII grid, the player's view of the screen) | 100 | 3.67 – 3.73 (no better than always forward) |
 | Clef-flash, top-down image of the observation | 100 | 3.36 (worse) |
-| **Clef-flash + route controller** (`scene` · `route` · `lookup`, the app default) | 7 | **22.4** [10.9, 35.7] |
-| Same controller, scripted, **no model** (`exec-route`) | 100 | 48.3 |
+| Clef-flash + route controller (`scene` · `route` · `lookup`, earlier revision) | 7 | **22.4** [10.9, 35.7] |
+| Scripted controller, **no model** (`exec-route`, same earlier revision) | 100 | 48.3 |
+| Scripted controller, **no model** (`exec-route`, current revision; stall limit 60) | 100 | 61.6 |
 | `lookahead` (reads the simulator, no model) | 100 | 44.75 |
 
 Given the game state and a plain question, Clef-flash plays like "always forward": it puts its highest probability on advancing
@@ -50,11 +51,11 @@ moved it a long way (on a 90-state probe it agrees with the ideal follower of th
 Read the numbers with these caveats:
 
 - **The controller is our code.** It does the hopping, the timing and the detours; the model only answers three one-field
-  lookups. The fair comparison for the headline row is the scripted ceiling with the same controller (48.3), not
+  scene lookups and, on a platform, a clock lookup. The fair comparison for the historical model row is the scripted ceiling with the same controller (48.3), not
   `always-forward`. Every condition is labelled with how much help the code gives.
-- **The headline row is 7 games**, hence the wide interval. The 100-seed gate is still pending: roughly 25,000–30,000 neurons,
-  several days on the free tier. These seven games span two controller revisions and are not a matched comparison with
+- **The historical model row is 7 games**, hence the wide interval. The 100-seed gate is still pending; its earlier estimate was 25,000–30,000 neurons over several days and needs replanning for current gameplay. These seven games span two controller revisions and are not a matched comparison with
   the 100-game scripted references.
+- **Current gameplay has changed.** The controller now retries failed sides, walks longer detours and stops after 60 decisions without progress. Its current scripted reference makes 61.6 rows. There is no matched model evaluation for that version; the seven-game mean above belongs to the earlier controller and stall limit 40.
 
 Full tables, method and open questions: [docs/results.md](docs/results.md).
 
@@ -90,14 +91,14 @@ flowchart LR
 | Needs | For | Version |
 |---|---|---|
 | Node.js | everything | 24 or newer |
-| pnpm | everything | 10 |
+| pnpm | everything | 12.14.0 (pinned in `packageManager`) |
 | Git and an internet connection | first run (downloads the game assets) | any |
-| Rust, MSVC C++ build tools, WebView2 | desktop app only | stable Rust |
+| Rust and [Tauri platform prerequisites](https://v2.tauri.app/start/prerequisites/) | desktop app only | stable Rust; MSVC C++ build tools and WebView2 on Windows |
 
 ```bash
 git clone https://github.com/ramon-victor/clef-crossy-road.git
 cd clef-crossy-road
-pnpm install
+pnpm install --frozen-lockfile
 pnpm run dev
 ```
 
@@ -115,8 +116,9 @@ Stop any `pnpm run dev` first: both use port 5173. For a release build, run `pnp
 `pnpm tauri build --no-bundle` inside `apps/desktop`, and double-click `play.cmd`, which also prints what the model is sent.
 Keys, the **I** input inspector and the `CCR_*` variables are in [docs/desktop-app.md](docs/desktop-app.md).
 
-> **Platform.** Developed and tested on Windows 11. The `.cmd` launchers and WebView2 are Windows-specific. Browser mode only
-> needs Node and pnpm, but it has not been verified on macOS or Linux.
+> **Platform.** Desktop launch has been checked on Windows; backend tests have also run on Linux. The `.cmd` launchers and WebView2 are Windows-specific. CI checks TypeScript and the web build on Windows, Linux and macOS; native desktop behavior on all three platforms has not been verified.
+
+If an older pnpm fails to load the pinned version, see [pnpm setup](docs/desktop-app.md#pnpm-setup).
 
 ## Using a model
 
@@ -142,12 +144,12 @@ zero cost.
 pnpm bench plan   --policies always-forward,lookahead --seeds 1..100          # estimate cost, split over days
 pnpm bench run    --run my-run --policies always-forward,random,lookahead --seeds 1..100
 pnpm bench report --run my-run                                                # means, paired deltas, 95% CIs
-pnpm bench diagnose --run my-run                                              # AUC of P(forward) vs. real safety
 pnpm bench show-input --seed 4 --actions hop_forward                          # the exact request a model would get
 ```
 
 Model players are named `clef:<model>:<encoder>:<strategy>[:<manual>]`, for example `clef:clef-flash:scene:route:lookup`.
 The grammar, the reference players, the stall rule and latency injection are in [docs/benchmark.md](docs/benchmark.md).
+For a run that contains model probabilities, `pnpm bench diagnose --run <name>` scores P(forward) against real safety; the free reference-only example above has no such probabilities.
 Spending commands refuse to start once the day's ceiling is reached; `--daily-neurons` can only lower it.
 
 ## Repository layout
@@ -176,13 +178,14 @@ and `clef`; the apps wire everything together ([docs/architecture.md](docs/archi
 | Call the Clef API or estimate cost | [docs/clef-api.md](docs/clef-api.md) |
 | Run or extend the benchmark | [docs/benchmark.md](docs/benchmark.md) |
 | Use the app | [docs/desktop-app.md](docs/desktop-app.md) |
+| Maintain the seven UI languages | [docs/internationalization.md](docs/internationalization.md) |
 | Know why a decision was made | [docs/adr/](docs/adr/) |
 | Find sources and related work | [docs/references.md](docs/references.md) |
 
 ## Development
 
 ```bash
-pnpm typecheck && pnpm lint && pnpm test       # TypeScript
+pnpm check                                    # typecheck, lint and TypeScript tests
 cd apps/desktop/src-tauri && cargo test --lib  # Rust
 ```
 

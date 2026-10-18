@@ -1,8 +1,14 @@
 import { GameView } from "@ccr/render";
 import { useEffect, useRef, useState } from "preact/hooks";
 import type { Sounds } from "./audio.ts";
-import { ACTION_GLYPH, endTitle, percent } from "./format.ts";
+import { ACTION_GLYPH } from "./format.ts";
+import { gameEndTitle } from "./i18n/presentation.ts";
+import { useI18n } from "./i18n/provider.tsx";
+import { ErrorMessage } from "./panel/ErrorMessage.tsx";
 import type { Session, SessionState } from "./session.ts";
+import { Compass } from "./theater/Compass.tsx";
+import { modelChoice } from "./theater/choice.ts";
+import { Glyph } from "./theater/Glyph.tsx";
 
 export interface GameCanvasProps {
   session: Session;
@@ -12,13 +18,22 @@ export interface GameCanvasProps {
   onFps?: (fps: number) => void;
   onRetry: () => void;
   onNewMap: () => void;
+  onShowControls?: (() => void) | undefined;
+  /** The model's decision drawn around the chicken. It replaces the thought bubble while it is on. */
+  compass: { on: boolean; conversationOpen: boolean; onConversation(): void };
 }
+
+/** How far above its feet the compass is centred, in world units: the middle of the chicken. */
+const COMPASS_LIFT = 0.5;
 
 /** Owns the WebGL view and the animation loop; everything else is plain DOM on top of it. */
 export function GameCanvas(props: GameCanvasProps) {
+  const translation = useI18n();
+  const { t, number, percent } = translation;
   const { session, state } = props;
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const bubbleRef = useRef<HTMLDivElement>(null);
+  const compassRef = useRef<HTMLDivElement>(null);
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
   const [errorText, setErrorText] = useState("");
   const latest = useRef(props);
@@ -73,8 +88,15 @@ export function GameCanvas(props: GameCanvasProps) {
           wasAlive = snap.alive;
 
           const bubble = bubbleRef.current;
-          const pos = view?.heroScreenPosition();
-          if (bubble && pos) bubble.style.transform = `translate(${pos.x}px, ${pos.y}px)`;
+          // The thought bubble and the compass replace each other, so only the one that is on is placed.
+          const compass = compassRef.current;
+          if (compass) {
+            const body = view?.heroScreenPosition(COMPASS_LIFT);
+            if (body) compass.style.transform = `translate(${body.x}px, ${body.y}px)`;
+          } else if (bubble) {
+            const pos = view?.heroScreenPosition();
+            if (pos) bubble.style.transform = `translate(${pos.x}px, ${pos.y}px)`;
+          }
 
           if (now - lastReport > 500) {
             lastReport = now;
@@ -97,33 +119,61 @@ export function GameCanvas(props: GameCanvasProps) {
   }, [session]);
 
   const last = state.last;
-  const showBubble = status === "ready" && state.alive && !state.human && last !== null;
-  const chosenP = last?.decision.probabilities?.[last.action];
+  const showBubble =
+    status === "ready" && state.alive && !state.human && last !== null && !props.compass.on;
+  const chosen = last ? modelChoice(last) : null;
+  const shownMove = chosen?.move ?? last?.action;
+  const chosenP = chosen?.bars?.p[chosen.move];
 
   return (
     <div class="stage">
-      <canvas
-        ref={canvasRef}
-        class="game"
-        tabIndex={0}
-        aria-label="Game. Arrow keys or WASD to move; Space to pause."
-      />
+      <canvas ref={canvasRef} class="game" tabIndex={0} aria-label={t("game.canvas")} />
 
       <div class="hud">
-        <div class="hud-score">{state.score}</div>
-        <div class="hud-sub">
-          rows · best {state.best} · seed {state.seed}
-        </div>
+        <div class="hud-score">{number(state.score)}</div>
+        <div class="hud-sub">{t("game.hud", { best: state.best, seed: String(state.seed) })}</div>
       </div>
+
+      {props.onShowControls && (
+        <button
+          type="button"
+          class="open-controls"
+          onClick={props.onShowControls}
+          aria-label={t("windows.openControls")}
+          title={t("windows.openControlsHelp")}
+        >
+          <svg
+            viewBox="0 0 24 24"
+            width="20"
+            height="20"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            aria-hidden="true"
+          >
+            <path d="M4 7h16M4 17h16" />
+            <circle cx="9" cy="7" r="3" fill="currentColor" stroke="none" />
+            <circle cx="15" cy="17" r="3" fill="currentColor" stroke="none" />
+          </svg>
+        </button>
+      )}
+
+      {state.paused && status === "ready" && state.alive && !state.stalled && (
+        <div class="paused-note" role="status">
+          {t("windows.paused")}
+        </div>
+      )}
 
       <div ref={bubbleRef} class="bubble-anchor">
         {showBubble && last && (
           <div class="bubble" key={last.index}>
-            <span class="bubble-arrow">{ACTION_GLYPH[last.action]}</span>
+            <span class="bubble-arrow">
+              <Glyph glyph={ACTION_GLYPH[shownMove ?? last.action]} size={22} />
+            </span>
             {chosenP !== undefined && <span class="bubble-p">{percent(chosenP)}</span>}
           </div>
         )}
-        {status === "ready" && state.phase === "thinking" && (
+        {status === "ready" && state.phase === "thinking" && !props.compass.on && (
           <div class="bubble thinking">
             <span class="dots">
               <i />
@@ -134,26 +184,36 @@ export function GameCanvas(props: GameCanvasProps) {
         )}
       </div>
 
-      {status === "loading" && <div class="overlay-note">Loading models…</div>}
+      {status === "ready" && props.compass.on && (
+        <Compass
+          session={session}
+          state={state}
+          anchorRef={compassRef}
+          conversationOpen={props.compass.conversationOpen}
+          onConversation={props.compass.onConversation}
+        />
+      )}
+
+      {status === "loading" && <div class="overlay-note">{t("game.loading")}</div>}
       {status === "error" && (
         <div class="overlay-card">
-          <h2>Could not start the view</h2>
-          <p>{errorText}</p>
-          <p class="small">If the models are missing, run: node scripts/fetch-assets.mjs</p>
+          <h2>{t("game.loadError")}</h2>
+          <ErrorMessage info={{ code: "render", detail: errorText }} />
+          <p class="small">{t("game.assetsHelp", { command: "node scripts/fetch-assets.mjs" })}</p>
         </div>
       )}
 
       {status === "ready" && (!state.alive || state.stalled) && (
         <div class="overlay-card over">
-          <div class="over-title">{endTitle(state)}</div>
-          <div class="over-score">{state.score}</div>
-          <div class="over-sub">rows crossed · best {state.best}</div>
+          <div class="over-title">{gameEndTitle(state, translation)}</div>
+          <div class="over-score">{number(state.score)}</div>
+          <div class="over-sub">{t("game.rows", { count: state.score, best: state.best })}</div>
           <div class="over-actions">
             <button type="button" class="btn primary" onClick={props.onRetry}>
-              Retry same map
+              {t("game.retryMap")}
             </button>
             <button type="button" class="btn" onClick={props.onNewMap}>
-              New map
+              {t("controls.newMap")}
             </button>
           </div>
         </div>

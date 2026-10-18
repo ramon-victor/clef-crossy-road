@@ -16,6 +16,7 @@ trying to do.
 | Page | What you get |
 |---|---|
 | [Desktop app](desktop-app.md) | Running the app, keys, the AI panel, launch variables |
+| [Internationalization](internationalization.md) | Language selection, translation boundaries, catalogs and contributor checks |
 | [Benchmark](benchmark.md) | Running and extending the benchmark: commands, player ids, rules, latency injection, the spend budget |
 
 ## Reference

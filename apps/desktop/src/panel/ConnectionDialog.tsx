@@ -1,8 +1,12 @@
 import { useLayoutEffect, useRef, useState } from "preact/hooks";
+import { credentialIssue } from "../bridge/credentials.ts";
+import { type ErrorInfo, errorInfo } from "../bridge/errors.ts";
 import type { Bridge, CredentialStatus } from "../bridge/types.ts";
+import { useI18n } from "../i18n/provider.tsx";
+import { ErrorMessage } from "./ErrorMessage.tsx";
 
 export interface ConnectionDialogProps {
-  bridge: Bridge;
+  bridge: Pick<Bridge, "saveCredentials">;
   configured: boolean;
   onSaved(status: CredentialStatus): void;
   onClose(): void;
@@ -10,11 +14,12 @@ export interface ConnectionDialogProps {
 
 /** A write-only form: saved credentials are never fetched or prefilled. */
 export function ConnectionDialog({ bridge, configured, onSaved, onClose }: ConnectionDialogProps) {
+  const { t } = useI18n();
   const dialog = useRef<HTMLDialogElement>(null);
   const [accountId, setAccountId] = useState("");
   const [apiToken, setApiToken] = useState("");
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState("");
+  const [error, setError] = useState<ErrorInfo | null>(null);
 
   useLayoutEffect(() => {
     const element = dialog.current;
@@ -40,22 +45,26 @@ export function ConnectionDialog({ bridge, configured, onSaved, onClose }: Conne
           class="info-button"
           onClick={onClose}
           disabled={saving}
-          aria-label="Close Cloudflare settings"
+          aria-label={t("connection.close")}
         >
           ×
         </button>
       </header>
       <p id="connection-description" class="hint">
-        {configured
-          ? "Credentials are already configured. Enter both values to replace them."
-          : "Connect your Cloudflare account to use Clef."}
+        {configured ? t("connection.replace") : t("connection.connect")}
       </p>
       <form
+        noValidate
         onSubmit={async (event) => {
           event.preventDefault();
           if (saving) return;
+          const issue = credentialIssue({ accountId, apiToken });
+          if (issue) {
+            setError({ code: issue, detail: "" });
+            return;
+          }
           setSaving(true);
-          setError("");
+          setError(null);
           try {
             const status = await bridge.saveCredentials({
               accountId: accountId.trim(),
@@ -65,20 +74,14 @@ export function ConnectionDialog({ bridge, configured, onSaved, onClose }: Conne
             setApiToken("");
             onSaved(status);
           } catch (reason) {
-            setError(
-              typeof reason === "string"
-                ? reason
-                : reason instanceof Error
-                  ? reason.message
-                  : "Could not save credentials. Try again.",
-            );
+            setError(errorInfo(reason));
           } finally {
             setSaving(false);
           }
         }}
       >
         <label class="field-label" for="cloudflare-account">
-          Account ID <code>CF_ACCOUNT_ID</code>
+          {t("connection.account")} <code>CF_ACCOUNT_ID</code>
         </label>
         <input
           id="cloudflare-account"
@@ -90,11 +93,11 @@ export function ConnectionDialog({ bridge, configured, onSaved, onClose }: Conne
           required
           pattern="[a-fA-F0-9]{32}"
           maxLength={32}
-          placeholder="32-character account ID"
+          placeholder={t("connection.accountPlaceholder")}
           disabled={saving}
         />
         <label class="field-label" for="cloudflare-token">
-          API token <code>CF_API_TOKEN</code>
+          {t("connection.token")} <code>CF_API_TOKEN</code>
         </label>
         <input
           id="cloudflare-token"
@@ -106,22 +109,22 @@ export function ConnectionDialog({ bridge, configured, onSaved, onClose }: Conne
           spellcheck={false}
           required
           maxLength={4096}
-          placeholder="Token with Workers AI permission"
+          placeholder={t("connection.tokenPlaceholder")}
           disabled={saving}
         />
-        <p class="hint">Saved locally on this computer. Saved values are never displayed here.</p>
-        <p class="hint">Saving does not call the API. The game stays paused until you resume it.</p>
+        <p class="hint">{t("connection.local")}</p>
+        <p class="hint">{t("connection.noCall")}</p>
         {error && (
-          <p class="connection-error" role="alert">
-            {error}
-          </p>
+          <div class="connection-error">
+            <ErrorMessage info={error} />
+          </div>
         )}
         <div class="connection-actions">
           <button type="button" class="btn" disabled={saving} onClick={onClose}>
-            Cancel
+            {t("common.cancel")}
           </button>
           <button type="submit" class="btn primary" disabled={saving}>
-            {saving ? "Saving…" : "Save credentials"}
+            {t(saving ? "connection.saving" : "connection.save")}
           </button>
         </div>
       </form>

@@ -43,3 +43,7 @@ Memory does not enter the `Observation`, whose schema stays ADR-0005's. The runn
 - Bad, because the border between perception and judgement is a human decision; new fields go through the test question above and a forbidden-words test.
 - Neutral: what the model receives can be inspected in the app (key **I**) and with `pnpm bench show-input`, which print the request exactly as it is sent.
 - Measured effect of these views on play: see [results](../results.md). On their own they did not make Clef play better than "always forward"; [ADR-0010](0010-words-rules-maneuver-executor.md) and [ADR-0011](0011-route-controller-three-lookups.md) add help at labelled levels.
+
+## Platform clock
+
+Added on 2026-10-17: while riding, `scene` reports `chicken.edge_in` as `a_moment` (under 1 s), `soon` (under 2.5 s), `later`, or `not_carried` (stationary). It derives from the current platform's velocity and distance to the world edge, independently of candidate moves. This extends perception beyond the 0.2 s forecast; it is not a per-move safety evaluation and does not change `Observation`. Non-platform requests omit the field. The help label includes `platform clock`, with tests preserving request compatibility elsewhere.

@@ -22,13 +22,13 @@ pnpm bench report --run refs,flash-json --ref always-forward          # scores, 
 pnpm bench diagnose --run flash-json                                  # AUC of P(hop_forward) vs real safety, per terrain; files only
 pnpm bench export --run refs --policy lookahead --min-score 20        # RL trajectories (observation, action, reward, done) as NDJSON
 pnpm bench show-input --seed 4 --actions hop_forward --policy clef    # the exact request for a state; sends nothing, needs no key
-pnpm bench probe-sample --seeds 1..300                                # 90 labelled decision points from three free players
-pnpm bench plan --policies clef:clef-flash:json:choice:full,clef --seeds 1 --assume-decisions 90
+pnpm bench probe-sample --seeds 1..300                                # up to 114 labelled decision points from free players
+pnpm bench plan --policies clef:clef-flash:json:choice:full,clef --seeds 1 --assume-decisions 114
 pnpm bench probe-run --run p-flash --policies clef:clef-flash:json:choice:full,clef --max-calls 400 --daily-neurons 9000
 pnpm bench probe-report --run p-flash --ref clef:clef-flash:json:choice:full   # scores vs labels; agreement with the ideal follower
 ```
 
-Only `run` and `probe-run` can call the API. A probe makes one policy decision per sampled state; a strategy may put several questions in that request. Its eight strata (quota) are `water-deadly` (24), `water-open` (12), `road-deadly` (12), `road-open` (8), `tree` (10), `tree-stuck` (10), `grass-open` (8), `rail` (6). Labels come from the simulator and never reach a model. For a probe estimate, use `plan` with one seed and `--assume-decisions` set to the sample size, as above.
+Only `run` and `probe-run` can call the API. A probe makes one policy decision per sampled state; a strategy may put several questions in that request. The original eight strata total 90 states: `water-deadly` (24), `water-open` (12), `road-deadly` (12), `road-open` (8), `tree` (10), `tree-stuck` (10), `grass-open` (8), `rail` (6). Two platform strata add 12 each (`platform-edge`, `platform-far`), for up to 114 states. Historical 90-state results predate that addition. Labels never reach the model. Estimate a probe with one seed and `--assume-decisions` set to its actual sample size.
 
 ## Policy ids
 
@@ -46,10 +46,12 @@ The parser rejects unsupported combinations before a run starts. In particular, 
 |---|---|---|
 | World ticks after each action: one full hop, 60 ticks per second, so 0.2 s | 12 | `--decision-ticks` |
 | Maximum decisions per game (reaching it is "capped") | 300 | `--max-decisions` |
-| Stall rule: end the game after this many consecutive decisions without a new furthest row (`0` disables) | 40 | `--stall-limit` |
+| Stall rule: end the game after this many consecutive decisions without a new furthest row (`0` disables) | 60 | `--stall-limit` |
 | Parallel games | 1 for baselines, 4 with a `clef` policy | `--concurrency` |
 
 A game ends on death, at the decision cap, or on a stall. The rules apply to every policy alike, and the stall rule also bounds the cost of a policy that dithers forever. Executor steps count as decisions. Settings are fixed in `meta.json`; resuming a run with different ones is refused. The score, "rows crossed", is the furthest row reached minus the starting row.
+
+Historical results recorded before 2026-10-17 used stall limit 40. Pass `--stall-limit 40` when reproducing those conditions, and compare both seeds and controller versions. The app has no 300-decision benchmark cap; a cached app replay may continue beyond it.
 
 ## Reference players
 
@@ -93,5 +95,6 @@ The hard rule is to stay inside the Workers AI free tier, **10,000 neurons per a
 - **`--max-calls`** (default 1500 for `run`, 400 for `probe-run`) only stops *starting* games or questions. Games in flight (up to `--concurrency`) run to the end and can overshoot the plan; the daily ceiling is the real stop. Exit code 3 means the call cap was reached, 2 a fatal error such as the quota.
 - **Plan first.** `plan` estimates decisions per game times neurons per decision, reserves 10% of each day and splits the seeds over as many days as needed, printing `--seeds` ranges ready to paste. It assumes no cache hits, uses built-in token estimates (marked `(est.)` when not measured) and accepts `--assume-decisions n`.
 - **Cache validity.** The key is the model, state, questions, images and a tag of prompt version, encoder, strategy and manual, so any prompt or encoder change misses. With a controller (`maneuver`, `graph-maneuver`, `route`) a cached game also replays only if the controller makes the same moves it made when cached: after changing `route.ts` or a prompt, re-run the seeds and check each with `--daily-neurons 0`.
+- **Worktrees.** Share the canonical checkout's ledger and cache with `--root <checkout>` and `node --env-file=<checkout>/.env apps/bench/src/cli.ts ...`. Do not copy the ledger to another worktree. Restart a running dev server after recording new answers because it caches them in memory.
 
 Per-model rates and measured request sizes are in [Clef API: price, limits and cost](clef-api.md#price-limits-and-cost). Cost depends on the condition and the number of model requests, not the number of controller hops. The estimate for the default condition's pending 100-seed evaluation is in [Results: open work](results.md#open-work); use `plan` to split it before spending.

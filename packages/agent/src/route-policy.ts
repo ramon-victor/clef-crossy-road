@@ -1,25 +1,36 @@
 import type { Answer, ClefClient, ClefRequest, ClefResult } from "@ccr/clef";
 import { ACTIONS, type Action, type Observation } from "@ccr/core";
+import { choiceAnswers } from "./answers.ts";
 import type { ClefPolicyConfig } from "./clef-policy.ts";
 import { emptyMemory, type Memory } from "./memory.ts";
-import type { Decision, ModelInput, ObservationPolicy, PolicyFactory } from "./policy.ts";
+import type { DecisionNotice } from "./notice.ts";
+import type {
+  DecideHooks,
+  Decision,
+  ModelInput,
+  ObservationPolicy,
+  PolicyFactory,
+} from "./policy.ts";
 import { PROMPT_VERSION } from "./prompts.ts";
-import { ROUTE_ACTION, RouteExecutor, type RouteManeuver } from "./route.ts";
+import { ROUTE_ACTION, type RouteAct, RouteExecutor, type RouteManeuver } from "./route.ts";
 import {
   AROUND_OPTIONS,
+  type AroundOption,
   CELL_OPTIONS,
   MOVING_OPTIONS,
+  RIDE_OPTIONS,
+  RIDE_QUESTION_ID,
   ROUTE_QUESTION_IDS,
   routeQuestions,
 } from "./route-prompts.ts";
 import { sceneState } from "./scene.ts";
 
 /**
- * The `route` strategy (ADR-0011): three small lookups in one request. `cell` says whether the chicken can
- * stand on the cell straight ahead, `moving` whether the things of that row move, and `around` which way to go
- * if the way ahead is closed (left, right, wait). The only rule of ours on the answers is the routing: a cell
- * to stand on, or things that keep moving, mean `cross_ahead`; otherwise the way is closed and `around`
- * decides. A controller (route.ts) then does the hopping, and steps it takes are not model calls.
+ * The `route` strategy (ADR-0011): three small lookups in one request (`cell`, `moving`, `around`), and a fourth,
+ * `ride`, while the chicken stands on a platform. The only rule of ours on the answers is the routing: a platform a
+ * moment from the edge means `leave_platform`; a cell to stand on, or things that keep moving, mean `cross_ahead`;
+ * otherwise the way is closed and `around` decides. A controller (route.ts) then does the hopping, and the steps it
+ * takes are not model calls.
  */
 export function routePolicy(
   client: ClefClient,
@@ -27,6 +38,7 @@ export function routePolicy(
   id: string,
 ): PolicyFactory {
   const questions = routeQuestions();
+  const questionsOnAPlatform = routeQuestions(true);
   const cacheTag = `${PROMPT_VERSION}|${config.encoder}|${config.strategy}|${config.manual}`;
 
   /** The one place a request is put together, so what is shown is what is sent. */
@@ -36,7 +48,7 @@ export function routePolicy(
       lastManeuver: executor.lastResult,
       failed: executor.failedSides(memory),
     }),
-    questions,
+    questions: obs.player.riding ? questionsOnAPlatform : questions,
     cacheTag,
   });
 
@@ -46,19 +58,48 @@ export function routePolicy(
       kind: "observation",
       id,
       describe: (obs, memory = emptyMemory()) => inputOf(requestFor(obs, memory, executor)),
-      async decide(obs: Observation, memory: Memory = emptyMemory()): Promise<Decision> {
+      async decide(
+        obs: Observation,
+        memory: Memory = emptyMemory(),
+        hooks?: DecideHooks,
+      ): Promise<Decision> {
         const step = executor.next(obs, memory);
-        if (step) return { action: step.action, source: "executor", note: step.note };
+        if (step) {
+          return {
+            action: step.action,
+            source: "executor",
+            note: step.note,
+            notice: step.notice,
+            extra: { controller: step.step },
+          };
+        }
         const request = requestFor(obs, memory, executor);
+        const sent = inputOf(request);
+        hooks?.onAsk?.(sent);
         const chosen = fromRoute(await client.run(request));
-        const first = executor.start(chosen.maneuver, obs, memory);
+        const { act, started, note, notice } = begin(executor, chosen, obs, memory);
         return {
           ...chosen.decision,
-          action: first.action,
+          ...(chosen.pLeaving === undefined
+            ? {}
+            : {
+                probabilities: withLeaving(
+                  chosen.decision.probabilities,
+                  chosen.pLeaving,
+                  act.action,
+                ),
+              }),
+          action: act.action,
           source: "model",
-          note: `model chose ${chosen.maneuver}; ${first.note}`,
-          extra: { ...chosen.decision.extra, maneuver: chosen.maneuver },
-          sent: inputOf(request),
+          note: `model chose ${chosen.maneuver}; ${note}`,
+          notice: { kind: "model", maneuver: chosen.maneuver, step: notice },
+          extra: {
+            ...chosen.decision.extra,
+            maneuver: chosen.maneuver,
+            controller: act.step,
+            ...(started === chosen.maneuver ? {} : { fallback: started }),
+          },
+          sent,
         };
       },
     };
@@ -68,6 +109,43 @@ export function routePolicy(
 
 function inputOf({ model, state, questions }: ClefRequest): ModelInput {
   return { model, state, questions };
+}
+
+/** A manoeuvre that cannot begin passes to the next of the model's own answers, without asking again. */
+function begin(
+  executor: RouteExecutor,
+  chosen: Pick<RouteChoice, "maneuver" | "fallbacks">,
+  obs: Observation,
+  memory: Memory,
+): { act: RouteAct; started: RouteManeuver; note: string; notice: DecisionNotice } {
+  let act = executor.start(chosen.maneuver, obs, memory);
+  let started = chosen.maneuver;
+  const refusals: string[] = [];
+  const notices: DecisionNotice[] = [];
+  for (const next of chosen.fallbacks) {
+    if (!act.refused) break;
+    refusals.push(executor.lastResult ?? "");
+    notices.push(act.notice);
+    act = executor.start(next, obs, memory);
+    started = next;
+  }
+  return {
+    act,
+    started,
+    note: [...refusals, act.note].join("; "),
+    notice: { kind: "sequence", parts: [...notices, act.notice] },
+  };
+}
+
+/** What to try after `chosen` is refused: the detours the model gave, by probability. Waiting is what a refusal already does. */
+export function refusalOrder(
+  chosen: RouteManeuver,
+  around: Readonly<Record<AroundOption, number>>,
+): RouteManeuver[] {
+  if (chosen === "wait_here" || chosen === "leave_platform") return [];
+  return AROUND_OPTIONS.filter((option) => option !== "wait_here" && option !== chosen).sort(
+    (a, b) => around[b] - around[a],
+  );
 }
 
 function choiceOf<T extends string>(
@@ -90,26 +168,44 @@ function choiceOf<T extends string>(
  * of crossing is P(stand) + P(no_stand) * P(moving), and what is left (the way is closed) is split by the
  * third answer.
  */
-export function fromRoute(result: ClefResult): { maneuver: RouteManeuver; decision: Decision } {
+export interface RouteChoice {
+  maneuver: RouteManeuver;
+  decision: Decision;
+  pLeaving?: number;
+  fallbacks: RouteManeuver[];
+}
+
+export function fromRoute(result: ClefResult): RouteChoice {
   const cell = choiceOf(result.answers[ROUTE_QUESTION_IDS[0]], CELL_OPTIONS, "cell");
   const moving = choiceOf(result.answers[ROUTE_QUESTION_IDS[1]], MOVING_OPTIONS, "moving");
   const around = choiceOf(result.answers[ROUTE_QUESTION_IDS[2]], AROUND_OPTIONS, "around");
+  const ride =
+    result.answers[RIDE_QUESTION_ID] === undefined
+      ? null
+      : choiceOf(result.answers[RIDE_QUESTION_ID], RIDE_OPTIONS, "ride");
   const pStand = cell.probabilities.stand;
   const pMoving = moving.probabilities.moving;
+  const pLeaving = ride?.probabilities.leaving;
   const pCross = pStand + (1 - pStand) * pMoving;
   const pClosed = 1 - pCross;
   const ahead =
     cell.choice === "stand" ? "open" : moving.choice === "moving" ? "passing" : "closed";
-  const maneuver: RouteManeuver = ahead === "closed" ? around.choice : "cross_ahead";
-  const probabilities: Partial<Record<Action, number>> = { hop_forward: pCross };
+  const maneuver: RouteManeuver =
+    ride?.choice === "leaving"
+      ? "leave_platform"
+      : ahead === "closed"
+        ? around.choice
+        : "cross_ahead";
+  const rest = 1 - (pLeaving ?? 0);
+  const probabilities: Partial<Record<Action, number>> = { hop_forward: pCross * rest };
   for (const option of AROUND_OPTIONS) {
-    probabilities[ROUTE_ACTION[option]] = pClosed * around.probabilities[option];
+    probabilities[ROUTE_ACTION[option]] = pClosed * around.probabilities[option] * rest;
   }
   for (const action of ACTIONS) probabilities[action] ??= 0;
   return {
     maneuver,
     decision: {
-      action: ROUTE_ACTION[maneuver],
+      action: maneuver === "leave_platform" ? "stay" : ROUTE_ACTION[maneuver],
       probabilities,
       ...(cell.confidence !== undefined ? { confidence: cell.confidence } : {}),
       extra: {
@@ -120,11 +216,24 @@ export function fromRoute(result: ClefResult): { maneuver: RouteManeuver; decisi
         pMoving,
         pClosed,
         around: around.choice,
+        ...(ride === null ? {} : { ride: ride.choice, pLeaving }),
       },
       latencyMs: result.latencyMs,
       inputTokens: result.usage.inputTokens,
       neurons: result.neurons,
       cached: result.cached,
+      ...choiceAnswers(result),
     },
+    ...(pLeaving === undefined ? {} : { pLeaving }),
+    fallbacks: refusalOrder(maneuver, around.probabilities),
   };
+}
+
+/** The platform's share goes on the hop made, so that the five bars still add up to one. */
+function withLeaving(
+  probabilities: Partial<Record<Action, number>> | undefined,
+  pLeaving: number,
+  exit: Action,
+): Partial<Record<Action, number>> {
+  return { ...probabilities, [exit]: (probabilities?.[exit] ?? 0) + pLeaving };
 }

@@ -8,12 +8,19 @@ import {
   type Question,
 } from "@ccr/clef";
 import { ACTIONS, type Action, type Observation } from "@ccr/core";
+import { choiceAnswers } from "./answers.ts";
 import { ACTION_PREFERENCE } from "./baselines.ts";
 import { ENCODER_IDS, ENCODER_LEVEL, type EncoderId, encodeRequest } from "./encode.ts";
 import { Executor, MANEUVER_ACTION, MANEUVER_IDS, type Maneuver } from "./executor.ts";
 import { lanesState, MANEUVER_NAMES, movesState } from "./lanes.ts";
 import type { Memory } from "./memory.ts";
-import type { Decision, ModelInput, ObservationPolicy, PolicyFactory } from "./policy.ts";
+import type {
+  DecideHooks,
+  Decision,
+  ModelInput,
+  ObservationPolicy,
+  PolicyFactory,
+} from "./policy.ts";
 import {
   choiceInstructions,
   criteriaFor,
@@ -50,7 +57,8 @@ import { routePolicy } from "./route-policy.ts";
  * graph-maneuver: the same two questions about manoeuvres, with the executor of `maneuver` doing the hopping.
  * route:     three one-field lookups in one request (`cell`: stand or no_stand; `moving`: moving or still;
  *            `around`: detour_left, detour_right or wait_here) and a controller that crosses, waits for a gap,
- *            or walks a detour (route.ts). Only with the `scene` view and the `lookup` manual (ADR-0011).
+ *            or walks a detour (route.ts). A fourth lookup, `ride`, asks the platform clock while riding.
+ *            Only with the `scene` view and the `lookup` manual (ADR-0011).
  */
 export const STRATEGY_IDS = [
   "choice",
@@ -184,7 +192,7 @@ export function helpLabel(config: ClefPolicyConfig): string {
   ) {
     parts.push("graph");
   }
-  if (config.strategy === "route") parts.push("route executor");
+  if (config.strategy === "route") parts.push("platform clock", "route executor");
   if (config.strategy === "maneuver" || config.strategy === "graph-maneuver")
     parts.push("executor");
   return parts.join(" + ");
@@ -282,9 +290,11 @@ export function clefPolicy(client: ClefClient, config: ClefPolicyConfig): Policy
       kind: "observation",
       id,
       describe: (obs, memory) => inputOf(requestFor(obs, memory, executor.lastResult)),
-      async decide(obs: Observation, memory?: Memory): Promise<Decision> {
+      async decide(obs: Observation, memory?: Memory, hooks?: DecideHooks): Promise<Decision> {
         if (!maneuvers) {
           const request = requestFor(obs, memory);
+          const sent = inputOf(request);
+          hooks?.onAsk?.(sent);
           const result = await client.run(request);
           const decision =
             config.strategy === "choice"
@@ -295,12 +305,15 @@ export function clefPolicy(client: ClefClient, config: ClefPolicyConfig): Policy
                     result,
                     config.strategy === "critic-go" ? selectGoUnlessRisky : selectByRisk,
                   );
-          return { ...decision, sent: inputOf(request) };
+          return { ...decision, sent };
         }
         const state = lanesState(obs, memory);
         const step = executor.next(state);
-        if (step) return { action: step.action, source: "executor", note: step.note };
+        if (step)
+          return { action: step.action, source: "executor", note: step.note, notice: step.notice };
         const request = requestFor(obs, memory, executor.lastResult);
+        const sent = inputOf(request);
+        hooks?.onAsk?.(sent);
         const answered = await client.run(request);
         const chosen = graphs ? fromGraphManeuver(answered) : fromManeuver(answered);
         const first = executor.start(chosen.maneuver, state);
@@ -309,8 +322,9 @@ export function clefPolicy(client: ClefClient, config: ClefPolicyConfig): Policy
           action: first.action,
           source: "model",
           note: `model chose ${chosen.maneuver}; ${first.note}`,
+          notice: { kind: "model", maneuver: chosen.maneuver, step: first.notice },
           extra: { ...chosen.decision.extra, maneuver: chosen.maneuver },
-          sent: inputOf(request),
+          sent,
         };
       },
     };
@@ -332,6 +346,7 @@ function meta(result: ClefResult) {
     inputTokens: result.usage.inputTokens,
     neurons: result.neurons,
     cached: result.cached,
+    ...choiceAnswers(result),
   };
 }
 

@@ -25,7 +25,7 @@ Trees are occupied columns (geometry), not "blocked moves". A move into a tree i
 | `forecast` | Plus where each moving object will be 0.2 s from now (one hop): a pure function of the observation, identical for every candidate move |
 | `words` | The `forecast` knowledge compared by the code and told as the word for what fills each cell ([ADR-0010](adr/0010-words-rules-maneuver-executor.md)); nothing new about the world |
 
-The memory is not part of the `Observation`: the runner and the app build it (`Memory`: the last 6 moves, the words views list the last 4) and pass it to `decide(obs, memory)`. *Game knowledge* (the rules and how the game is played, identical for every state and free of numbers) may appear in the instructions. *Judgement* ("safe", "dies if", valid moves, time to collision, "reachable") never may. Rules or controllers that the code adds on top of the model's answers are separate conditions; the report labels them (`helpLabel`), for example `words + rules + graph + route executor`.
+The memory is not part of the `Observation`: the runner and the app build it (`Memory`: the last 6 moves, the words views list the last 4) and pass it to `decide(obs, memory)`. *Game knowledge* (the rules and how the game is played, identical for every state and free of numbers) may appear in the instructions. *Judgement* ("safe", "dies if", valid moves, time to collision, "reachable") never may. Rules or controllers that the code adds on top of the model's answers are separate conditions; the report labels them (`helpLabel`). The current default is labelled `words + rules + graph + platform clock + route executor`.
 
 ## Observation (E0, JSON)
 
@@ -65,6 +65,8 @@ Values below are illustrative.
 
 The words views share a closed vocabulary with no digits. A cell is `empty`, `tree`, `water`, `log`, `lily_pad`, `vehicle`, `train`, `train_coming`, `outside_world` or `unseen`, and the chicken can stand on `empty`, `log` and `lily_pad` only (a rule of the game, not a reading of a state). Distances are `adjacent`, `two_away`, `three_or_more` or `none`. The words say what is there when the hop ends, never what it means for the chicken; tests reject words of judgement.
 
+While riding, `scene` also includes `chicken.edge_in`: `a_moment` (less than 1 s to the world edge), `soon` (less than 2.5 s), `later`, or `not_carried` (stationary platform). This describes the current platform, independently of candidate moves; it does not change the `Observation` schema. Non-platform states omit it and preserve their previous request shape ([ADR-0009](adr/0009-perception-memory-judgement.md#platform-clock)).
+
 ## Policy ids
 
 `clef:<model>:<encoder>:<strategy>[:<manual>]`, for example `clef:clef-flash:json:choice:full`. The manual defaults to `full`; an unknown part, or a combination listed below as unsupported, is refused when the id is read. `clef` alone means `DEFAULT_CLEF`.
@@ -90,11 +92,11 @@ Unsupported: `rules` without `lanes`; `ordered` or `exclusive` without `moves`; 
 | `maneuver` | One `choice` over five manoeuvres (`cross_ahead`, `sidestep_left`, `sidestep_right`, `back_off`, `wait_here`); an executor (`executor.ts`) waits for the cell to clear and hops, and the model is asked again only when the manoeuvre ends or cannot be done | `lanes`+`rules`, `moves`+`ordered` |
 | `graph` | Two small `choice` questions in one request: `go` (`go` or `hold`) and `side` (`hop_left`, `hop_right`, `stay`, `hop_back`). The only rule added by the code is routing: `go` is `hop_forward`, `hold` takes the second answer | `moves`+`ordered` |
 | `graph-maneuver` | The same two questions about manoeuvres (`go` is `cross_ahead`), with the executor of `maneuver` doing the hopping | `moves`+`ordered` |
-| `route` | Three one-field lookups in one request, each with solved examples: `cell` (`stand` or `no_stand`: can the chicken stand on the cell straight ahead), `moving` (`moving` or `still`: do the things of that row move) and `around` (`detour_left`, `detour_right` or `wait_here`). The only rule added by the code is routing: `stand` or `moving` means `cross_ahead`, otherwise `around` decides. The controller in `route.ts` then crosses, or walks the detour | `scene`+`lookup` |
+| `route` | Three scene lookups: `cell` (`stand`, `no_stand`), `moving` (`moving`, `still`), `around` (`detour_left`, `detour_right`, `wait_here`). While riding, a fourth lookup `ride` (`leaving`, `staying`) reads `chicken.edge_in`. `leaving` selects `leave_platform` first; otherwise `stand` or `moving` selects `cross_ahead`, and a closed way uses `around`. A controller executes the maneuver | `scene`+`lookup` |
 
-The controller of `route` waits up to 15 steps (3 s) for a gap when crossing. For a detour it walks the way round (back one row if it must, along the row, forward onto a row not yet reached) for at most 12 hops, checking each hop in its own window. The executors never swap the manoeuvre or the side the model chose: they carry it out or hand the decision back with a reason, which the model reads in `memory.last_maneuver`. The hops they make are not model calls and cost nothing ([ADR-0010](adr/0010-words-rules-maneuver-executor.md), [ADR-0011](adr/0011-route-controller-three-lookups.md)).
+The route controller waits up to 15 steps for a crossing gap, but refuses still water immediately. Detours search 24 hops ahead and run for at most 40 steps, ending on the selected side; failed sides can be retried after 4 decisions. Platform exits search up to 8 hops. A maneuver that cannot start tries the other detours from the model's `around` probabilities, in descending order, without another call. `wait_here` and `leave_platform` have no fallback queue. Refusals and controller steps remain visible and feed back through `memory.last_maneuver` ([ADR-0011](adr/0011-route-controller-three-lookups.md)).
 
-For `route`, action probabilities in the panel are derived by `fromRoute` from the lookup probabilities: `P(cross) = P(stand) + (1 − P(stand)) × P(moving)`. The remaining mass is split by the `around` answer and mapped to the corresponding action IDs. These bars summarize the routing rule, not a separate model question over the five moves. Controller-only steps have no probabilities.
+For `route`, the joint probabilities recorded by the benchmark start with `P(cross) = P(stand) + (1 − P(stand)) × P(moving)`. The remaining mass is split by `around`; with `ride`, this distribution is scaled by `1 − P(leaving)` and the leaving mass is placed on the controller's first action. The panel and compass show probabilities within the selected routing branch (`barsOf`), with its branch probability shown separately. Neither representation is a direct model vote over moves. Controller-only steps have no probabilities.
 
 The benchmark also has scripted references that never call a model: `always-forward`, `random`, `lookahead`, `rule-view`, `rule-view-fx`, `rule-lanes`, `rule-moves` (scripted readers of the same views, a sufficiency test for what a view shows), `exec-cross`, `exec-rules` and `exec-route` (a scripted chooser plus the executor or controller).
 
@@ -102,7 +104,7 @@ The benchmark also has scripted references that never call a model: `always-forw
 
 - The instruction and option texts live in `packages/agent/src/prompts.ts` (and `route-prompts.ts` for `lookup`). `PROMPT_VERSION` is `p1`. It is part of the cache tag with the encoder, strategy and manual, and each benchmark run records it; a changed text makes cached answers stale.
 - A manual describes the physical rules of the world and never says which move is good. Tests keep advice words (`should`, `safest`, `best move`, `you must`, `avoid`) out of the manuals and encoder notes. Each encoder appends a short note that defines its own fields (for example `dcol`).
-- Action IDs: `hop_forward`, `hop_back`, `hop_left`, `hop_right`, `stay`. Manoeuvre IDs: `cross_ahead`, `sidestep_left`, `sidestep_right`, `back_off`, `wait_here` (`maneuver`, `graph-maneuver`) and `cross_ahead`, `detour_left`, `detour_right`, `wait_here` (`route`).
+- Action IDs: `hop_forward`, `hop_back`, `hop_left`, `hop_right`, `stay`. Manoeuvre IDs: `cross_ahead`, `sidestep_left`, `sidestep_right`, `back_off`, `wait_here` (`maneuver`, `graph-maneuver`) and `cross_ahead`, `detour_left`, `detour_right`, `wait_here`, `leave_platform` (`route`).
 
 | Manual | Style |
 |---|---|
@@ -112,7 +114,7 @@ The benchmark also has scripted references that never call a model: `always-forw
 | `rules` | `lanes` only. Options cite the fields and words of that view and the condition under which each move is correct |
 | `ordered` | `moves` only. One short rule per move about its own entry of the state, tried in a stated order; the first one that is true wins |
 | `exclusive` | `moves` only. As `ordered`, but each option also names the cases that rule it out, so exactly one is true |
-| `lookup` | `scene` with `route` only. The game text and one lookup per question with solved examples, identical for every state |
+| `lookup` | `scene` with `route` only. Fixed game text and solved examples per question; three questions normally, four while riding |
 
 `pnpm bench probe-report` shows, for the words conditions, how often the model picks the move an ideal reader of the written rules would pick: obedience to the rules, not skill.
 

@@ -1,34 +1,36 @@
-import { type ChoiceKind, CLEF_27B_ID, CLEF_ID, type PolicyChoice } from "../policies.ts";
+import type { PlayerOption } from "../controls.ts";
+import { playerText } from "../i18n/presentation.ts";
+import { useI18n } from "../i18n/provider.tsx";
+import { type ChoiceKind, CLEF_27B_ID, CLEF_ID } from "../policies.ts";
 
-const GROUPS: readonly { kind: ChoiceKind; label: string }[] = [
-  { kind: "model", label: "Models (Workers AI)" },
-  { kind: "human", label: "You" },
-  { kind: "reference", label: "References (no API)" },
-];
+const GROUPS: readonly ChoiceKind[] = ["model", "human", "reference"];
 
 export interface PlayerCardProps {
-  choices: readonly PolicyChoice[];
+  choices: readonly PlayerOption[];
   selectedId: string;
   bridgeKind: "tauri" | "http";
   onSelect(id: string): void;
 }
 
 export function PlayerCard({ choices, selectedId, bridgeKind, onSelect }: PlayerCardProps) {
+  const translation = useI18n();
+  const { t } = translation;
   const choice = choices.find((c) => c.id === selectedId);
+  const text = choice ? playerText(choice, translation) : null;
   return (
     <section class="card player-card">
       <div class="player-label">
         <label class="field-label" for="player">
-          Who plays
+          {t("player.who")}
         </label>
         <span class="player-kind">
           {choice?.kind === "model"
             ? selectedId === CLEF_ID || selectedId === CLEF_27B_ID
-              ? "Model + controller"
-              : "Model player"
+              ? t("player.modelController")
+              : t("player.model")
             : choice?.kind === "reference"
-              ? "Reference · no API"
-              : "Arrows / WASD"}
+              ? t("player.reference")
+              : t("player.arrows")}
         </span>
       </div>
       <div class="player-row">
@@ -39,13 +41,13 @@ export function PlayerCard({ choices, selectedId, bridgeKind, onSelect }: Player
           aria-describedby={choice?.usesApi ? "player-cost" : undefined}
           onChange={(e) => onSelect((e.currentTarget as HTMLSelectElement).value)}
         >
-          {GROUPS.map(({ kind, label }) => (
-            <optgroup label={label} key={kind}>
+          {GROUPS.map((kind) => (
+            <optgroup label={t(`player.group.${kind}`)} key={kind}>
               {choices
                 .filter((c) => c.kind === kind)
                 .map((c) => (
-                  <option value={c.id} key={c.id} disabled={kind === "model" && !c.factory}>
-                    {c.label}
+                  <option value={c.id} key={c.id} disabled={!c.available}>
+                    {playerText(c, translation).label}
                   </option>
                 ))}
             </optgroup>
@@ -55,19 +57,17 @@ export function PlayerCard({ choices, selectedId, bridgeKind, onSelect }: Player
           type="button"
           class="info-button"
           popovertarget="player-info"
-          aria-label={`About ${choice?.label ?? "this player"} and Clef Crossy Road`}
-          title="About this player and keyboard controls"
+          aria-label={t("player.about", { player: text?.label ?? "Clef" })}
+          title={t("player.aboutHelp")}
         >
           i
         </button>
       </div>
       {choice?.usesApi && (
         <p id="player-cost" class="hint spend-note">
-          {choice.freeReplay ? (
-            <>Cache {choice.freeReplay} free · other maps spend neurons.</>
-          ) : (
-            "New model decisions spend neurons."
-          )}
+          {choice.freeReplay
+            ? t("player.cacheCost", { range: choice.freeReplay })
+            : t("player.newCost")}
         </p>
       )}
       <section
@@ -84,41 +84,45 @@ export function PlayerCard({ choices, selectedId, bridgeKind, onSelect }: Player
             class="info-button"
             popovertarget="player-info"
             popovertargetaction="hide"
-            aria-label="Close player information"
+            aria-label={t("player.closeInfo")}
           >
             ×
           </button>
         </header>
-        <p class="hint">Watch a decision model cross the road, or take the controls yourself.</p>
-        <h3>{choice?.label}</h3>
-        <p>{choice?.detail}</p>
+        <p class="hint">{t("player.intro")}</p>
+        <h3>{text?.label}</h3>
+        <p>{text?.detail}</p>
         {choice?.usesApi && (
           <p>
-            ≈ {choice.neuronsPerDecision?.toFixed(1)} neurons per new decision. Cache hits and
-            controller steps are free. The daily free tier resets at 00:00 UTC.
+            {t("player.cost", {
+              cost: choice.neuronsPerDecision ?? 0,
+              minimumFractionDigits: 1,
+              maximumFractionDigits: 1,
+            })}
           </p>
         )}
-        {choice?.freeReplay && (
-          <p>
-            Seeds {choice.freeReplay} replay from the cache for free. Other maps ask the model and
-            spend neurons.
-          </p>
-        )}
-        <h3>Keyboard controls</h3>
+        {choice?.freeReplay && <p>{t("player.replays", { range: choice.freeReplay })}</p>}
+        <h3>{t("player.keys")}</h3>
         <dl class="key-help">
           <dt>↑ ← ↓ → / WASD</dt>
-          <dd>Move when you play</dd>
-          <dt>Space</dt>
-          <dd>Pause / resume</dd>
+          <dd>{t("player.moveHelp")}</dd>
+          <dt>{t("controls.space")}</dt>
+          <dd>{t("player.pauseHelp")}</dd>
           <dt>N</dt>
-          <dd>One decision while paused in Step mode</dd>
+          <dd>{t("player.stepHelp")}</dd>
           <dt>R / M</dt>
-          <dd>Retry / new map</dd>
+          <dd>{t("player.retryHelp")}</dd>
           <dt>I</dt>
-          <dd>What the model read</dd>
+          <dd>{t("inspect.title")}</dd>
+          {bridgeKind === "tauri" && (
+            <>
+              <dt>F2</dt>
+              <dd>{t("windows.openControls")}</dd>
+            </>
+          )}
         </dl>
-        <p class="hint">Click the game to use its shortcuts. Esc closes this information.</p>
-        <p class="hint">{bridgeKind === "tauri" ? "Desktop · Tauri" : "Browser development"}</p>
+        <p class="hint">{t("player.shortcutsHelp")}</p>
+        <p class="hint">{t(bridgeKind === "tauri" ? "player.desktop" : "player.browser")}</p>
       </section>
     </section>
   );

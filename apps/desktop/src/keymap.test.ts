@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { commandForKey } from "./keymap.ts";
 
+it("opens native controls with F2", () => {
+  expect(commandForKey({ key: "F2", ctrlKey: false, metaKey: false, altKey: false })).toEqual({
+    type: "controls",
+  });
+});
+
 const press = (
   key: string,
   modifiers: { ctrlKey?: boolean; metaKey?: boolean; altKey?: boolean } = {},
@@ -29,6 +35,10 @@ describe("commandForKey", () => {
     ["m", "newMap"],
     ["i", "inspect"],
     ["I", "inspect"],
+    ["t", "theater"],
+    ["T", "theater"],
+    ["c", "compass"],
+    ["C", "compass"],
   ])("%j is the %s command", (key, type) => {
     expect(press(key)).toEqual({ type });
   });

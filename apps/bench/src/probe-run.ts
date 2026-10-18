@@ -1,9 +1,16 @@
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
-import type { PolicyFactory } from "@ccr/agent";
+import { type PolicyFactory, recordableExtra } from "@ccr/agent";
 import { type ClefClient, ClefError } from "@ccr/clef";
 import { appendNdjson, endPartialLine, readNdjson } from "@ccr/clef/node";
 import { observe } from "@ccr/core";
+
+/** The strategy's numbers worth keeping in a result, as a field to spread (none when there are none). */
+const extraOf = (extra: Record<string, unknown>): { extra?: Record<string, unknown> } => {
+  const kept = recordableExtra(extra);
+  return kept ? { extra: kept } : {};
+};
+
 import { interleaveStrata, type ProbeResult, type ProbeState, rebuild } from "./probe.ts";
 
 export const PROBE_STATES_FILE = "states.ndjson";
@@ -84,7 +91,7 @@ export async function runProbe(options: ProbeRunOptions): Promise<ProbeRunSummar
           ...(decision.neurons === undefined ? {} : { neurons: decision.neurons }),
           ...(decision.cached === undefined ? {} : { cached: decision.cached }),
           ...(typeof decision.extra?.maneuver === "string"
-            ? { maneuver: decision.extra.maneuver, extra: decision.extra }
+            ? { maneuver: decision.extra.maneuver, ...extraOf(decision.extra) }
             : {}),
         };
         appendNdjson(resultsPath, result);

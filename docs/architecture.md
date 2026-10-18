@@ -39,7 +39,7 @@ flowchart LR
 | `@ccr/agent` | `Policy` types, baselines and scripted references, encoders and word views, versioned prompts, the route controller, `ClefPolicy`, the episode runner with injected latency (`applyDecision` also replays recorded games), cost per decision (`decisionCost`) | `core`, `clef` |
 | `@ccr/render` | Three.js scene built from a read-only `Snapshot` | `core` |
 | `apps/bench` | CLI: `run`, `report`, `plan`, `diagnose`, `export`, `probe-*`, `show-input`. `cli.ts` only dispatches ([benchmark.md](benchmark.md)) | `core`, `agent`, `clef` |
-| `apps/desktop` | Tauri v2: window, Preact panel, a UI-free `Session`, Rust commands (one module per concern) ([desktop-app.md](desktop-app.md)) | `core`, `agent`, `clef`, `render` |
+| `apps/desktop` | Tauri v2 game and controls windows, Preact UI, a UI-free `Session`, Rust commands and local translation catalogs ([desktop-app.md](desktop-app.md)) | `core`, `agent`, `clef`, `render` |
 
 pnpm's strict `node_modules` layout enforces the directions: a package can import only what its `package.json` declares ([ADR-0003](adr/0003-typescript-pnpm-monorepo.md)). `core` has two more guards: its `tsconfig` loads neither DOM nor Node types, and a purity test scans its sources ([ADR-0004](adr/0004-deterministic-simulation.md)).
 
@@ -64,7 +64,7 @@ A model is always an `ObservationPolicy`: **the type keeps the simulator out of 
 5. The answer is normalised (REST wraps it in `result`), validated by schema and turned into a `Decision`. A successful call is recorded in the ledger and the cache.
 6. The action is applied: `game.step(action)` advances `DECISION_TICKS` (12, one hop); with injected latency, `applyDecision` first lets the world run for the wait. The panel and the log receive the decision, latency, tokens and neurons.
 
-With the route controller ([ADR-0010](adr/0010-words-rules-maneuver-executor.md), [ADR-0011](adr/0011-route-controller-three-lookups.md)) the model's answers pick a manoeuvre and the controller issues the hops. Those steps are `Decision.source === "executor"`: no API call, no neurons. An episode ends on death, after 300 decisions, or after 40 decisions without a new furthest row (`--max-decisions`, `--stall-limit`).
+With the route controller ([ADR-0010](adr/0010-words-rules-maneuver-executor.md), [ADR-0011](adr/0011-route-controller-three-lookups.md)) the model's answers pick a manoeuvre and the controller issues the hops. Controller-only steps are `Decision.source === "executor"`: no API call, no neurons. Benchmark defaults end an episode on death, after 300 decisions, or after 60 decisions without a new furthest row (`--max-decisions`, `--stall-limit`). Historical results used stall limit 40. The app uses the stall limit without the benchmark's decision cap.
 
 ## Run modes
 
@@ -83,7 +83,9 @@ Credentials are entered once in **Setup → Cloudflare**. The native side valida
 
 ## Persistence
 
-Plain text, no database. Everything below is generated and ignored by git.
+Desktop has two webviews. `main` alone owns `Session`, policies, `ClefClient`, scene, audio and logs. `controls` receives serializable snapshots and sends acknowledged commands through targeted Tauri events; it never creates a model client or game. Closing it hides the existing webview; reopening synchronizes presentation state. Display timestamps are converted between the webviews' clock origins. Language preferences are synchronized without changing model inputs ([internationalization.md](internationalization.md)).
+
+Run data is plain text, with no database; the files below are generated and ignored by git. Browser storage holds only non-sensitive UI preferences (locale, conversation, compass and reading pace), never credentials.
 
 | File | Content |
 |---|---|
@@ -106,12 +108,12 @@ Versions are pinned in `pnpm-lock.yaml` and `Cargo.lock`.
 | PRNG | Hand-written sfc32, one stream per row | Determinism independent of generation order | `Math.random`, libraries |
 | Time | Fixed 60 Hz step counted in ticks | Reproduces the original pace without depending on the display | Variable `dt` |
 | Rendering | Three.js 0.182 | Imperative scene built from snapshots, reusing upstream's models | React Three Fiber |
-| Panel | Preact 11 + Vite 8 | Light; game logic stays in a UI-free `Session` | React |
+| Panel | Preact 11 + Vite 8, i18next | Game logic stays in a UI-free `Session`; translations affect presentation only | React |
 | Desktop | Tauri 2 (WebView2) | Light native window; the token stays in Rust | Electron (heavy) |
 | Rust | `reqwest` 0.12 (native TLS), `dotenvy` | HTTP call and budget outside the webview | `reqwest` 0.13 as a direct dependency |
 | Clef client | `fetch` + zod 4 behind `Transport`, `DecisionCache`, `SpendBudget` | Same code in Node and in the UI | Third-party SDK |
 | Persistence | NDJSON, request-hash cache, neuron ledger | Reproducible, auditable, no database | SQLite, D1 |
-| Tests | Vitest 5 (TypeScript), `cargo test` (Rust) | Fast; the app tests use no real timers | Jest |
+| Tests | Vitest 5 (TypeScript), `cargo test` (Rust) | Unit tests plus jsdom UI integration tests, with no model calls | Jest |
 | Lint and format | Biome 2.5 | One tool | ESLint + Prettier |
 | Assets | `scripts/fetch-assets.mjs` | Downloads upstream's models at a pinned revision; they are not redistributed ([NOTICE](../NOTICE)) | Committing the assets |
 

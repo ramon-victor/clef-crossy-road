@@ -7,10 +7,12 @@ What happened when Cloudflare's Clef models played the game, why, and what is st
 - **The environment is deterministic and reproducible.** Comparisons are paired with confidence intervals, and the daily spend ceiling is checked in code ([ADR-0008](adr/0008-daily-budget-free-tier.md)).
 - **Zero-shot Clef-flash does not beat `always-forward`.** In every input format tried (JSON, ASCII grid, image, relative columns, the player's view with the whole screen, motion forecast and memory) it plays like "always forward": about 3.7 rows against 3.78. The image input is significantly worse. Clef 27B chose "forward" in every decision of its 40-game run.
 - **The information is in the views; the model does not use it.** Scripted readers of the same views make 13.5 to 19.7 rows.
-- **A scaffolded condition moves the model.** Words written by the code, three one-field lookups with solved examples and a controller that does the hopping and walks detours reach 22.43 rows over 7 games. That is the whole stack (the project's words, rules, routing, path and timing), labelled as such, not zero-shot play. The 100-seed [gate](benchmark.md#the-gate) is pending.
+- **A scaffolded condition moves the model.** An earlier words + three-lookups + route-controller revision reached 22.43 rows over 7 games, at stall limit 40. Current gameplay adds the platform clock and longer detours, with stall limit 60; those historical scores do not evaluate the current model player. The 100-seed [gate](benchmark.md#the-gate) is pending.
 - **The value of the project** is the environment, an honest negative result, and a base for RL fine-tuning on the deterministic core ([ADR-0006](adr/0006-no-fine-tuning-no-self-host.md)).
 
 ## Headline table
+
+Historical runs below used stall limit 40 and the controller versions recorded at the time. Current revisions are described separately below.
 
 | Condition | Games | Rows crossed [95% CI] | Δ vs always-forward [CI] |
 |---|---|---|---|
@@ -27,7 +29,7 @@ What happened when Cloudflare's Clef models played the game, why, and what is st
 | Clef 27B, `json-fx` | 8 | 2.63 | 0.00 |
 | Flash, `view-fx` + `routing` | 7 | 1.43 | −1.29 [−2.57, −0.29] (worse) |
 | `moves`·`graph-maneuver`·`ordered` | 40 | 10.05 [7.20, 13.32] | +6.75 [3.92, 9.93] |
-| `scene`·`route`·`lookup` (app default) | 7 | 22.43 [10.85, 35.71] | +19.71 [8.14, 33.01] |
+| `scene`·`route`·`lookup` (earlier controller) | 7 | 22.43 [10.85, 35.71] | +19.71 [8.14, 33.01] |
 
 Differences are paired on the same seeds, so the `always-forward` reference of a smaller run is not 3.78: it is 3.30 on seeds 1 to 40 and 2.72 on the seven seeds of the last row. **In the last two rows a controller does the hopping** (and, in the last, plans the route), so read them against the free references below, not against `always-forward` alone.
 
@@ -93,7 +95,7 @@ Design influences are listed in [references.md](references.md#related-work). Lis
 
 ## Controller versus model
 
-The controller does the hopping, picks the instant and walks the detour. The model chooses only between crossing, detouring left or right, or waiting, and the controller never swaps the side it chose ([ADR-0010](adr/0010-words-rules-maneuver-executor.md), [ADR-0011](adr/0011-route-controller-three-lookups.md)).
+The controller does the hopping, picks the instant and walks the detour. Historically the model chose crossing, a detour or waiting. Current gameplay also asks when to leave a platform and, if a maneuver cannot start, tries other detours in the model's probability order. Both versions require labelled comparisons ([ADR-0011](adr/0011-route-controller-three-lookups.md)).
 
 | Reference (100 seeds) | Rows | What it isolates |
 |---|---|---|
@@ -104,6 +106,23 @@ The controller does the hopping, picks the instant and walks the detour. The mod
 | `lookahead` | 44.75 | The simulator |
 
 The 22.43-row mean covers 7 games and is not paired with `exec-route` or `exec-cross`; both are free, so the matched numbers on seeds 2 to 8 need only a free `pnpm bench run` and `report`. The earlier 40-game condition reached a little over half of what scripted readers of its words make (10.05 against 17 to 20) and beat the executor alone by 4.80 rows. Matched-seed comparisons with both the executor-only floor and the scripted chooser are needed to attribute gains; a comparison against `always-forward` alone cannot isolate the model's contribution.
+
+## Current controller revision
+
+The 2026-10-17 revision adds the platform clock, a fourth lookup while riding, expiring failed-side memory, longer detours and immediate refusal of still water. These are controller and prompt changes, not evidence that the original model learned to play.
+
+| Scripted reference | Seeds | Mean rows | Stall limit |
+|---|---|---|---|
+| `exec-route`, revised controller | 100 | 57.6 | 40 |
+| `exec-route`, revised controller | 100 | 61.6 | 60 (current default) |
+
+No paired interval was recorded for this revision. With limit 60, 24 games stalled, including 6 facing still water; deaths were car 20, edge 17 and train 3. These counts belong to the scripted reference, not Clef-flash.
+
+On the platform probe, asking whether `edge_in` equals `a_moment` produced `leaving` in 12 of 12 near-edge states and 0 of 12 other platform states; asking in general language whether the platform would carry the chicken out produced 3 of 12. This is a small rule-following probe, not a gameplay evaluation.
+
+Recorded Clef-flash replays on seeds 6 and 7 still end at 9 and 8 rows. Seed 8 rose from 39 to 115 rows within the 300-decision benchmark cap, or 183 when recorded to completion (671 decisions, `--max-decisions 1000`). Its 31 refused maneuvers pass to other model-ranked detours without a new request. The three complete replays have 272 cache hits and no new calls in the recorded validation. Do not combine that uncapped game with the historical seven-game benchmark mean.
+
+The updated controller and model still need a matched-seed evaluation. The formal 100-seed gate remains pending.
 
 ## Latency finding
 
@@ -123,7 +142,7 @@ A Clef-flash round trip measured from Brazil is p50 about 326 ms with a small pr
 
 ## Limits and honesty
 
-- The last row of the headline table is **7 games** (interval [10.85, 35.71], games from 4 to 51 rows). Seeds 2 to 5 were played with a controller version without the `canSettle` check, seeds 6 to 8 with the final one. The scripted controller averaged 48.3 rows after that change versus 47.5 before it; no paired interval was recorded for the change. Only seeds 6 to 8 replay from the cache.
+- The last row of the historical table is **7 games** (interval [10.85, 35.71], games from 4 to 51 rows). Seeds 2 to 5 used a controller without `canSettle`, seeds 6 to 8 used the then-current revision. The scripted controller averaged 48.3 rows after that change versus 47.5 before it; no paired interval was recorded. Current cached seeds 6 to 8 include later controller changes, so they no longer reproduce that historical sample as a whole.
 - The condition is the whole stack and is not evidence that the model plays zero-shot. Zero-shot results are the first rows of the headline table.
 - **The gate is pending.** It needs at least 100 seeds; the only intervals above zero come from 40 and 7 games.
 - One prompt text per condition (plus a minimal variant). The 27B JSON run records no mean; the `exec-route` interval is not recorded.
@@ -132,7 +151,7 @@ A Clef-flash round trip measured from Brazil is p50 about 326 ms with a small pr
 
 ## Open work
 
-- **Run the default condition on 100 seeds** (`clef:clef-flash:scene:route:lookup`): about 6 neurons per request and tens of requests per game (5 to 67 in the seven recorded games), so 25,000 to 30,000 neurons spread over several days, with `pnpm bench plan` before each step and a call cap in mind (`--max-calls` does not stop games in flight). Compare with `exec-route` on the same seeds. This also fills the cache the app replays. The 27B on the same seeds only if it fits.
+- **Run the current default on 100 seeds** (`clef:clef-flash:scene:route:lookup`) against `exec-route` with matching limits and controller version. The earlier three-question estimate was 25,000 to 30,000 neurons across several days; the fourth lookup and longer games require a fresh `pnpm bench plan`. Keep the call cap in mind (`--max-calls` does not stop games in flight). The 27B on the same seeds only if it fits.
 - **RL fine-tuning** with the core as environment ([ADR-0006](adr/0006-no-fine-tuning-no-self-host.md)). The diagnostic names the target: reading position and velocity to land on logs and lily pads. It needs Cloudflare's RL program or self-hosted open weights (Apache 2.0). `pnpm bench export` already writes (observation, action, reward, done) trajectories with physical facts only.
 - **`clef-omni` with images** on 25 to 40 seeds (about 80 neurons per seed, so 2,000 to 3,200), to complete the model matrix. The 46-state probe suggests no change.
 - **Probability-threshold veto** (refuse hops when P(`hop_forward`) is low). It should only help stop at the water's edge. A threshold rule replayed over recorded answers of the word conditions did not beat the argmax.

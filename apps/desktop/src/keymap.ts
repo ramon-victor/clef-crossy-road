@@ -6,7 +6,10 @@ export type KeyCommand =
   | { type: "step" }
   | { type: "retry" }
   | { type: "newMap" }
-  | { type: "inspect" };
+  | { type: "controls" }
+  | { type: "inspect" }
+  | { type: "theater" }
+  | { type: "compass" };
 
 /** Keys are matched in lower case, so Shift and Caps Lock do not matter. */
 const MOVES: Readonly<Record<string, Action>> = {
@@ -26,6 +29,9 @@ const COMMANDS: Readonly<Record<string, KeyCommand>> = {
   r: { type: "retry" },
   m: { type: "newMap" },
   i: { type: "inspect" },
+  f2: { type: "controls" },
+  t: { type: "theater" },
+  c: { type: "compass" },
 };
 
 /**

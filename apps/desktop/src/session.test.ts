@@ -3,6 +3,7 @@ import {
   DEFAULT_STALL_LIMIT,
   type Decision,
   type Memory,
+  type ModelInput,
   type PolicyFactory,
   playEpisode,
 } from "@ccr/agent";
@@ -52,6 +53,35 @@ function controlledPolicy() {
 }
 
 describe("Session: human control", () => {
+  it("suspends a queued single step when explicitly paused, as on window minimization", async () => {
+    const controlled = controlledPolicy();
+    const session = new Session();
+    session.setPolicy(controlled.factory, 1);
+    session.setPaused(true);
+    session.stepOnce();
+    session.setPaused(true);
+    run(session, 1);
+    await settle();
+    expect(controlled.asked()).toBe(0);
+    expect(session.state()).toMatchObject({ tick: 0, paused: true, decisions: 0 });
+    session.setPaused(false);
+    session.frame(FRAME);
+    expect(controlled.asked()).toBe(1);
+  });
+
+  it("accounts for an in-flight answer while paused without starting another turn", async () => {
+    const controlled = controlledPolicy();
+    const session = new Session();
+    session.setPolicy(controlled.factory, 1);
+    session.frame(FRAME);
+    session.setPaused(true);
+    const tick = session.state().tick;
+    await controlled.answer({ action: "hop_forward", neurons: 2 });
+    run(session, 1);
+    expect(session.state()).toMatchObject({ tick, paused: true, decisions: 1, neurons: 2 });
+    expect(controlled.asked()).toBe(0);
+  });
+
   it("runs the world and applies key input immediately", () => {
     const s = new Session();
     s.start(7);
@@ -376,6 +406,399 @@ describe("Session: AI in real time", () => {
 
     await policy.answer();
     run(s, 0.05);
+    expect(s.state().decisions).toBe(1);
+  });
+});
+
+const INPUT: ModelInput = { model: "clef-flash", state: { rows: [] }, questions: {} };
+const MODEL_ANSWER: Decision = { action: "hop_forward", source: "model", sent: INPUT };
+const CONTROLLER_STEP: Decision = { action: "hop_left", source: "executor", note: "hop 2" };
+
+/**
+ * A policy that tells the session when it really asks the model, like the Clef ones do. `asks` says, per
+ * decision, whether it does (a controller step does not); the answers are given by the test.
+ */
+function askingPolicy(asks: boolean[] = []) {
+  const waiting: Array<(decision: Decision) => void> = [];
+  const factory: PolicyFactory = {
+    id: "asking",
+    create: () => ({
+      kind: "observation",
+      id: "asking",
+      decide: (_obs, _memory, hooks) => {
+        if (asks.shift() ?? true) hooks?.onAsk?.(INPUT);
+        return new Promise<Decision>((resolve) => waiting.push(resolve));
+      },
+    }),
+  };
+  return {
+    factory,
+    async answer(decision: Decision) {
+      waiting.shift()?.(decision);
+      await settle();
+    },
+  };
+}
+
+describe("Session: following the question the model is reading", () => {
+  it("shows the request from the moment it goes out until the answer lands, and says so at once", async () => {
+    const policy = askingPolicy();
+    const s = new Session({ now: () => 1234 });
+    let told = 0;
+    s.subscribe(() => told++);
+    s.setPolicy(policy.factory);
+    s.start(3);
+    const before = told;
+
+    s.frame(FRAME);
+    expect(s.state().asking).toEqual({ input: INPUT, since: 1234 });
+    expect(told).toBeGreaterThan(before); // no waiting for a poll
+
+    await policy.answer(MODEL_ANSWER);
+    expect(s.state().asking).toBeNull();
+    expect(s.state().lastModel?.index).toBe(0);
+    expect(s.state().stepsSinceModel).toBe(0);
+  });
+
+  it("also does it in real time, where the phase never says thinking", async () => {
+    const policy = askingPolicy();
+    const s = new Session();
+    s.setTiming("realtime");
+    s.setPolicy(policy.factory);
+    s.start(4);
+
+    run(s, 0.1);
+    expect(s.state().phase).not.toBe("thinking");
+    expect(s.state().asking?.input).toBe(INPUT);
+
+    await policy.answer(MODEL_ANSWER);
+    expect(s.state().asking).toBeNull();
+  });
+
+  it("does not show a step the controller takes itself, and counts it against the last model answer", async () => {
+    const policy = askingPolicy([true, false, false]);
+    const s = new Session();
+    s.setPolicy(policy.factory);
+    s.start(3);
+
+    s.frame(FRAME);
+    await policy.answer(MODEL_ANSWER);
+    run(s, 0.4); // the hop plays out, then the controller steps in
+    expect(s.state().asking).toBeNull();
+    await policy.answer(CONTROLLER_STEP);
+    run(s, 0.4);
+    await policy.answer(CONTROLLER_STEP);
+
+    const st = s.state();
+    expect(st.asking).toBeNull();
+    expect(st.stepsSinceModel).toBe(2);
+    expect(st.lastModel?.index).toBe(0);
+    expect(st.last?.index).toBe(2);
+  });
+
+  it("starts counting again when the model answers anew", async () => {
+    const policy = askingPolicy([true, false, true]);
+    const s = new Session();
+    s.setPolicy(policy.factory);
+    s.start(3);
+
+    s.frame(FRAME);
+    await policy.answer(MODEL_ANSWER);
+    run(s, 0.4);
+    await policy.answer(CONTROLLER_STEP);
+    run(s, 0.4);
+    await policy.answer(MODEL_ANSWER);
+
+    expect(s.state().lastModel?.index).toBe(2);
+    expect(s.state().stepsSinceModel).toBe(0);
+  });
+
+  it("leaves a reference player out of it: it asks nobody", async () => {
+    const s = new Session();
+    s.setPolicy(alwaysForward);
+    s.start(5);
+    await runUntil(s, () => s.state().decisions >= 2);
+    expect(s.state()).toMatchObject({ asking: null, lastModel: null, stepsSinceModel: 0 });
+  });
+
+  it("forgets the question on a restart, and ignores the answer that comes late", async () => {
+    const policy = askingPolicy();
+    const s = new Session();
+    s.setPolicy(policy.factory);
+    s.start(1);
+    s.frame(FRAME);
+    expect(s.state().asking).not.toBeNull();
+
+    s.start(2);
+    expect(s.state().asking).toBeNull();
+    await policy.answer(MODEL_ANSWER);
+    expect(s.state()).toMatchObject({ asking: null, lastModel: null, decisions: 0 });
+  });
+
+  it("stops showing the question when the request fails", async () => {
+    const failing: PolicyFactory = {
+      id: "failing",
+      create: () => ({
+        kind: "observation",
+        id: "failing",
+        decide: async (_obs, _memory, hooks) => {
+          hooks?.onAsk?.(INPUT);
+          throw new Error("Capacity temporarily exceeded");
+        },
+      }),
+    };
+    const s = new Session();
+    s.setPolicy(failing);
+    s.start(1);
+    s.frame(FRAME);
+    await settle();
+    expect(s.state()).toMatchObject({ phase: "error", asking: null });
+  });
+});
+
+/** A policy that answers at once with the next decision of a script (the last one repeats). */
+function scripted(script: Decision[]) {
+  let asked = 0;
+  const factory: PolicyFactory = {
+    id: "scripted",
+    create: () => ({
+      kind: "observation",
+      id: "scripted",
+      decide: async (_obs, _memory, hooks) => {
+        const decision = script[Math.min(asked++, script.length - 1)] ?? MODEL_ANSWER;
+        if (decision.sent) hooks?.onAsk?.(decision.sent);
+        return decision;
+      },
+    }),
+  };
+  return { factory, asked: () => asked };
+}
+
+describe("Session: turns, the model's questions with what followed each", () => {
+  it("opens a turn for each answer of the model and files the controller's steps under it", async () => {
+    const { factory } = scripted([MODEL_ANSWER, CONTROLLER_STEP, CONTROLLER_STEP, MODEL_ANSWER]);
+    const s = new Session();
+    s.setPolicy(factory);
+    s.start(3);
+    await runUntil(s, () => s.state().decisions >= 4, 800);
+    const { turns } = s.state();
+    expect(turns).toHaveLength(2);
+    expect(turns[0]?.model.index).toBe(0);
+    expect(turns[0]?.steps.map((x) => x.index)).toEqual([1, 2]);
+    expect(turns[1]?.model.index).toBe(3);
+    expect(turns[1]?.steps).toEqual([]);
+  });
+
+  it("keeps the last few turns and a limited number of steps for each, and forgets them on a restart", async () => {
+    // Standing still, so the game does not end before the caps are reached.
+    const ask: Decision = { action: "stay", source: "model", sent: INPUT };
+    const step: Decision = { action: "stay", source: "executor", note: "wait" };
+    const script = [ask, ...Array(10).fill(step), ...Array(8).fill(ask)];
+    const { factory } = scripted(script);
+    const s = new Session();
+    s.setPolicy(factory);
+    s.start(3);
+    await runUntil(s, () => s.state().decisions >= script.length, 6000);
+    expect(s.state().decisions).toBeGreaterThanOrEqual(script.length);
+    const { turns } = s.state();
+    expect(turns).toHaveLength(6);
+    expect(turns.map((x) => x.model.index)).toEqual([13, 14, 15, 16, 17, 18].slice(-6));
+    s.start(4);
+    expect(s.state().turns).toEqual([]);
+  });
+
+  it("files every step of the longest manoeuvre under its turn, and caps a runaway", async () => {
+    const ask: Decision = { action: "stay", source: "model", sent: INPUT };
+    const step: Decision = { action: "stay", source: "executor", note: "wait" };
+    const { factory } = scripted([ask, ...Array(30).fill(step)]);
+    const s = new Session();
+    s.setPolicy(factory);
+    s.start(3);
+    await runUntil(s, () => s.state().decisions >= 31, 8000);
+    // A crossing waits up to 15 steps and a detour walks up to 12 hops: none of them may be left out.
+    expect(s.state().turns[0]?.steps.length).toBeGreaterThanOrEqual(16);
+    expect(s.state().turns[0]?.steps).toHaveLength(24);
+    expect(s.state().stepsSinceModel).toBe(30);
+  });
+
+  it("has no turns for a reference player, which asks nobody", async () => {
+    const s = new Session();
+    s.setPolicy(alwaysForward);
+    s.start(5);
+    await runUntil(s, () => s.state().decisions >= 2);
+    expect(s.state().turns).toEqual([]);
+  });
+});
+
+describe("Session: holding a model's move for a person to read", () => {
+  /** A session whose clock only moves when the test says so. */
+  function clocked(linger: number, script: Decision[] = [MODEL_ANSWER]) {
+    let clock = 0;
+    const s = new Session({ now: () => clock });
+    const policy = scripted(script);
+    s.setLinger(linger);
+    s.setPolicy(policy.factory);
+    s.start(3);
+    return {
+      s,
+      policy,
+      at: (ms: number) => {
+        clock = ms;
+      },
+    };
+  }
+
+  it("records the answer at once, and plays the move only when the time is up", async () => {
+    const { s, policy, at } = clocked(1000);
+    s.frame(FRAME);
+    await settle();
+    expect(s.state()).toMatchObject({ phase: "reading", decisions: 1 });
+    expect(s.state().lastModel?.index).toBe(0);
+    expect(s.state().asking).toBeNull();
+    expect(s.game.tick).toBe(0);
+
+    run(s, 0.5); // frames go by, the clock does not
+    expect(s.state().phase).toBe("reading");
+    expect(s.game.tick).toBe(0);
+    expect(policy.asked()).toBe(1);
+
+    at(999);
+    s.frame(FRAME);
+    expect(s.state().phase).toBe("reading");
+
+    at(1000);
+    s.frame(FRAME);
+    expect(s.state().phase).toBe("hopping");
+    run(s, 0.5);
+    expect(s.game.score).toBe(1);
+  });
+
+  it("counts the move, in the statistics and for whoever follows the game, only when it is played", async () => {
+    const paid: Decision = { ...MODEL_ANSWER, neurons: 5, inputTokens: 1000 };
+    let clock = 0;
+    const s = new Session({ now: () => clock });
+    const told: SessionEvent[] = [];
+    s.subscribeEvents((event) => told.push(event));
+    s.setLinger(1000);
+    s.setPolicy(scripted([paid]).factory);
+    s.start(3);
+    s.frame(FRAME);
+    await settle();
+    expect(s.state()).toMatchObject({ phase: "reading", decisions: 1, neurons: 0 });
+    expect(told.filter((e) => e.type === "decision")).toHaveLength(0);
+
+    clock = 1000;
+    s.frame(FRAME);
+    expect(s.state().neurons).toBe(5);
+    expect(told.filter((e) => e.type === "decision")).toHaveLength(1);
+  });
+
+  it("never counts a move that was held when the game is restarted", async () => {
+    let clock = 0;
+    const s = new Session({ now: () => clock });
+    const told: SessionEvent[] = [];
+    s.subscribeEvents((event) => told.push(event));
+    s.setLinger(1000);
+    s.setPolicy(scripted([{ ...MODEL_ANSWER, neurons: 5 }]).factory);
+    s.start(3);
+    s.frame(FRAME);
+    await settle();
+    s.start(2);
+    clock = 5000;
+    expect(told.filter((e) => e.type === "decision")).toHaveLength(0);
+    expect(s.state().neurons).toBe(0);
+  });
+
+  it("does not ask again while the answer is being read", async () => {
+    const { s, policy, at } = clocked(1000);
+    for (let i = 0; i < 5; i++) {
+      s.frame(FRAME);
+      await settle();
+    }
+    expect(policy.asked()).toBe(1);
+    at(1000);
+    await runUntil(s, () => policy.asked() >= 2);
+    expect(policy.asked()).toBe(2);
+  });
+
+  it("is shorter at a higher speed", async () => {
+    const { s, at } = clocked(1000);
+    s.setSpeed(4);
+    s.frame(FRAME);
+    await settle();
+    at(249);
+    s.frame(FRAME);
+    expect(s.state().phase).toBe("reading");
+    at(250);
+    s.frame(FRAME);
+    expect(s.state().phase).toBe("hopping");
+  });
+
+  it("leaves a controller step alone: it plays at once, with no wait of its own", async () => {
+    const { s, at } = clocked(1000, [MODEL_ANSWER, CONTROLLER_STEP, CONTROLLER_STEP]);
+    s.frame(FRAME);
+    await settle();
+    at(1000);
+    for (let i = 0; i < 90 && s.state().stepsSinceModel < 2; i++) {
+      s.frame(FRAME);
+      await settle();
+    }
+    expect(s.state().stepsSinceModel).toBe(2);
+    expect(s.state().phase).not.toBe("reading");
+  });
+
+  it("plays the game out exactly the same, only later", async () => {
+    const outcome = async (linger: number) => {
+      let clock = 0;
+      const s = new Session({ now: () => clock });
+      s.setLinger(linger);
+      s.setPolicy(scripted([MODEL_ANSWER]).factory);
+      s.start(11);
+      for (let i = 0; i < 6000 && s.state().decisions < 12 && s.game.alive; i++) {
+        clock += 1000 / 60;
+        s.frame(FRAME);
+        await settle();
+      }
+      const { score, deathCause, decisions } = s.state();
+      return { score, deathCause, decisions };
+    };
+    expect(await outcome(900)).toEqual(await outcome(0));
+  });
+
+  it("does not hold anything in real time, where the world does not wait", async () => {
+    const clock = 0;
+    const s = new Session({ now: () => clock });
+    s.setTiming("realtime");
+    s.setLinger(1000);
+    s.setPolicy(scripted([MODEL_ANSWER]).factory);
+    s.start(4);
+    s.frame(FRAME);
+    await settle();
+    expect(s.state().phase).not.toBe("reading");
+    run(s, 0.3);
+    expect(s.game.tick).toBeGreaterThan(5);
+  });
+
+  it("lets the move go at once when the wait is switched off", async () => {
+    const { s } = clocked(1000);
+    s.frame(FRAME);
+    await settle();
+    expect(s.state().phase).toBe("reading");
+    s.setLinger(0);
+    s.frame(FRAME);
+    expect(s.state().phase).toBe("hopping");
+  });
+
+  it("drops a held move on a restart", async () => {
+    const { s, policy, at } = clocked(1000);
+    s.frame(FRAME);
+    await settle();
+    s.start(2);
+    expect(s.state().phase).toBe("idle");
+    at(5000);
+    s.frame(FRAME);
+    await settle();
+    expect(policy.asked()).toBe(2); // asked afresh; the old move was not played on the new map
     expect(s.state().decisions).toBe(1);
   });
 });

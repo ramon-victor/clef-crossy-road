@@ -1,8 +1,8 @@
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { alwaysForward, type PolicyFactory } from "@ccr/agent";
-import { ACTIONS, type Action, Game, type Observation } from "@ccr/core";
+import { alwaysForward, type PolicyFactory, platformClock } from "@ccr/agent";
+import { ACTIONS, type Action, Game, type Observation, observe } from "@ccr/core";
 import { afterEach, beforeAll, describe, expect, it } from "vitest";
 import {
   agreementWithWords,
@@ -40,6 +40,8 @@ const SMALL = {
   "tree-stuck": 2,
   "grass-open": 1,
   rail: 1,
+  "platform-edge": 3,
+  "platform-far": 3,
 } as const;
 
 describe("classify", () => {
@@ -68,6 +70,7 @@ describe("sampleStates", () => {
     for (const [id, quota] of Object.entries(SMALL)) expect(counts(id)).toBeLessThanOrEqual(quota);
     expect(a.length).toBeGreaterThan(8);
     expect(new Set(a.map((s) => s.id)).size).toBe(a.length);
+    expect(new Set(a.map((s) => `${s.seed}|${s.actions.join(",")}`)).size).toBe(a.length);
   });
 
   it("labels agree with the simulator, and a good move is never one that dies when another is fine", async () => {
@@ -85,6 +88,20 @@ describe("sampleStates", () => {
         expect(state.good).not.toContain("hop_forward");
       }
       if (state.stratum.endsWith("-open")) expect(state.good).toContain("hop_forward");
+    }
+  });
+
+  it("collects the decision points on a platform, by how close the platform is to the edge of the world", () => {
+    const edge = a.filter((s) => s.stratum === "platform-edge");
+    const far = a.filter((s) => s.stratum === "platform-far");
+    expect(far.length).toBeGreaterThan(0);
+    for (const state of [...edge, ...far]) {
+      const { game } = rebuild(state);
+      const seen = observe(game);
+      expect(seen.player.riding, state.id).toBe(true);
+      expect(platformClock(seen)?.word === "a_moment", state.id).toBe(
+        state.stratum === "platform-edge",
+      );
     }
   });
 

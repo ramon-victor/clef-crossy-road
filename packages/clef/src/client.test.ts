@@ -17,6 +17,26 @@ const fast = {
 };
 
 describe("ClefClient", () => {
+  it.each(["auth", "quota", "bad_request"] as const)(
+    "preserves a transport's %s classification and does not retry it",
+    async (kind) => {
+      let calls = 0;
+      const error = new ClefError(kind, "Classified by the local bridge");
+      const client = new ClefClient({
+        transport: {
+          post: async () => {
+            calls++;
+            throw error;
+          },
+        },
+        ...fast,
+      });
+      await expect(client.run(request)).rejects.toBe(error);
+      expect(calls).toBe(1);
+      expect(client.stats().retries).toBe(0);
+    },
+  );
+
   it("returns the parsed choice, usage and cost for a successful call", async () => {
     const { transport, seen } = scripted([{ status: 200, json: choiceBody() }]);
     const client = new ClefClient({ transport, ...fast });

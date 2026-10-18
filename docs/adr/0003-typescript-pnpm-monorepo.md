@@ -21,6 +21,7 @@ Chosen option: "TypeScript with pnpm workspaces, Vitest and Biome", because a si
 - The dependency direction between packages is enforced by pnpm's strict `node_modules` layout: a package can import only what its `package.json` declares. Each package has its own `typecheck`.
 - The core is stricter still: its `tsconfig` loads no DOM or Node types, and a purity test scans its source ([ADR-0004](0004-deterministic-simulation.md)).
 - Tests run on Vitest, lint and format on Biome.
+- `packageManager` pins pnpm 12.14.0. Validate upgrades with `pnpm install --frozen-lockfile`, `pnpm check` and the web build. CI runs these checks on Windows, Linux and macOS; Rust tests run on Windows. Update an incompatible global pnpm with its official installer instead of downgrading the project pin.
 
 ### Consequences
 

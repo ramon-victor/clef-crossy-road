@@ -42,7 +42,7 @@ Do not write scripts that call the API directly: they bypass the ledger.
 
 - **CSP.** `tauri.conf.json` sets a restrictive policy. In production `connect-src` allows only `'self'`, `ipc:` and `http://ipc.localhost`, so every API call goes through a Rust command. The development policy adds the local Vite server.
 - **`clef_run`.** It accepts only the models `clef`, `clef-flash` and `clef-omni` and builds the URL itself; the webview cannot supply one. A compromised webview therefore cannot point the token at other endpoints.
-- **Capabilities.** The main window has `core:default` only. The app's own commands are registered in `src-tauri/src/lib.rs`.
+- **Capabilities.** The `main` and `controls` windows have `core:default` and the read-only `os:allow-locale` permission. Native app commands control window lifecycle. Only `main` owns the session and model client; the controls window receives serializable presentation snapshots and sends acknowledged commands.
 - **Dev bridge.** `apps/desktop/dev-bridge.ts` exists only under `vite serve` (`apply: "serve"`) and is not part of any build. The server listens on `localhost`; the bridge rejects a `Host` that is not a loopback name, an `Origin` that differs from the host and a cross-site fetch, and the credentials endpoint requires a JSON content type. Requests without an `Origin` header (non-browser local clients) are accepted, so treat it as a local development tool, not a hardened service.
 - **Dependencies.** Run `cargo audit` on the Rust dependencies before distributing a build.
 

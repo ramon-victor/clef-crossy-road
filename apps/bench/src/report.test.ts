@@ -129,8 +129,10 @@ describe("compare and report", () => {
 describe("perceptionOf: the route strategy", () => {
   it("says what the help amounts to, and what the free reference reads", () => {
     expect(perceptionOf("clef:clef-flash:scene:route:lookup")).toBe(
-      "words + rules + graph + route executor",
+      "words + rules + graph + platform clock + route executor",
     );
-    expect(perceptionOf("exec-route")).toBe("scene + rules + route executor (scripted)");
+    expect(perceptionOf("exec-route")).toBe(
+      "scene + rules + platform clock + route executor (scripted)",
+    );
   });
 });
