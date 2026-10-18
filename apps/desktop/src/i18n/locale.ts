@@ -1,8 +1,8 @@
+import { browserStore, type KeyValueStore, readSetting, writeSetting } from "../storage.ts";
 export const LOCALES = ["en", "pt-BR", "es", "fr", "de", "ja", "zh-Hans"] as const;
 export type Locale = (typeof LOCALES)[number];
 export type LanguagePreference = Locale | "system";
 
-/** Autonyms make the selector usable even when the current language is unfamiliar. */
 export const LANGUAGE_NAMES: Readonly<Record<Locale, string>> = {
   en: "English",
   "pt-BR": "Português (Brasil)",
@@ -17,7 +17,6 @@ export function isLocale(value: unknown): value is Locale {
   return typeof value === "string" && LOCALES.some((locale) => locale === value);
 }
 
-/** Match language variants without silently substituting a different Chinese writing system. */
 export function resolveLocale(tag: string | null | undefined): Locale {
   if (!tag) return "en";
   try {
@@ -32,25 +31,18 @@ export function resolveLocale(tag: string | null | undefined): Locale {
 
 export const LANGUAGE_STORAGE_KEY = "ccr.locale";
 
-export function readPreference(storage: Pick<Storage, "getItem">): LanguagePreference {
-  try {
-    const value = storage.getItem(LANGUAGE_STORAGE_KEY);
-    return isLocale(value) ? value : "system";
-  } catch {
-    return "system";
-  }
+export function readPreference(
+  storage: Pick<KeyValueStore, "getItem"> | null = browserStore(),
+): LanguagePreference {
+  const value = readSetting(LANGUAGE_STORAGE_KEY, storage);
+  return isLocale(value) ? value : "system";
 }
 
 export function savePreference(
-  storage: Pick<Storage, "setItem">,
+  storage: Pick<KeyValueStore, "setItem"> | null,
   preference: LanguagePreference,
 ): void {
-  try {
-    // Only this non-sensitive preference belongs in browser storage. Never store credentials here.
-    storage.setItem(LANGUAGE_STORAGE_KEY, preference);
-  } catch {
-    // Private/locked-down webviews still allow an in-memory choice for the current session.
-  }
+  writeSetting(LANGUAGE_STORAGE_KEY, preference, storage);
 }
 
 export async function systemLocale(): Promise<Locale> {

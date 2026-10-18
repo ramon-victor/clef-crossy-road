@@ -1,4 +1,5 @@
 import { DEFAULT_CLEF, DEFAULT_STALL_LIMIT, type DecisionNotice, decisionCost } from "@ccr/agent";
+import { FREE_NEURONS_PER_DAY } from "@ccr/clef";
 import type { Action } from "@ccr/core";
 import type { PolicyChoice } from "../policies.ts";
 import type { SessionState } from "../session.ts";
@@ -16,19 +17,20 @@ export function gameEndTitle(
   return state.deathCause ? t(`death.${state.deathCause}`) : t("game.over");
 }
 
+const baseDecisionCost = decisionCost(DEFAULT_CLEF).neurons;
+
 export function playerText(choice: PolicyChoice, { t }: Translator) {
   const cost = Math.round(choice.neuronsPerDecision ?? 0);
   return {
     label: t(`player.${choice.presentation}.label`, { id: choice.id }),
     detail: t(`player.${choice.presentation}.detail`, {
       cost,
-      ratio: Math.round((choice.neuronsPerDecision ?? 0) / decisionCost(DEFAULT_CLEF).neurons),
-      sets: Math.floor(10_000 / (choice.neuronsPerDecision ?? 1)),
+      ratio: Math.round((choice.neuronsPerDecision ?? 0) / baseDecisionCost),
+      sets: Math.floor(FREE_NEURONS_PER_DAY / (choice.neuronsPerDecision ?? 1)),
     }),
   };
 }
 
-/** Events are translated at render time, including previously recorded controller steps. */
 export function noticeText(notice: DecisionNotice, translation: Translator): string {
   const { t } = translation;
   const maneuver = "maneuver" in notice ? t(`maneuver.${notice.maneuver}`) : "";
@@ -68,7 +70,9 @@ export function noticeText(notice: DecisionNotice, translation: Translator): str
     case "timeout":
       return t("notice.timeout", { cell, count: notice.count });
     case "too_long":
-      return t("notice.too_long", { count: notice.count });
+    case "still_carried":
+    case "no_exit":
+      return t(`notice.${notice.kind}`, { count: notice.count });
     case "no_route":
       return t("notice.no_route", {
         side: t(`side.${notice.side}`),

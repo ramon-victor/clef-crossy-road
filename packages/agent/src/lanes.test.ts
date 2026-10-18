@@ -8,6 +8,8 @@ import {
   type Cell,
   canStand,
   cellAt,
+  cellWindow,
+  hopWindow,
   isPermanent,
   type LanesState,
   lanesState,
@@ -120,6 +122,31 @@ const cellsOf = (state: LanesState): Cell[] => [
   state.sideways.right_lands_on,
   state.backward.lands_on,
 ];
+
+describe("hopWindow: a hop forward from a column that is not a whole one", () => {
+  // Seed 58 of the free reference died three ticks into a hop off a log from column 0.7 that was judged at column 1.
+  const row = road([{ col: 0.1, speed: -2.78 }]);
+
+  it("counts a vehicle over the column the chicken leaves, not only the whole column it lands on", () => {
+    expect(cellWindow(row, 1, 0.2, 0.3)).toBe("empty");
+    expect(hopWindow(row, 0.7, 0.2, 0.3)).toBe("vehicle");
+  });
+
+  it("is the plain window on a whole column and within a few hundredths of one", () => {
+    expect(hopWindow(row, 1, 0.2, 0.3)).toBe("empty");
+    expect(hopWindow(row, 1.02, 0.2, 0.3)).toBe("empty");
+  });
+
+  it("does not count the column left for the time the chicken then waits on the whole one", () => {
+    const slow = road([{ col: -0.5, speed: 0.3 }]);
+    expect(hopWindow(slow, 0.7, 0.2, 1.0, true)).toBe("empty");
+  });
+
+  it("looks only where the hop ends for water and trees", () => {
+    expect(hopWindow(water([{ col: 1, speed: 0 }]), 0.7, 0.2, 0.3)).toBe("log");
+    expect(hopWindow(grass([0]), 0.7, 0.2, 0.3)).toBe("empty");
+  });
+});
 
 describe("the lanes view", () => {
   const sample = [...statesOf([1, 2, 3, 4, 5, 6, 7, 8])];

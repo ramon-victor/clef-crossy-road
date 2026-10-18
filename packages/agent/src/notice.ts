@@ -7,7 +7,16 @@ export type ControllerManeuver = Maneuver | RouteManeuver;
 
 /** Presentation only. Never include these events in observations, prompts, memory or cache keys. */
 export type DecisionNotice =
-  | { kind: "wait" | "safe_wait" | "blocked_wait" | "drift" | "waited" }
+  | {
+      kind:
+        | "wait"
+        | "safe_wait"
+        | "blocked_wait"
+        | "drift"
+        | "waited"
+        | "still_water"
+        | "not_carried";
+    }
   | { kind: "clear"; maneuver: ControllerManeuver }
   | { kind: "waiting"; maneuver: ControllerManeuver; cell: Cell; waited: number; limit: number }
   | { kind: "escape"; action: Action; remaining: number }
@@ -20,7 +29,7 @@ export type DecisionNotice =
     }
   | { kind: "permanent" | "cannot_stay"; cell: Cell }
   | { kind: "timeout"; cell: Cell; count: number }
-  | { kind: "too_long"; count: number }
+  | { kind: "too_long" | "still_carried" | "no_exit"; count: number }
   | { kind: "no_route"; side: "left" | "right"; count: number }
   | { kind: "refused" | "returned"; maneuver: ControllerManeuver; reason: DecisionNotice }
   | { kind: "hopped" | "reached"; maneuver: ControllerManeuver; count: number }

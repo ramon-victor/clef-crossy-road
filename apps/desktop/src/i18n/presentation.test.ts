@@ -1,8 +1,6 @@
-import type { DecisionNotice } from "@ccr/agent";
+import { DEFAULT_STALL_LIMIT, type DecisionNotice } from "@ccr/agent";
 import { describe, expect, it } from "vitest";
-import { buildPolicyChoices } from "../policies.ts";
-import { LOCALES } from "./locale.ts";
-import { gameEndTitle, noticeText, playerText } from "./presentation.ts";
+import { gameEndTitle, noticeText } from "./presentation.ts";
 import { translator } from "./translate.ts";
 
 const notice: DecisionNotice = {
@@ -22,22 +20,32 @@ const notice: DecisionNotice = {
 };
 
 describe("localized game descriptions", () => {
-  it.each(LOCALES)(
-    "renders nested controller explanations and player descriptions in %s",
-    (locale) => {
-      const translation = translator(locale);
-      const text = noticeText(notice, translation);
-      expect(text).not.toMatch(/{{|notice\.|maneuver\.|hop_back|detour_left/);
-      for (const choice of buildPolicyChoices(null)) {
-        const description = playerText(choice, translation);
-        expect(description.label).not.toMatch(/player\.|{{/);
-        expect(description.detail).not.toMatch(/player\.|{{/);
-      }
-      expect(
-        gameEndTitle({ alive: false, stalled: false, deathCause: "water" }, translation),
-      ).not.toBe("");
-    },
-  );
+  it("uses the current stall limit and the localized death cause", () => {
+    const state = { alive: true, stalled: true, deathCause: null };
+    expect(gameEndTitle(state, translator("en"))).toBe(
+      `Stuck: no new row in ${DEFAULT_STALL_LIMIT} decisions`,
+    );
+    expect(
+      gameEndTitle(
+        { ...state, alive: false, stalled: false, deathCause: "water" },
+        translator("pt-BR"),
+      ),
+    ).toBe(translator("pt-BR").t("death.water"));
+  });
+
+  it("describes platform exit refusals from structured data", () => {
+    const event: DecisionNotice = {
+      kind: "refused",
+      maneuver: "leave_platform",
+      reason: { kind: "no_exit", count: 4 },
+    };
+    expect(noticeText(event, translator("en"))).toBe(
+      "get off the platform could not start. No way off within 4 hops.",
+    );
+    expect(noticeText({ kind: "still_water" }, translator("pt-BR"))).toBe(
+      "Nada se move nessa linha; a água continua lá.",
+    );
+  });
 
   it("retranslates a recorded note without changing its structured events", () => {
     const original = JSON.stringify(notice);

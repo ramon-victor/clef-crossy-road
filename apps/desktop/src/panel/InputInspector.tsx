@@ -124,11 +124,11 @@ function AnswerTab({ log }: { log: DecisionLog }) {
   );
 }
 
-/** Translates the inspection UI while preserving every byte of the actual model input. */
 export function InputInspector({ history, policyId, onClose }: InputInspectorProps) {
   const translation = useI18n();
   const { t } = translation;
   const closeRef = useRef<HTMLButtonElement>(null);
+  const copyRequest = useRef(0);
   const copyTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const [picked, setPicked] = useState<number | null>(null);
   const [tab, setTab] = useState<Tab>("state");
@@ -146,6 +146,7 @@ export function InputInspector({ history, policyId, onClose }: InputInspectorPro
     const previous = document.activeElement;
     closeRef.current?.focus();
     return () => {
+      ++copyRequest.current;
       clearTimeout(copyTimer.current);
       if (previous instanceof HTMLElement && previous.isConnected) previous.focus();
     };
@@ -161,7 +162,10 @@ export function InputInspector({ history, policyId, onClose }: InputInspectorPro
 
   const copy = async () => {
     if (!sent) return;
-    setCopyStatus((await copyText(inputAsJson(sent))) ? "copied" : "error");
+    const request = ++copyRequest.current;
+    const copied = await copyText(inputAsJson(sent));
+    if (request !== copyRequest.current) return;
+    setCopyStatus(copied ? "copied" : "error");
     clearTimeout(copyTimer.current);
     copyTimer.current = setTimeout(() => setCopyStatus("idle"), 1500);
   };

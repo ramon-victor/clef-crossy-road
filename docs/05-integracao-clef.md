@@ -1,6 +1,6 @@
 # 05 · Integração com o Clef (Workers AI, REST)
 
-> **Status:** contrato verificado por execução real; configuração local testada sem API · **Verificado em:** 2026-10-17 · **Fontes:** [references.md](references.md)
+> **Status:** contrato verificado por execução real; configuração local testada sem API · **Verificado em:** 2026-10-18 · **Fontes:** [references.md](references.md)
 > Legenda de evidência: **[doc]** documentação oficial · **[ind]** teste independente, amostra pequena · **[obs]** observado neste projeto em 2026-10-14.
 
 ## Endpoint

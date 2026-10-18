@@ -10,6 +10,7 @@ import { CLEF_CACHED_SEEDS, CLEF_ID, type PolicyChoice } from "./policies.ts";
 const CACHED_SEED = Number(CLEF_CACHED_SEEDS.split("-")[0]);
 
 import type { Session } from "./session.ts";
+import { type Pace, PREFERENCE_KEYS } from "./theater/preference.ts";
 
 interface Context {
   session: Session;
@@ -17,6 +18,8 @@ interface Context {
   bridge: Bridge;
   choices: PolicyChoice[];
   select(id: string): void;
+  /** `persist: false` is for this run only, so a check never leaves its own choice as the person's. */
+  setPace(pace: Pace, persist?: boolean): void;
 }
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -263,6 +266,96 @@ async function checkInspector(ctx: Context): Promise<Report> {
   };
 }
 
+/** What the person had chosen, to put back after a check that presses the keys that save a choice. */
+function savePreferences(): Array<[string, string | null]> {
+  return PREFERENCE_KEYS.map((key): [string, string | null] => {
+    try {
+      return [key, localStorage.getItem(key)];
+    } catch {
+      return [key, null];
+    }
+  });
+}
+
+function restorePreferences(saved: ReadonlyArray<readonly [string, string | null]>): void {
+  try {
+    for (const [key, value] of saved) {
+      if (value === null) localStorage.removeItem(key);
+      else localStorage.setItem(key, value);
+    }
+  } catch {
+    // Storage is not available; nothing was kept either.
+  }
+}
+
+/**
+ * What shows the model deciding, in the real window: the compass around the chicken (five moves, one lit, a
+ * caption) and the conversation column (a CLEF bubble whose options carry the model's pick). C and T hide
+ * and bring them back.
+ */
+async function checkTheater(ctx: Context): Promise<Report> {
+  const saved = savePreferences();
+  ctx.setPace("live", false);
+  ctx.select(CLEF_ID);
+  ctx.session.setSpeed(4);
+  ctx.session.start(CACHED_SEED);
+  const count = (selector: string) => document.querySelectorAll(selector).length;
+  const press = async (key: string) => {
+    window.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true }));
+    await sleep(250);
+  };
+  const started = performance.now();
+  while (performance.now() - started < 12_000 && ctx.session.state().decisions < 1)
+    await sleep(100);
+  // A choice saved by an earlier session may have hidden one of them; the check is about the views themselves.
+  const compassByDefault = count(".compass-anchor") === 1;
+  if (!compassByDefault) await press("c");
+  const conversationByDefault = count(".theater") === 1;
+  if (!conversationByDefault) await press("t");
+  // The cached game keeps going: wait for a moment when an answer, not a question, is on screen.
+  while (performance.now() - started < 20_000 && count(".compass.answered .cb.win") === 0)
+    await sleep(50);
+  const buttons = count(".compass .cb");
+  const lit = count(".compass .cb.win");
+  const caption = document.querySelector(".cap-main")?.textContent ?? "";
+  const bubbles = count(".theater .bub.model");
+  const picks = count(".theater .turn:not(.old) .pill.win");
+  const questions = count(".theater .turn:not(.old) .qa-row");
+  await press("c");
+  const compassHiddenWithC = count(".compass-anchor") === 0;
+  await press("c");
+  const compassShownAgain = count(".compass-anchor") === 1;
+  await press("t");
+  const conversationHiddenWithT = count(".theater") === 0;
+  await press("t");
+  const conversationShownAgain = count(".theater") === 1;
+  // The checks that follow run against the window as it started: both views end up shown, so hide what was hidden.
+  if (!compassByDefault) await press("c");
+  if (!conversationByDefault) await press("t");
+  restorePreferences(saved);
+  return {
+    theater: {
+      compassByDefault,
+      conversationByDefault,
+      compass: {
+        buttons,
+        lit,
+        caption,
+        hiddenWithC: compassHiddenWithC,
+        shownAgain: compassShownAgain,
+      },
+      conversation: {
+        bubbles,
+        questions,
+        picks,
+        everyQuestionHasAPick: questions > 0 && picks === questions,
+        hiddenWithT: conversationHiddenWithT,
+        shownAgain: conversationShownAgain,
+      },
+    },
+  };
+}
+
 /**
  * Only runs in the desktop app when launched with CCR_SELFTEST=1: checks rendering, the budget,
  * the cached Clef pipeline and the keyboard, writes runs/selftest.json and exits.
@@ -278,12 +371,15 @@ export async function runSelfTest(ctx: Context): Promise<void> {
   if (!enabled) return;
 
   const report: Report = { startedAt: new Date().toISOString() };
+  // Full speed, as before the pace existed: the checks wait on the game, not on a person reading.
+  ctx.setPace("live", false);
   try {
     for (const check of [
       checkRendering,
       checkBudget,
       checkClefFromCache,
       checkInspector,
+      checkTheater,
       checkHumanKeys,
       checkHeldKey,
     ]) {

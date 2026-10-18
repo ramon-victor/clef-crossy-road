@@ -1,6 +1,7 @@
 import { render } from "preact";
 import { App } from "./App.tsx";
-import { initialLanguage, LanguageProvider } from "./i18n/provider.tsx";
+import { initialLanguage } from "./i18n/environment.ts";
+import { LanguageProvider } from "./i18n/provider.tsx";
 import "./styles.css";
 
 const root = document.getElementById("app");

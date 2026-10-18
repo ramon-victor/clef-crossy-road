@@ -6,6 +6,9 @@ import { gameEndTitle } from "./i18n/presentation.ts";
 import { useI18n } from "./i18n/provider.tsx";
 import { ErrorMessage } from "./panel/ErrorMessage.tsx";
 import type { Session, SessionState } from "./session.ts";
+import { Compass } from "./theater/Compass.tsx";
+import { modelChoice } from "./theater/choice.ts";
+import { Glyph } from "./theater/Glyph.tsx";
 
 export interface GameCanvasProps {
   session: Session;
@@ -15,7 +18,12 @@ export interface GameCanvasProps {
   onFps?: (fps: number) => void;
   onRetry: () => void;
   onNewMap: () => void;
+  /** The model's decision drawn around the chicken. It replaces the thought bubble while it is on. */
+  compass: { on: boolean; conversationOpen: boolean; onConversation(): void };
 }
+
+/** How far above its feet the compass is centred, in world units: the middle of the chicken. */
+const COMPASS_LIFT = 0.5;
 
 /** Owns the WebGL view and the animation loop; everything else is plain DOM on top of it. */
 export function GameCanvas(props: GameCanvasProps) {
@@ -24,6 +32,7 @@ export function GameCanvas(props: GameCanvasProps) {
   const { session, state } = props;
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const bubbleRef = useRef<HTMLDivElement>(null);
+  const compassRef = useRef<HTMLDivElement>(null);
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
   const [errorText, setErrorText] = useState("");
   const latest = useRef(props);
@@ -78,8 +87,15 @@ export function GameCanvas(props: GameCanvasProps) {
           wasAlive = snap.alive;
 
           const bubble = bubbleRef.current;
-          const pos = view?.heroScreenPosition();
-          if (bubble && pos) bubble.style.transform = `translate(${pos.x}px, ${pos.y}px)`;
+          // The thought bubble and the compass replace each other, so only the one that is on is placed.
+          const compass = compassRef.current;
+          if (compass) {
+            const body = view?.heroScreenPosition(COMPASS_LIFT);
+            if (body) compass.style.transform = `translate(${body.x}px, ${body.y}px)`;
+          } else if (bubble) {
+            const pos = view?.heroScreenPosition();
+            if (pos) bubble.style.transform = `translate(${pos.x}px, ${pos.y}px)`;
+          }
 
           if (now - lastReport > 500) {
             lastReport = now;
@@ -102,8 +118,11 @@ export function GameCanvas(props: GameCanvasProps) {
   }, [session]);
 
   const last = state.last;
-  const showBubble = status === "ready" && state.alive && !state.human && last !== null;
-  const chosenP = last?.decision.probabilities?.[last.action];
+  const showBubble =
+    status === "ready" && state.alive && !state.human && last !== null && !props.compass.on;
+  const chosen = last ? modelChoice(last) : null;
+  const shownMove = chosen?.move ?? last?.action;
+  const chosenP = chosen?.bars?.p[chosen.move];
 
   return (
     <div class="stage">
@@ -117,11 +136,13 @@ export function GameCanvas(props: GameCanvasProps) {
       <div ref={bubbleRef} class="bubble-anchor">
         {showBubble && last && (
           <div class="bubble" key={last.index}>
-            <span class="bubble-arrow">{ACTION_GLYPH[last.action]}</span>
+            <span class="bubble-arrow">
+              <Glyph glyph={ACTION_GLYPH[shownMove ?? last.action]} size={22} />
+            </span>
             {chosenP !== undefined && <span class="bubble-p">{percent(chosenP)}</span>}
           </div>
         )}
-        {status === "ready" && state.phase === "thinking" && (
+        {status === "ready" && state.phase === "thinking" && !props.compass.on && (
           <div class="bubble thinking">
             <span class="dots">
               <i />
@@ -131,6 +152,16 @@ export function GameCanvas(props: GameCanvasProps) {
           </div>
         )}
       </div>
+
+      {status === "ready" && props.compass.on && (
+        <Compass
+          session={session}
+          state={state}
+          anchorRef={compassRef}
+          conversationOpen={props.compass.conversationOpen}
+          onConversation={props.compass.onConversation}
+        />
+      )}
 
       {status === "loading" && <div class="overlay-note">{t("game.loading")}</div>}
       {status === "error" && (

@@ -7,6 +7,7 @@ import {
   type Memory,
   type PolicyFactory,
   parseClefPolicyId,
+  platformClock,
   randomPolicy,
   readLanes,
   readOrdered,
@@ -36,6 +37,9 @@ export const STRATA = [
   { id: "tree-stuck", quota: 10, about: "the same tree after 1 or 3 bumps, so the memory says so" },
   { id: "grass-open", quota: 8, about: "open grass ahead" },
   { id: "rail", quota: 6, about: "rail ahead" },
+  // Last, so that the states picked for the strata above stay the ones they were before these were added.
+  { id: "platform-edge", quota: 12, about: "on a platform a moment from the edge of the world" },
+  { id: "platform-far", quota: 12, about: "on a platform that is not (soon, later, or still)" },
 ] as const;
 
 export type Stratum = (typeof STRATA)[number]["id"];
@@ -99,6 +103,11 @@ export function classify(ahead: RowKind | undefined, forward: Outcome): Stratum 
   }
 }
 
+const stateKey = (c: Pick<Candidate, "seed" | "actions">): string =>
+  `${c.seed}|${c.actions.join(",")}`;
+
+const isPlatform = (stratum: Stratum): boolean => stratum.startsWith("platform");
+
 interface Candidate {
   stratum: Stratum;
   seed: number;
@@ -121,10 +130,14 @@ async function candidatesFor(seeds: readonly number[], maxDecisions: number): Pr
         const outcomes = outcomesAt(game);
         const stratum = classify(game.row(game.heroRow + 1)?.kind, outcomes.hop_forward);
         if (stratum) found.push({ stratum, seed, actions: [...actions], outcomes });
+        const seen = observe(game);
+        if (seen.player.riding) {
+          const stratum =
+            platformClock(seen)?.word === "a_moment" ? "platform-edge" : "platform-far";
+          found.push({ stratum, seed, actions: [...actions], outcomes });
+        }
         const decision =
-          policy.kind === "oracle"
-            ? await policy.decide(game)
-            : await policy.decide(observe(game), memory);
+          policy.kind === "oracle" ? await policy.decide(game) : await policy.decide(seen, memory);
         const { outcome } = game.step(decision.action);
         actions.push(decision.action);
         memory = remember(memory, { action: decision.action, outcome }, game.score, game.heroRow);
@@ -202,14 +215,14 @@ export async function sampleStates(options: SampleOptions): Promise<ProbeState[]
     const stuck = id === "tree-stuck";
     // Both tree strata come from the same candidates; the stuck ones skip the seeds already used.
     const usedSeeds = new Set(chosen.filter((c) => c.stratum === "tree").map((c) => c.seed));
-    const pool = onePerSeed(
-      shuffled(
-        candidates.filter(
-          (c) => c.stratum === (stuck ? "tree" : id) && !(stuck && usedSeeds.has(c.seed)),
-        ),
-        rng,
-      ),
-    ).slice(0, quota(id));
+    const taken = new Set(chosen.map(stateKey));
+    const inStratum = (c: Candidate): boolean =>
+      c.stratum === (stuck ? "tree" : id) && !(stuck && usedSeeds.has(c.seed));
+    const fresh = (c: Candidate): boolean => !isPlatform(c.stratum) || !taken.has(stateKey(c));
+    const pool = onePerSeed(shuffled(candidates.filter(inStratum), rng).filter(fresh)).slice(
+      0,
+      quota(id),
+    );
     chosen.push(
       ...(stuck ? pool.map((c, i) => bumped(c, BUMPS[i % BUMPS.length] as number)) : pool),
     );

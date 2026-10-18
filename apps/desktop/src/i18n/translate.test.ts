@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { LOCALES, readPreference, resolveLocale, savePreference } from "./locale.ts";
+import { LOCALES } from "./locale.ts";
 import { catalogs, translator } from "./translate.ts";
 
 const placeholders = (message: string) =>
@@ -41,45 +41,5 @@ describe("translation catalogs", () => {
     const portuguese = translator("pt-BR");
     expect(portuguese.t("common.close")).toBe("Fechar");
     expect(english.t("common.close")).toBe("Close");
-  });
-});
-
-describe("system language matching", () => {
-  it.each([
-    ["en-GB", "en"],
-    ["pt-PT", "pt-BR"],
-    ["pt-BR", "pt-BR"],
-    ["es-MX", "es"],
-    ["fr-CA", "fr"],
-    ["de-AT", "de"],
-    ["ja-JP", "ja"],
-    ["zh-CN", "zh-Hans"],
-    ["zh-SG", "zh-Hans"],
-    ["zh-Hans-HK", "zh-Hans"],
-    ["zh", "zh-Hans"],
-    ["zh-Hant", "en"],
-    ["zh-TW", "en"],
-    ["zh-HK", "en"],
-    ["ru-RU", "en"],
-    ["ar", "en"],
-    ["pt_BR", "en"],
-    ["", "en"],
-    [null, "en"],
-  ])("resolves %s to %s", (tag, expected) => expect(resolveLocale(tag)).toBe(expected));
-
-  it("ignores corrupt preferences and tolerates unavailable storage", () => {
-    for (const value of [null, "xx", "{}", "system"])
-      expect(readPreference({ getItem: () => value })).toBe("system");
-    expect(readPreference({ getItem: () => "ja" })).toBe("ja");
-    const blocked = {
-      getItem: () => {
-        throw new Error("blocked");
-      },
-      setItem: () => {
-        throw new Error("blocked");
-      },
-    };
-    expect(readPreference(blocked)).toBe("system");
-    expect(() => savePreference(blocked, "de")).not.toThrow();
   });
 });

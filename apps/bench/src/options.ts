@@ -23,7 +23,7 @@ Policies: always-forward, random, lookahead, lookahead-<depth>, rule-view, rule-
 run options:
   --concurrency <n>      parallel episodes (default 1 for baselines, 4 when a Clef policy is used)
   --max-decisions <n>    cap per episode (default 300)
-  --stall-limit <n>      end an episode after n decisions without a new furthest row (default 40, 0 = off)
+  --stall-limit <n>      end an episode after n decisions without a new furthest row (default 60, 0 = off)
   --decision-ticks <n>   world ticks after each action (default 12, one full hop)
   --latency <spec>       none | fixed:<ms> | recorded, optionally + ":pipelined". The world keeps running
                          while the model thinks. Serial: hero idles while waiting. Pipelined: the next

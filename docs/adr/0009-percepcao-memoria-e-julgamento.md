@@ -44,3 +44,11 @@ argumento de `decide(obs, memory)`. Os encoders antigos a ignoram, então suas r
 - (−) A fronteira "percepção ou julgamento" é uma decisão humana; os campos novos passam pelo teste acima e por um teste de palavras proibidas.
 - Resultado medido: [07](../07-experimentos.md) ("Vista de jogador" e "Opções que dizem quando cada jogada serve"). Nenhuma das vistas, nem o estilo `routing`, fez o Clef jogar melhor que "sempre em frente".
 - O que o modelo recebe pode ser visto no app (tecla I) e com `pnpm bench show-input`, que imprimem o pedido exatamente como é enviado.
+
+## Adendo (2026-10-17): o relógio da própria plataforma é percepção
+
+O dono notou que o modelo "não sabe que está num tronco em movimento que logo vai sair do mapa". A vista dava `carried_towards` e `place_in_world`, mas nenhuma pergunta os lia e nenhum campo dizia **quanto falta**. Entra no estado, **só enquanto a galinha está numa plataforma**, `chicken.edge_in`: `a_moment` (menos de um segundo), `soon` (menos de dois segundos e meio), `later` ou `not_carried` (a plataforma está parada ou a leva para longe da borda). Os limiares ficam no código; o modelo só vê a palavra.
+
+Passa no teste de percepção ("uma pessoa jogando saberia isso só olhando a tela e lembrando?"): é a velocidade do tronco e a distância da galinha à borda, as duas na tela, e **não depende de nenhuma jogada candidata** (é a mesma para qualquer salto que a galinha pudesse fazer) nem diz o que fazer ou se algo é seguro. É a mesma natureza da previsão a 0,2 s, com um horizonte maior e só para o chão sob a galinha. A linha é fina (um tempo até uma borda parece um "tempo até a colisão" que a tabela acima proíbe), e por isso fica registrada aqui: o que a ADR proíbe é a **avaliação por jogada**; este valor é uma propriedade do chão, e não muda o `Observation` (é calculado no agente, a partir dele).
+
+Consequências: o rótulo de ajuda da condição ganha "platform clock" (`helpLabel`); um teste confere que o estado fora de uma plataforma é o que era (os pedidos não mudam) e que nenhuma palavra do vocabulário diz o que fazer; a vista continua sem dígitos.

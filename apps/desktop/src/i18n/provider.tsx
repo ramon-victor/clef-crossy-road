@@ -1,12 +1,19 @@
 import { type ComponentChildren, createContext } from "preact";
-import { useCallback, useContext, useEffect, useMemo, useRef, useState } from "preact/hooks";
 import {
-  type LanguagePreference,
-  type Locale,
-  readPreference,
-  savePreference,
-  systemLocale,
-} from "./locale.ts";
+  useCallback,
+  useContext,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "preact/hooks";
+import {
+  type LanguageEnvironment,
+  languageEnvironment,
+  setDocumentLanguage,
+} from "./environment.ts";
+import type { LanguagePreference, Locale } from "./locale.ts";
 import { type Translator, translator } from "./translate.ts";
 
 interface LanguageContext extends Translator {
@@ -17,43 +24,10 @@ interface LanguageContext extends Translator {
 
 const Context = createContext<LanguageContext | null>(null);
 
-export interface LanguageEnvironment {
-  detect(): Promise<Locale>;
-  read(): LanguagePreference;
-  save(preference: LanguagePreference): void;
-}
-
-const environment: LanguageEnvironment = {
-  detect: systemLocale,
-  read: () => {
-    try {
-      return readPreference(window.localStorage);
-    } catch {
-      return "system";
-    }
-  },
-  save: (value) => {
-    try {
-      savePreference(window.localStorage, value);
-    } catch {
-      // Even accessing localStorage can throw when storage is disabled.
-    }
-  },
-};
-
-export async function initialLanguage(source = environment) {
-  const preference = source.read();
-  const detected = await source.detect().catch(() => "en" as const);
-  const locale = preference === "system" ? detected : preference;
-  document.documentElement.lang = locale;
-  document.documentElement.dir = "ltr";
-  return { preference, detected };
-}
-
 export function LanguageProvider({
   children,
   initial,
-  source = environment,
+  source = languageEnvironment,
 }: {
   children: ComponentChildren;
   initial: { preference: LanguagePreference; detected: Locale };
@@ -84,9 +58,8 @@ export function LanguageProvider({
     [source, refresh],
   );
 
-  useEffect(() => {
-    document.documentElement.lang = locale;
-    document.documentElement.dir = "ltr";
+  useLayoutEffect(() => {
+    setDocumentLanguage(locale);
   }, [locale]);
 
   useEffect(() => {

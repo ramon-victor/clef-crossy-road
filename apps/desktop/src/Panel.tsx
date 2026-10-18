@@ -11,6 +11,7 @@ import { SetupCard } from "./panel/SetupCard.tsx";
 import { StatsCard } from "./panel/StatsCard.tsx";
 import type { PolicyChoice } from "./policies.ts";
 import type { SessionState, Timing } from "./session.ts";
+import type { Pace } from "./theater/preference.ts";
 
 export interface PanelProps {
   state: SessionState;
@@ -31,6 +32,11 @@ export interface PanelProps {
   onRetry(): void;
   onNewMap(): void;
   onInspect(): void;
+  theaterOpen: boolean;
+  onTheater(): void;
+  /** How long a model's answer stands before the chicken moves; null for a player that asks no model. */
+  pace: Pace | null;
+  onPace(pace: Pace): void;
   onSeed(seed: number): void;
   onSound(on: boolean): void;
   onAutoRestart(on: boolean): void;
@@ -74,6 +80,8 @@ export function Panel(props: PanelProps) {
           credentials={props.credentials}
           onConfigure={props.onConfigure}
           onTiming={props.onTiming}
+          pace={props.pace}
+          onPace={props.onPace}
           onSpeed={props.onSpeed}
           onSeed={props.onSeed}
           onAutoRestart={props.onAutoRestart}
@@ -81,7 +89,14 @@ export function Panel(props: PanelProps) {
         {state.error && (
           <ErrorCard info={state.errorInfo ?? { code: "unknown", detail: state.error }} />
         )}
-        {!state.human && <DecisionCard state={state} onInspect={props.onInspect} />}
+        {!state.human && (
+          <DecisionCard
+            state={state}
+            theaterOpen={props.theaterOpen}
+            onInspect={props.onInspect}
+            onTheater={props.onTheater}
+          />
+        )}
         <StatsCard state={state} />
       </div>
       <div class="panel-bottom">

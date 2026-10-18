@@ -150,7 +150,45 @@ describe("ClefPolicy", () => {
     const episode = await playEpisode(clefPolicy(client, config), 5, { maxDecisions: 3 });
     expect(episode.records.length).toBeGreaterThan(0);
     expect(JSON.stringify(episode)).not.toContain("instructions");
-    for (const record of episode.records) expect(record).not.toHaveProperty("sent");
+    for (const record of episode.records) {
+      expect(record).not.toHaveProperty("sent");
+      expect(record).not.toHaveProperty("answers");
+    }
+  });
+
+  it("announces the request just before it goes out, and returns the answer as given", async () => {
+    const { client, seen } = clientReturning(() =>
+      choiceBody("hop_left", { hop_forward: 0.1, hop_left: 0.6, hop_right: 0.3 }),
+    );
+    const policy = clefPolicy(client, config).create(1);
+    if (policy.kind !== "observation") throw new Error("expected an observation policy");
+    const asked: Array<{ input: unknown; sentSoFar: number }> = [];
+    const decision = await policy.decide(observe(new Game({ seed: 1 })), undefined, {
+      onAsk: (input) => asked.push({ input, sentSoFar: seen.length }),
+    });
+    expect(asked).toHaveLength(1);
+    expect(asked[0]?.sentSoFar).toBe(0);
+    expect(asked[0]?.input).toBe(decision.sent);
+    expect(decision.answers).toEqual({
+      move: {
+        choice: "hop_left",
+        probabilities: { hop_forward: 0.1, hop_left: 0.6, hop_right: 0.3 },
+      },
+    });
+  });
+
+  it("keeps no answers for yes/no questions, which have no options to show", async () => {
+    const { client } = clientReturning(() => ({
+      result: {
+        answers: Object.fromEntries(
+          ACTIONS.map((a) => [riskQuestionId(a), { type: "noul", noul: 0.3 }]),
+        ),
+        usage: { input_tokens: 500, output_tokens: 0 },
+      },
+      success: true,
+    }));
+    const decision = await decideOnFirstObservation(client, { ...config, strategy: "critic" });
+    expect(decision).not.toHaveProperty("answers");
   });
 
   it("rejects an option id it does not know", async () => {

@@ -21,7 +21,6 @@ declare module "i18next" {
 export const catalogs = { en, "pt-BR": ptBR, es, fr, de, ja, "zh-Hans": zhHans };
 
 const engine = createInstance();
-// Resources are bundled: initialization is synchronous and never requests translation files.
 void engine.init({
   resources: Object.fromEntries(Object.entries(catalogs).map(([locale, ui]) => [locale, { ui }])),
   lng: "en",
@@ -32,11 +31,10 @@ void engine.init({
   keySeparator: false,
   initAsync: false,
   returnEmptyString: false,
-  interpolation: { escapeValue: false }, // Preact escapes text; never render translated HTML.
+  interpolation: { escapeValue: false },
 });
 
-/** A fixed translator has no mutable global language, so tests and mounted trees remain isolated. */
-export function translator(locale: Locale) {
+function createTranslator(locale: Locale) {
   const numbers = new Map<string, Intl.NumberFormat>();
   const number = (value: number, options: Intl.NumberFormatOptions = {}): string => {
     const key = JSON.stringify(options);
@@ -60,4 +58,14 @@ export function translator(locale: Locale) {
   };
 }
 
-export type Translator = ReturnType<typeof translator>;
+export type Translator = ReturnType<typeof createTranslator>;
+const translators = new Map<Locale, Translator>();
+
+export function translator(locale: Locale): Translator {
+  let value = translators.get(locale);
+  if (!value) {
+    value = createTranslator(locale);
+    translators.set(locale, value);
+  }
+  return value;
+}

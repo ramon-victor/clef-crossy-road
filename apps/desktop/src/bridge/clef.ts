@@ -49,7 +49,6 @@ class BridgeCache implements DecisionCache {
  */
 class BridgeBudget implements SpendBudget {
   readonly dailyLimit = FREE_NEURONS_PER_DAY;
-  private lastSpent = 0;
   private readonly bridge: Bridge;
 
   constructor(bridge: Bridge) {
@@ -57,8 +56,7 @@ class BridgeBudget implements SpendBudget {
   }
 
   async spentToday(): Promise<number> {
-    this.lastSpent = (await this.bridge.budget()).spent;
-    return this.lastSpent;
+    return (await this.bridge.budget()).spent;
   }
 
   async canSpend(): Promise<boolean> {

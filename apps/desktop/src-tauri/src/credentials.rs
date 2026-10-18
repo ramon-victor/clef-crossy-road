@@ -42,17 +42,13 @@ pub fn load(root: &Path) -> Credentials {
 
 /// Saved GUI settings take precedence; environment variables remain a startup fallback.
 fn load_with(root: &Path, account: Option<String>, token: Option<String>) -> Credentials {
-    let path = root.join(".env");
-    // On Unix, File::open can accept a directory; dotenvy's iterator then repeats its I/O error.
-    let saved: HashMap<String, String> = if path.is_file() {
-        dotenvy::from_path_iter(path)
-            .into_iter()
-            .flatten()
-            .filter_map(Result::ok)
-            .collect()
-    } else {
-        HashMap::new()
-    };
+    let saved: HashMap<String, String> = fs::read_to_string(root.join(".env"))
+        .map(|contents| {
+            dotenvy::from_read_iter(contents.as_bytes())
+                .filter_map(Result::ok)
+                .collect()
+        })
+        .unwrap_or_default();
     Credentials {
         account_id: saved
             .get("CF_ACCOUNT_ID")

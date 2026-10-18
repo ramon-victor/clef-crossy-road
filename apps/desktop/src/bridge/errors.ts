@@ -15,7 +15,6 @@ export type ErrorCode = BridgeErrorCode | ClefErrorKind | "unknown" | "render";
 
 export interface ErrorInfo {
   code: ErrorCode;
-  /** Original technical diagnostic. App-owned errors never include submitted credentials. */
   detail: string;
   params?: Record<string, number>;
 }
@@ -26,7 +25,6 @@ export interface BridgeFailure {
   params?: Record<string, number>;
 }
 
-/** Preserve classification through ClefClient without deriving it from English prose. */
 export class BridgeError extends ClefError {
   readonly code: BridgeErrorCode;
   readonly params: BridgeFailure["params"];
@@ -57,7 +55,22 @@ export function bridgeError(reason: unknown): BridgeError {
     BRIDGE_ERROR_CODES.some((code) => code === reason.code) &&
     typeof reason.message === "string"
   ) {
-    return new BridgeError(reason as BridgeFailure);
+    const params =
+      "params" in reason &&
+      reason.params !== null &&
+      typeof reason.params === "object" &&
+      !Array.isArray(reason.params)
+        ? Object.fromEntries(
+            Object.entries(reason.params).filter(
+              ([, value]) => typeof value === "number" && Number.isFinite(value),
+            ),
+          )
+        : undefined;
+    return new BridgeError({
+      code: reason.code as BridgeErrorCode,
+      message: reason.message,
+      ...(params && Object.keys(params).length ? { params } : {}),
+    });
   }
   return new BridgeError({
     code: "bridge",

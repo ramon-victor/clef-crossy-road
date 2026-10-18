@@ -1,11 +1,12 @@
 import { useLayoutEffect, useRef, useState } from "preact/hooks";
+import { credentialIssue } from "../bridge/credentials.ts";
 import { type ErrorInfo, errorInfo } from "../bridge/errors.ts";
 import type { Bridge, CredentialStatus } from "../bridge/types.ts";
 import { useI18n } from "../i18n/provider.tsx";
 import { ErrorMessage } from "./ErrorMessage.tsx";
 
 export interface ConnectionDialogProps {
-  bridge: Bridge;
+  bridge: Pick<Bridge, "saveCredentials">;
   configured: boolean;
   onSaved(status: CredentialStatus): void;
   onClose(): void;
@@ -57,16 +58,9 @@ export function ConnectionDialog({ bridge, configured, onSaved, onClose }: Conne
         onSubmit={async (event) => {
           event.preventDefault();
           if (saving) return;
-          if (!/^[a-fA-F0-9]{32}$/.test(accountId.trim())) {
-            setError({ code: "account_invalid", detail: "" });
-            return;
-          }
-          if (
-            !apiToken.trim() ||
-            apiToken.trim().length > 4096 ||
-            !/^[A-Za-z0-9._~+/-]+=*$/.test(apiToken.trim())
-          ) {
-            setError({ code: "token_invalid", detail: "" });
+          const issue = credentialIssue({ accountId, apiToken });
+          if (issue) {
+            setError({ code: issue, detail: "" });
             return;
           }
           setSaving(true);

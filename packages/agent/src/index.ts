@@ -85,13 +85,16 @@ export {
   remember,
 } from "./memory.ts";
 export type { ControllerManeuver, DecisionNotice } from "./notice.ts";
+export { type EdgeIn, type PlatformClock, platformClock } from "./platform.ts";
 export type {
+  DecideHooks,
   Decision,
   ModelInput,
   ObservationPolicy,
   OraclePolicy,
   Policy,
   PolicyFactory,
+  QuestionAnswer,
 } from "./policy.ts";
 export {
   ACTION_CRITERIA,
@@ -111,18 +114,30 @@ export {
 } from "./prompts.ts";
 export {
   execRoute,
+  HOLD_WHYS,
+  type HoldWhy,
   MAX_DETOUR_STEPS,
   ROUTE_ACTION,
-  ROUTE_DEPTH,
   ROUTE_IDS,
   type Route,
   type RouteAct,
   RouteExecutor,
   type RouteManeuver,
   type RouteRequest,
+  type RouteStep,
   routeChoice,
   searchRoute,
+  type WaitWhy,
 } from "./route.ts";
+export {
+  AROUND_OPTIONS,
+  CELL_OPTIONS,
+  MOVING_OPTIONS,
+  RIDE_OPTIONS,
+  RIDE_QUESTION_ID,
+  ROUTE_QUESTION_IDS,
+  routeQuestions,
+} from "./route-prompts.ts";
 export { readLanes, readOrdered, ruleLanes, ruleMoves, ruleView, ruleViewFx } from "./rule.ts";
 export {
   type ApplyOptions,
@@ -135,6 +150,7 @@ export {
   isPipelined,
   type LatencyModel,
   playEpisode,
+  recordableExtra,
 } from "./runner.ts";
 export {
   type BehindFrontier,

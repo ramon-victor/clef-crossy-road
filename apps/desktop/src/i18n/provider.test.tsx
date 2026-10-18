@@ -4,21 +4,35 @@ import { constantPolicy } from "@ccr/agent/testing";
 import { cleanup, fireEvent, render, waitFor } from "@testing-library/preact";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { BridgeError } from "../bridge/errors.ts";
-import type { Bridge } from "../bridge/types.ts";
 import { Panel } from "../Panel.tsx";
 import { ConnectionDialog } from "../panel/ConnectionDialog.tsx";
 import { InputInspector } from "../panel/InputInspector.tsx";
 import { buildPolicyChoices } from "../policies.ts";
 import { Session } from "../session.ts";
+import { initialLanguage, type LanguageEnvironment } from "./environment.ts";
 import type { LanguagePreference } from "./locale.ts";
-import { initialLanguage, type LanguageEnvironment, LanguageProvider } from "./provider.tsx";
+import { LanguageProvider, useI18n } from "./provider.tsx";
 
 const sources = () => ({
   detect: vi.fn(async () => "pt-BR" as const),
   read: () => "system" as const,
   save: vi.fn(),
 });
-afterEach(cleanup);
+const dialogMethods = ["showModal", "close"] as const;
+const originalDialogMethods = dialogMethods.map((name) =>
+  Object.getOwnPropertyDescriptor(HTMLDialogElement.prototype, name),
+);
+afterEach(() => {
+  cleanup();
+  dialogMethods.forEach((name, index) => {
+    const descriptor = originalDialogMethods[index];
+    if (descriptor) Object.defineProperty(HTMLDialogElement.prototype, name, descriptor);
+    else Reflect.deleteProperty(HTMLDialogElement.prototype, name);
+  });
+
+  vi.restoreAllMocks();
+  vi.unstubAllGlobals();
+});
 
 function renderPanel(source: LanguageEnvironment) {
   const session = new Session({ now: () => 0 });
@@ -46,12 +60,16 @@ function renderPanel(source: LanguageEnvironment) {
     onSelect: vi.fn(),
     onTiming: vi.fn(),
     onSpeed: vi.fn(),
-    onPause: vi.fn(),
+    onPause: vi.fn(() => session.togglePause()),
     onStep: vi.fn(),
     onRetry: vi.fn(),
     onNewMap: vi.fn(),
     onInspect: vi.fn(),
-    onSeed: vi.fn(),
+    theaterOpen: false,
+    onTheater: vi.fn(),
+    pace: "relaxed" as const,
+    onPace: vi.fn(),
+    onSeed: vi.fn((seed: number) => session.start(seed)),
     onSound: vi.fn(),
     onAutoRestart: vi.fn(),
   };
@@ -122,16 +140,31 @@ describe("language changes in the app", () => {
         message: "Could not save local Cloudflare credentials.",
       });
     });
-    const bridge = { saveCredentials: save } as unknown as Bridge;
-    HTMLDialogElement.prototype.showModal = vi.fn(function (this: HTMLDialogElement) {
-      this.open = true;
+    const bridge = { saveCredentials: save };
+    Object.defineProperty(HTMLDialogElement.prototype, "showModal", {
+      configurable: true,
+      value: function (this: HTMLDialogElement) {
+        this.open = true;
+      },
     });
-    HTMLDialogElement.prototype.close = vi.fn(function (this: HTMLDialogElement) {
-      this.open = false;
+    Object.defineProperty(HTMLDialogElement.prototype, "close", {
+      configurable: true,
+      value: function (this: HTMLDialogElement) {
+        this.open = false;
+      },
     });
-    const { container, getByLabelText, getByText, rerender, getByRole } = render(
+    const Switch = () => {
+      const { select } = useI18n();
+      return (
+        <button type="button" onClick={() => select("fr")}>
+          switch
+        </button>
+      );
+    };
+    const { container, getByLabelText, getByText, getByRole } = render(
       <LanguageProvider initial={{ preference: "pt-BR", detected: "pt-BR" }} source={source}>
         <ConnectionDialog bridge={bridge} configured={false} onSaved={vi.fn()} onClose={vi.fn()} />
+        <Switch />
       </LanguageProvider>,
     );
     fireEvent.input(getByLabelText(/ID da conta/), {
@@ -141,21 +174,6 @@ describe("language changes in the app", () => {
     fireEvent.click(getByText("Salvar credenciais"));
     await waitFor(() =>
       expect(getByRole("alert").textContent).toContain("Não foi possível salvar"),
-    );
-    // Reuse the mounted form, just as a provider update does in the real app.
-    const Switch = () => {
-      const { select } = useI18n();
-      return (
-        <button type="button" onClick={() => select("fr")}>
-          switch
-        </button>
-      );
-    };
-    rerender(
-      <LanguageProvider initial={{ preference: "pt-BR", detected: "pt-BR" }} source={source}>
-        <ConnectionDialog bridge={bridge} configured={false} onSaved={vi.fn()} onClose={vi.fn()} />
-        <Switch />
-      </LanguageProvider>,
     );
     fireEvent.click(getByText("switch"));
     await waitFor(() =>
@@ -179,10 +197,7 @@ describe("language changes in the app", () => {
       },
     };
     const copy = vi.fn(async (_text: string) => {});
-    Object.defineProperty(navigator, "clipboard", {
-      configurable: true,
-      value: { writeText: copy },
-    });
+    vi.stubGlobal("navigator", { clipboard: { writeText: copy } });
     const { getByText, container } = render(
       <LanguageProvider initial={{ preference: "pt-BR", detected: "pt-BR" }} source={sources()}>
         <InputInspector
@@ -213,5 +228,3 @@ describe("language changes in the app", () => {
     });
   });
 });
-
-import { useI18n } from "./provider.tsx";

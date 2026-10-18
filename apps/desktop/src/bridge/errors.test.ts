@@ -16,17 +16,13 @@ it("keeps a structured HTTP failure through the bridge and into the session erro
     "fetch",
     vi.fn(async () => new Response(JSON.stringify({ error: failure }), { status: 429 })),
   );
-  try {
-    await httpBridge.run("clef-flash", {});
-    throw new Error("Expected refusal");
-  } catch (error) {
-    expect(error).toBeInstanceOf(BridgeError);
-    expect(errorInfo(error)).toEqual({
-      code: "quota",
-      detail: failure.message,
-      params: failure.params,
-    });
-  }
+  const result = httpBridge.run("clef-flash", {});
+  await expect(result).rejects.toBeInstanceOf(BridgeError);
+  await expect(result.catch(errorInfo)).resolves.toEqual({
+    code: "quota",
+    detail: failure.message,
+    params: failure.params,
+  });
 });
 
 it("does not retry missing credentials or replace their presentation code with a network error", async () => {
@@ -58,4 +54,20 @@ it("retains an unknown diagnostic without pretending that its prose is a known e
     code: "bridge",
     detail: "CF_API_TOKEN happens to appear in this old diagnostic",
   });
+});
+
+it("accepts only finite numeric error parameters from the backend", () => {
+  const failure = bridgeError({
+    code: "quota",
+    message: "Nothing sent",
+    params: { spent: 10000, limit: Infinity, detail: "invalid", nan: NaN },
+  });
+  expect(errorInfo(failure)).toEqual({
+    code: "quota",
+    detail: "Nothing sent",
+    params: { spent: 10000 },
+  });
+  expect(
+    errorInfo(bridgeError({ code: "quota", message: "Nothing sent", params: [10000] })),
+  ).not.toHaveProperty("params");
 });

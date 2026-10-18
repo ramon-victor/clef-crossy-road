@@ -1,9 +1,10 @@
 import { useState } from "preact/hooks";
 import type { CredentialStatus } from "../bridge/types.ts";
-import { isLocale, LANGUAGE_NAMES, LOCALES } from "../i18n/locale.ts";
 import { useI18n } from "../i18n/provider.tsx";
 import { parseSeedText } from "../seed.ts";
 import type { SessionState, Timing } from "../session.ts";
+import { PACES, type Pace } from "../theater/preference.ts";
+import { LanguageSelect } from "./LanguageSelect.tsx";
 
 const SPEEDS = [0.5, 1, 2, 4];
 const TIMINGS = ["step", "realtime"] as const;
@@ -14,6 +15,9 @@ export interface SetupCardProps {
   credentials: CredentialStatus | null;
   onConfigure(): void;
   onTiming(timing: Timing): void;
+  /** How long a model's answer stands before the chicken moves; null for a player that asks no model. */
+  pace: Pace | null;
+  onPace(pace: Pace): void;
   onSpeed(speed: number): void;
   onSeed(seed: number): void;
   onAutoRestart(on: boolean): void;
@@ -25,11 +29,13 @@ export function SetupCard({
   credentials,
   onConfigure,
   onTiming,
+  pace,
+  onPace,
   onSpeed,
   onSeed,
   onAutoRestart,
 }: SetupCardProps) {
-  const { t, number, preference, detected, select } = useI18n();
+  const { t, number } = useI18n();
   const [seedText, setSeedText] = useState("");
   const timing = t(state.human ? "setup.human" : `setup.${state.timing}`);
   return (
@@ -41,27 +47,7 @@ export function SetupCard({
         </span>
       </summary>
       <div class="setup-body">
-        <label class="field-label" for="language">
-          {t("language.label")}
-        </label>
-        <select
-          id="language"
-          class="select"
-          value={preference}
-          onChange={(event) => {
-            const value = event.currentTarget.value;
-            if (value === "system" || isLocale(value)) select(value);
-          }}
-        >
-          <option value="system">
-            {t("language.system", { language: LANGUAGE_NAMES[detected] })}
-          </option>
-          {LOCALES.map((locale) => (
-            <option key={locale} value={locale} lang={locale}>
-              {LANGUAGE_NAMES[locale]}
-            </option>
-          ))}
-        </select>
+        <LanguageSelect />
         {!state.human && (
           <fieldset class="segmented">
             <legend>{t("setup.timing")}</legend>
@@ -78,6 +64,28 @@ export function SetupCard({
               </button>
             ))}
           </fieldset>
+        )}
+        {pace !== null && (
+          <fieldset class="segmented" aria-describedby="pace-help">
+            <legend>{t("setup.pace")}</legend>
+            {PACES.map((option) => (
+              <button
+                type="button"
+                key={option}
+                class={pace === option ? "on" : ""}
+                aria-pressed={pace === option}
+                disabled={state.timing !== "step"}
+                onClick={() => onPace(option)}
+              >
+                {t(`setup.pace.${option}`)}
+              </button>
+            ))}
+          </fieldset>
+        )}
+        {pace !== null && (
+          <p id="pace-help" class="hint">
+            {state.timing === "step" ? t("setup.paceHelp") : t("setup.paceStepOnly")}
+          </p>
         )}
         <fieldset class="speeds">
           <legend>{t("setup.speed")}</legend>
