@@ -231,6 +231,7 @@ function classifyFailure(status: number, message: string, response: TransportRes
 }
 
 function toNetworkError(error: unknown): ClefError {
+  if (error instanceof ClefError) return error;
   const reason = error instanceof Error ? error.message : String(error);
   return new ClefError("network", reason.slice(0, 300));
 }

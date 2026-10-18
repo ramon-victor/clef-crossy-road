@@ -22,6 +22,16 @@ import {
 import { randomSeed } from "./seed.ts";
 import { runSelfTest } from "./selftest.ts";
 import { Session, type SessionState } from "./session.ts";
+import {
+  openByDefault,
+  PACE_MS,
+  type Pace,
+  readFlag,
+  readPace,
+  writeFlag,
+  writePace,
+} from "./theater/preference.ts";
+import { Theater } from "./theater/Theater.tsx";
 
 const DEFAULT_PLAYER = "clef-flash";
 /** Pause before an attract-mode game starts the next map, long enough to read the result card. */
@@ -60,6 +70,10 @@ export function App({ desktop = false }: { desktop?: boolean }) {
   const [soundOn, setSoundOn] = useState(true);
   const [autoRestart, setAutoRestart] = useState(true);
   const [inspecting, setInspecting] = useState(false);
+  // What the person chose for the Theater, or null if they never did (then a model player opens it).
+  const [theaterChoice, setTheaterChoice] = useState<boolean | null>(() => readFlag("theater"));
+  const [compassChoice, setCompassChoice] = useState<boolean | null>(() => readFlag("compass"));
+  const [pace, setPaceState] = useState<Pace>(() => readPace());
   const viewRef = useRef<GameView | null>(null);
   const minimizedRef = useRef(false);
 
@@ -165,6 +179,26 @@ export function App({ desktop = false }: { desktop?: boolean }) {
   const selected = byId.get(selectedId);
   const mayAutoRestart = autoRestart && selected !== undefined && !selected.usesApi && !state.human;
   const over = !state.alive || state.stalled;
+  const showTheater = openByDefault(theaterChoice, selected?.kind);
+  const setTheater = useCallback((on: boolean) => {
+    setTheaterChoice(on);
+    writeFlag("theater", on);
+  }, []);
+  const showCompass = openByDefault(compassChoice, selected?.kind);
+  const setCompass = useCallback((on: boolean) => {
+    setCompassChoice(on);
+    writeFlag("compass", on);
+  }, []);
+  // `persist: false` changes the pace for this run only: the self-test must not leave its own choice behind.
+  const setPace = useCallback((next: Pace, persist = true) => {
+    setPaceState(next);
+    if (persist) writePace(next);
+  }, []);
+  // Only someone watching a model gets the wait that leaves time to read an answer; everyone else plays at full speed.
+  const watching = (showTheater || showCompass) && selected?.kind === "model";
+  useEffect(() => {
+    session.setLinger(watching ? PACE_MS[pace] : 0);
+  }, [session, watching, pace]);
   useEffect(() => {
     if (!over || !mayAutoRestart || state.paused || minimized) return;
     const timer = setTimeout(newMap, RESTART_DELAY_MS);
@@ -207,6 +241,15 @@ export function App({ desktop = false }: { desktop?: boolean }) {
           sounds.enabled = command.enabled;
           setSoundOn(command.enabled);
           break;
+        case "theater":
+          setTheater(command.enabled);
+          break;
+        case "compass":
+          setCompass(command.enabled);
+          break;
+        case "pace":
+          setPace(command.pace);
+          break;
         case "autoRestart":
           setAutoRestart(command.enabled);
           break;
@@ -221,7 +264,20 @@ export function App({ desktop = false }: { desktop?: boolean }) {
         }
       }
     },
-    [select, refreshBudget, session, retry, newMap, noteSeed, selectedId, sounds, bridge],
+    [
+      select,
+      refreshBudget,
+      session,
+      retry,
+      newMap,
+      noteSeed,
+      selectedId,
+      sounds,
+      bridge,
+      setTheater,
+      setCompass,
+      setPace,
+    ],
   );
 
   const controls: ControlsData = {
@@ -235,6 +291,9 @@ export function App({ desktop = false }: { desktop?: boolean }) {
     autoRestart,
     bridgeKind: bridge.kind,
     minimized,
+    theaterOpen: showTheater,
+    compassOn: showCompass,
+    pace: selected?.kind === "model" ? pace : null,
   };
   const latest = useRef({ controls, execute });
   latest.current = { controls, execute };
@@ -307,6 +366,16 @@ export function App({ desktop = false }: { desktop?: boolean }) {
   useEffect(() => {
     const unlockSound = () => sounds.unlock();
     const onKey = (event: KeyboardEvent) => {
+      const command = commandForKey(event);
+      if (!command) return;
+      // Opening a native panel is also available while a result/HUD button has keyboard focus.
+      if (command.type === "controls") {
+        if (desktop) {
+          event.preventDefault();
+          openControls();
+        }
+        return;
+      }
       const target = event.target;
       if (
         target instanceof Element &&
@@ -316,10 +385,7 @@ export function App({ desktop = false }: { desktop?: boolean }) {
       )
         return;
       sounds.unlock();
-      const command = commandForKey(event);
-      if (!command) return;
-      if (command.type === "controls" && !desktop) return;
-      if (minimizedRef.current && command.type !== "controls" && command.type !== "inspect") return;
+      if (minimizedRef.current && command.type !== "inspect") return;
       event.preventDefault();
       switch (command.type) {
         case "move":
@@ -340,8 +406,12 @@ export function App({ desktop = false }: { desktop?: boolean }) {
         case "inspect":
           openControls(true);
           break;
-        case "controls":
-          openControls();
+        case "theater":
+          setTheater(!showTheater);
+          if (desktop && !showTheater) void showControls().catch(() => {});
+          break;
+        case "compass":
+          setCompass(!showCompass);
           break;
       }
     };
@@ -351,14 +421,25 @@ export function App({ desktop = false }: { desktop?: boolean }) {
       window.removeEventListener("keydown", onKey);
       window.removeEventListener("pointerdown", unlockSound);
     };
-  }, [session, sounds, retry, newMap, desktop, openControls]);
+  }, [
+    session,
+    sounds,
+    retry,
+    newMap,
+    desktop,
+    openControls,
+    setTheater,
+    showTheater,
+    setCompass,
+    showCompass,
+  ]);
 
   const onReady = useCallback(
     (view: GameView) => {
       viewRef.current = view;
-      void runSelfTest({ session, view, bridge, choices, select });
+      void runSelfTest({ session, view, bridge, choices, select, setPace });
     },
-    [session, bridge, choices, select],
+    [session, bridge, choices, select, setPace],
   );
 
   return (
@@ -371,8 +452,26 @@ export function App({ desktop = false }: { desktop?: boolean }) {
         onFps={setFps}
         onRetry={retry}
         onNewMap={newMap}
+        compass={{
+          on: showCompass && selected?.kind === "model",
+          conversationOpen: showTheater,
+          onConversation: () => {
+            setTheater(true);
+            if (desktop) void showControls().catch(() => {});
+          },
+        }}
         onShowControls={desktop ? () => openControls() : undefined}
       />
+      {!desktop && showTheater && (
+        <Theater
+          state={state}
+          kind={selected?.kind}
+          compassOn={showCompass}
+          onCompass={() => setCompass(!showCompass)}
+          onClose={() => setTheater(false)}
+          onInspect={() => setInspecting(true)}
+        />
+      )}
       {!desktop && (
         <ControlSurface
           data={controls}

@@ -1,6 +1,6 @@
 # 07 · Experimentos e benchmark
 
-> **Status:** gate da Fase 2 avaliado (reprovado com os prompts testados; uma condição nova, com palavras e executor, passa com 40 seeds e espera as 100) · **Verificado em:** 2026-10-15 · **Código:** `apps/bench`, `packages/agent`
+> **Status:** gate da Fase 2 avaliado (reprovado com os prompts testados; uma condição nova, com palavras e executor, passa com 40 seeds e espera as 100) · **Verificado em:** 2026-10-17 · **Código:** `apps/bench`, `packages/agent`
 
 ## Princípios
 
@@ -26,7 +26,7 @@ Resultados em `runs/<nome>/episodes.ndjson` (retomável) e `reports/`. As açõe
 
 ## Regras do benchmark
 
-- Cada decisão avança 12 ticks (um salto completo, 0,2 s). A partida termina na morte, em 300 decisões, ou por **estagnação**: 40 decisões seguidas sem alcançar uma linha nova (aplicado a todas as políticas por igual; também limita o custo de uma política que fica indecisa para sempre).
+- Cada decisão avança 12 ticks (um salto completo, 0,2 s). A partida termina na morte, em 300 decisões, ou por **estagnação**: 60 decisões seguidas sem alcançar uma linha nova (40 até 2026-10-16: tudo o que está abaixo e é anterior a essa data usa 40) (aplicado a todas as políticas por igual; também limita o custo de uma política que fica indecisa para sempre).
 - **Sem atraso** é o modo do gate. Atraso é uma condição à parte (abaixo).
 - Os rótulos de política em um relatório incluem o sufixo da condição, por exemplo `@lat300` (serial) ou `@latp300` (pipelined).
 
@@ -296,6 +296,96 @@ Média **22,43 ruas [10,85, 35,71]**, contra **4,43** da condição anterior nas
 **6. O app, e o que errei.** O app passou a abrir no Clef-flash num mapa em cache. Abrindo-o na seed 2, ele **gastou 49 neurons**: as decisões das seeds 2 a 5 só se repetem se o controlador fizer os mesmos movimentos de quando foram gravadas, e o controlador tinha mudado entre as rodadas. Conferir cada seed com `pnpm bench run ... --daily-neurons 0` (qualquer pedido novo é recusado e nada é gasto) mostrou que só as seeds 6, 7 e 8 reproduzem inteiras (20, 19 e 56 acertos de cache). O app lista **6 a 8**.
 
 Nada disto toca o que valia antes: o `json-fx` segue igual a `always-forward`. O Clef do app é uma condição **rotulada** ("palavras, regras no texto, roteamento e controlador de desvio nossos"), não uma prova de que o modelo joga: o controlador planeja a rota, e o modelo só escolhe entre atravessar, contornar por um lado ou esperar.
+
+### O tronco que leva a galinha para fora do mapa: o relógio da plataforma (2026-10-17)
+
+Pedido do dono: "ele não sabe que está num tronco em movimento que logo vai sair do mapa e vai dar game over". Diagnóstico sem rede, nas partidas em cache e no `exec-route`; o que se mediu com o modelo veio de 114 estados de sonda e de 3 partidas ([ADR-0011](adr/0011-controlador-com-rota-e-tres-consultas.md), adendo; [ADR-0009](adr/0009-percepcao-memoria-e-julgamento.md), adendo).
+
+**1. O que acontecia.** Seed 6 (Clef-flash, 9 ruas, borda): a galinha pulou duas vezes para um rio cujo tronco corria para a esquerda a 3,3 colunas/s e cuja linha seguinte só tinha troncos parados do outro lado, e esperou até passar de -5 (`detour_*` recusados, `wait_here` ×4: "nowhere safe to step"). **Nenhuma das três perguntas lia `carried_towards` nem `place_in_world`**, então o modelo não tinha como fazer outra coisa. Seed 7 (8 ruas, carro): esperou numa estrada um tronco passar na linha da frente, fugindo de um carro para o lado em que ele ia, até a borda.
+
+**2. As mortes do `exec-route` (escolhedor ideal, sem modelo; 100 seeds; 31 mortes), pela última jogada antes de morrer:**
+
+| Causa | Mortes |
+|---|---|
+| esperando numa estrada ou num trilho ("a galinha não pode ficar onde está") | 14 |
+| num tronco levado para fora do mapa | 9 |
+| carro **logo depois de sair de um tronco** | 6 |
+| trem | 2 |
+
+53% dos passos "parado" acontecem fora da grama (28% em tronco, 20% em estrada, 6% em trilho). O terceiro item era um erro do controlador: saindo de um tronco a galinha está numa coluna **fracionária** (0,7), o salto à frente vai até a coluna arredondada (1) e a conferência da janela olhava só a de destino; a galinha entra na estrada ainda a meio caminho (reproduzido tick a tick na seed 58: morre no tick 3 do salto). `hopWindow` confere as duas colunas durante o salto (a espera na coluna inteira que vem depois só olha a inteira).
+
+**3. O controlador, medido de graça (100 seeds, `exec-route`).**
+
+| Versão | Ruas | Mortes (carro / borda / trem) |
+|---|---|---|
+| antes | 47,5 | 19 / 9 / 3 |
+| só a correção do salto fracionário | 48,7 | 15 / 10 / 3 |
+| **final** (+ relógio, `leave_platform` só com a borda "a_moment" e a saída para a frente antes da de trás, e a coluna que a galinha deixa conferida só durante o salto) | **48,6** (mediana 39) | 16 / 9 / 3 (total 31 → 28) |
+
+O que **não** valeu, medido e descartado: sair da plataforma com a borda a menos de 2,5 s (`soon`) pela saída mais curta: 27,2 ruas; só com `a_moment` (menos de 1 s): 42,1, porque a saída mais curta era **voltar** e a galinha **embarcava no mesmo tronco, saía e embarcava de novo**; com "para a frente antes de voltar" (o que ficou): 48,3 só com `a_moment` e 46,7 também com `soon`; o limiar de `a_moment` em 0,6 s: 46,3 ruas e 15 mortes na borda; em 1,5 s: 47,5; em 2,0 s: 45,4; **não embarcar** num tronco que sai do mundo antes de a galinha poder seguir: **48,3 → 39,2 / 31,8 / 25,2 ruas** (medido sobre os 48,3 de então, antes do último ajuste da janela) (limiares de 1,0 / 1,5 / 2,5 s), com a borda indo de 11 mortes a 3 / 1 / 0, porque ela passa a esperar na margem até o fim (estagnação 54% → 66% / 79% / 84%); e "sobreviver 8 a 24 saltos" na retenção: sem ganho. **Nenhum remendo simples tira a espera em estrada**; o plano não promete ganho de placar além da correção do salto.
+
+**4. O modelo lê o relógio? A sonda de plataforma** (114 estados: os 90 de antes, sem mudança de id nem de resposta, mais 12 `platform-edge`, a uma palavra da borda, e 12 `platform-far`; ~330 a 350 neurons por variante, 45 chamadas):
+
+| Redação da 4ª pergunta (`ride`) | `platform-edge`: respondeu `leaving` | `platform-far`: respondeu `leaving` | P(leaving) na borda / longe | Concordância geral |
+|---|---|---|---|---|
+| "a plataforma está para levá-la para fora do mundo?" (mais o texto do jogo) | 3 de 12 | 0 de 12 | 0,17–0,62 / 0,04–0,15 | 86% |
+| com o motivo, as faixas de tempo e mais exemplos | 0 de 12 | 0 de 12 | 0,19–0,44 / 0,08–0,23 | 82% |
+| **"`chicken.edge_in` é `a_moment`?"** (um campo, só a palavra) | **12 de 12** | **0 de 12** | **0,73–0,90 / 0,05–0,11** | **95%** |
+
+Como nas outras condições, **o texto da opção decide**: pedindo o julgamento ("vai para fora?"), o modelo respondia `staying` quase sempre, embora desse mais probabilidade a `leaving` nos estados da borda (ordem certa, nunca acima de 0,5); pedindo a consulta de uma palavra, acertou todos. O ideal da sonda agora é `leave_platform` quando `edge_in` é `a_moment` (`routeChoice`), por isso a concordância dos 90 estados antigos passou de 94% para 93% (84 de 90).
+
+**5. Partidas** (seeds 6 a 8, Clef-flash, o mesmo `clef:clef-flash:scene:route:lookup` com a 4ª pergunta): **9, 8 e 39 ruas, as mesmas de antes** (30, 72 e 171 decisões, as mesmas), 94 acertos de cache e 29 chamadas novas (212 neurons: a pergunta nova só aparece nos 31 estados em plataforma). Na seed 6 o modelo respondeu `leaving` nos **5 estados a um instante da borda** (P 0,79 a 0,90) e o controlador recusou os cinco com "no way off within 8 hops; nowhere safe to step": **não havia saída em 8 saltos** (a galinha já tinha embarcado num tronco rápido, e à frente só havia água e troncos parados do outro lado). Saber não bastou: a morte foi decidida ao **embarcar**, e a regra que impediria isso custa mais ruas do que salva (item 3). As três partidas continuam reproduzindo do cache com `--daily-neurons 0` (94 acertos, 0 chamadas), então o app segue listando **6 a 8**.
+
+**6. Custo.** Hoje (UTC 2026-10-17), na conta do `.env`: 225 (primeira regravação, com a redação nova ainda não escolhida) + 337 + 350 + 327 (três sondas) + 212 (partidas finais) = **1.451 neurons**, de 10.000. As corridas usaram `--daily-neurons` de 1.500 a 3.000 e `--root` apontando para o checkout principal, para que o razão (`runs/cache/spend.ndjson`) e o cache sejam os mesmos do app.
+
+**7. O que a tela mostrava errado** (auditoria; o que mudou está em [08](08-ui-desktop.md)): em **21 das 95 decisões** gravadas (22%) a barra maior da bússola não era a jogada escolhida (as barras eram probabilidades conjuntas, a escolha é uma cascata de argmax: com P(stand) 0,45 e P(moving) 0,5 a chance conjunta de atravessar é 0,725, mas as duas respostas, uma a uma, dizem "não" e "parada"); uma manobra recusada aparecia como "Go straight"; 5% dos passos de espera diziam "vehicle" com a casa da frente vazia (era a linha **depois** que bloqueava, ou um trem).
+
+**Não medido:** o portão de 100 seeds (segue pendente; ~25.000 a 30.000 neurons); o efeito do relógio em partidas longas (são três seeds, todas iguais às de antes); o tempo real (o movimento é calculado no mundo do pedido e jogado no mundo de agora, e os contadores `n/15` contam quadros: pergunta aberta em [08](08-ui-desktop.md)).
+
+### Presa na água sem tronco: lado esquecido, desvio de 24 saltos e limite de "preso" (2026-10-17)
+
+Pedido do dono: "ele fica preso quando a água não tem tronco e ele precisa fazer outro caminho onde tem vitória-régia", às vezes voltando uma casa por causa de pedras. Diagnóstico sem rede, nas partidas em cache e no `exec-route` ([ADR-0011](adr/0011-controlador-com-rota-e-tres-consultas.md), adendo 2).
+
+**1. O que acontecia.** Na referência grátis (100 seeds, limite de 40 decisões) **56 partidas terminavam "presas" e 24 delas de frente para água com vitória-régia parada** (trilho 15, água com troncos 8, grama 9). Na seed 8 do Clef-flash (39 ruas) o jogo acabou em "Stuck: no new row in 40 decisions" **a 3 saltos de atravessar** (`detour_right: hop 3, 3 to go`), depois de 11 passos esperando, de pé numa estrada, uma casa de água que nunca mudaria.
+
+**2. As causas, medidas.**
+
+| Causa | Número |
+|---|---|
+| `recently_failed` só zerava numa linha nova: recusado cada lado, só sobrava `wait_here` | 34 a 39 vezes seguidas nos casos presos |
+| A busca do desvio olhava 8 saltos e o desvio desistia com 12 | em 9 dos 24, o caminho existia com 12 a 32 saltos |
+| `cross_ahead` esperava até 15 passos por água numa linha onde nada se move | nas 94 decisões gravadas, 35 tinham água à frente e nada se movendo: 17 desvios, 8 `wait_here`, 5 `leave_platform`, **5 `cross_ahead` (50 passos perdidos)** |
+| O modelo não tem certeza de que água não se pisa | P(stand) para `water` de 0,20 a 0,64 (mediana 0,38; 2 de 24 estados acima de 0,5), contra 0,87 a 0,94 para tronco e vitória-régia |
+| O limite de "preso" (40, e os passos do controlador contam) corta esperas e desvios legítimos | com o controlador novo, 40 → 57,6 ruas, 60 → 61,6, 80 → 62,1 |
+| Sem saída de verdade | 6 dos 24 não têm caminho nem com 48 saltos e 12 linhas de visão atrás (pedras fecham tudo): é o resultado correto |
+
+**3. O controlador, medido de graça** (`exec-route`, 100 seeds):
+
+| Versão | Ruas | Presas (de frente para água parada) | Mortes carro / borda / trem |
+|---|---|---|---|
+| antes (limite 40) | 48,6 | 56 (24) | 16 / 9 / 3 |
+| lado esquecido após 6 decisões | 55,1 | 45 | 17 / 11 / 4 |
+| desvio de 24 saltos e 40 passos | 55,2 | 41 | 20 / 11 / 3 |
+| **os dois, e o desvio termina do lado escolhido** (limite 40) | **57,6** | 37 (6) | 20 / 13 / 3 |
+| **idem, limite 60** | **61,6** | 24 (6) | 20 / 17 / 3 |
+
+Sem efeito, medido e fora: enxergar até 12 linhas atrás (57,35 → 57,50), guardar a falha por lugar (linha e coluna) em vez de só por tempo (56,1 sozinho, 57,7 junto), e tempos de esquecimento de 1 a 10 decisões, profundidades de 16 a 40 e limites de passos de 24 a 60 (todos dentro de 0,5). Custo: **mais mortes por carro (16 → 20)**, porque a galinha percorre caminhos que antes não tentava. O desvio passou a **terminar do lado que o modelo escolheu**: com 24 saltos, "esquerda" achava um caminho que ia primeiro pela direita e voltava.
+
+**4. A palavra `water`.** Trocar `water` por `open_water` no que o modelo lê (estado e perguntas) e sondar os 36 estados de água (226 neurons): mediana de P(stand) **0,38 → 0,31**, máximo 0,64 → 0,69, **2 estados acima de 0,5 nos dois casos**, tronco e vitória-régia iguais (0,92). Pela regra de parada (precisava descer a menos de 0,2) **foi revertido**: o texto não deixa o modelo mais seguro. O que protege agora é a recusa na hora e a próxima resposta do próprio modelo.
+
+**5. Partidas** (Clef-flash, `clef:clef-flash:scene:route:lookup`, seeds 6 a 8; 105 chamadas novas, **688 neurons**):
+
+| Seed | Antes | Agora | Chamadas ao modelo | Fim |
+|---|---|---|---|---|
+| 6 | 9 (borda) | **9** (borda) | 20 | igual: o tronco sem saída |
+| 7 | 8 (carro) | **8** (carro) | 19 | igual |
+| 8 | 39 (preso, 171 decisões) | **115** com o teto de 300 decisões, **183 ruas** gravada inteira (671 decisões, +653 neurons) | 233 | preso de novo, esperando um tronco (o limite de 60 corta uma espera) |
+
+Na seed 8, **31 recusas** passaram à próxima resposta do modelo (`extra.fallback`), 4 delas nas primeiras 300 decisões. Numa primeira versão a fila incluía `wait_here` e 23 das 31 terminavam esperando; uma revisão apontou que esperar já é o que a recusa faz, a fila passou a ter só os desvios, e a seed 8 gravada de novo (31 chamadas, 207 neurons) deu **o mesmo placar (183) e as mesmas decisões**: os desvios tentados no lugar das esperas também foram recusados, não havia caminho. As três seeds seguem reproduzindo do cache com `--daily-neurons 0` (272 acertos, 0 chamadas) e no app de verdade (0 chamadas ao bridge; "Stuck: no new row in 60 decisions" com 183 ruas); a seed 8 foi gravada **sem teto de 300 decisões** (`--max-decisions 1000`) justamente para o app a reproduzir inteira. O app lista **6 a 8**.
+
+**6. Protocolo.** `DEFAULT_STALL_LIMIT` passou de 40 para **60**. Todas as medições anteriores a 2026-10-17 neste documento são com 40; `bench run --stall-limit 40` as reproduz. A mudança não afeta o modelo (os passos do controlador são grátis), mas um jogo realmente preso gasta mais chamadas antes de parar (até ~20, ~130 neurons).
+
+**7. O que sobra preso** (referência grátis, limite 60, 24 partidas): trilho 9 (espera o trem), água com troncos 5 (espera um tronco), água parada 6 (sem saída), grama 3, estrada 1. Custo de hoje (UTC 2026-10-17) nesta rodada: 226 (sonda de `open_water`) + 688 + 653 = **1.567 neurons**; o razão do dia foi de 1.451 (fim da rodada anterior) a 3.260 de 10.000, e 242 desses neurons não são desta rodada (o app ou outra sessão usando o mesmo razão).
 
 ## Atraso: a pergunta do modo tempo real
 

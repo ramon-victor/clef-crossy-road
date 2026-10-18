@@ -1,7 +1,8 @@
-import { MAX_ABS_X, type Observation, type ObsRow } from "@ccr/core";
+import { MAX_ABS_X, type Observation } from "@ccr/core";
 import { HOP_SECONDS } from "./forecast.ts";
-import { canStand, cellWindow, type LanesState, lanesState } from "./lanes.ts";
+import { canStand, cellWindow, hopWindow, type LanesState, lanesState, rowAt } from "./lanes.ts";
 import type { Memory } from "./memory.ts";
+import { type EdgeIn, edgeWord, secondsToEdge } from "./platform.ts";
 
 /**
  * The `scene` view (ADR-0011): `lanes` widened to the whole row. The code looks along the row ahead and
@@ -21,9 +22,6 @@ export type SideName = "left" | "right";
 export const sign = (side: SideName): -1 | 1 => (side === "left" ? -1 : 1);
 
 const T = HOP_SECONDS;
-
-const rowAt = (obs: Observation, dz: number): ObsRow | undefined =>
-  obs.rows.find((row) => row.dz === dz);
 
 const distanceWord = (steps: number): Distance =>
   steps === 1 ? "adjacent" : steps === 2 ? "two_away" : "three_or_more";
@@ -80,6 +78,8 @@ export interface SceneState {
     place_in_world: LanesState["chicken"]["place_in_world"];
     carried_towards: LanesState["chicken"]["carried_towards"];
     behind_frontier: BehindFrontier;
+    /** Only on a platform, so every other request stays as it was (ADR-0009, addendum). */
+    edge_in?: EdgeIn;
   };
   memory: LanesState["memory"];
 }
@@ -105,7 +105,7 @@ export function sceneState(
   return {
     // The window of the hop and of the half hop that leaves the row again, as a route is checked.
     cross_ahead: {
-      lands_on: cellWindow(rowAt(obs, 1), Math.round(obs.player.col), T, 1.5 * T),
+      lands_on: hopWindow(rowAt(obs, 1), obs.player.col, T, 1.5 * T),
       things_move: lanes.forward.things_move === "no" ? "still" : lanes.forward.things_move,
     },
     detour_left: side("left"),
@@ -115,6 +115,7 @@ export function sceneState(
       place_in_world: lanes.chicken.place_in_world,
       carried_towards: lanes.chicken.carried_towards,
       behind_frontier: behindWord(memory.behindFrontier),
+      ...(obs.player.riding ? { edge_in: edgeWord(secondsToEdge(obs)) } : {}),
     },
     memory: lanes.memory,
   };

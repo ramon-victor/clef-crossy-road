@@ -1,6 +1,8 @@
 import { clefPolicyId, DEFAULT_CLEF, decisionCost } from "@ccr/agent";
 import { ClefClient } from "@ccr/clef";
 import { describe, expect, it } from "vitest";
+import { playerText } from "./i18n/presentation.ts";
+import { translator } from "./i18n/translate.ts";
 import {
   buildPolicyChoices,
   CLEF_27B_CONFIG,
@@ -16,6 +18,10 @@ import {
 const choices = buildPolicyChoices(null);
 const byId = (id: string) => choices.find((c) => c.id === id);
 const random = () => 987_654;
+const textFor = (id: string) => {
+  const choice = byId(id);
+  return choice ? playerText(choice, translator("en")) : null;
+};
 
 describe("who can play", () => {
   it("offers you, the two sizes of Clef and the references; every other condition stays in the benchmark", () => {
@@ -38,9 +44,9 @@ describe("who can play", () => {
       manual: "lookup",
     });
     expect(CLEF_27B_CONFIG).toEqual({ ...DEFAULT_CLEF, model: "clef" });
-    expect(byId(CLEF_ID)?.detail).toMatch(/controller/);
-    expect(byId(CLEF_ID)?.detail).toMatch(/words/);
-    expect(byId(CLEF_27B_ID)?.detail).toMatch(/same gameplay/);
+    expect(textFor(CLEF_ID)?.detail).toMatch(/controller/);
+    expect(textFor(CLEF_ID)?.detail).toMatch(/words/);
+    expect(textFor(CLEF_27B_ID)?.detail).toMatch(/same gameplay/);
   });
 
   it("each Clef reports that it may spend, and what a question set costs", () => {
@@ -56,7 +62,7 @@ describe("who can play", () => {
     const flash = byId(CLEF_ID)?.neuronsPerDecision ?? 0;
     const large = byId(CLEF_27B_ID);
     expect((large?.neuronsPerDecision ?? 0) / flash).toBeCloseTo(6.3, 1);
-    expect(large?.detail).toMatch(/6 times the cost/);
+    expect(textFor(CLEF_27B_ID)?.detail).toMatch(/6 times the cost/);
     expect(large?.freeReplay).toBeUndefined();
   });
 
@@ -89,7 +95,7 @@ describe("ids from shortcuts", () => {
       kind: "model",
       usesApi: true,
     });
-    expect(custom?.label).toContain("Custom");
+    expect(custom && playerText(custom, translator("en")).label).toContain("Custom");
     expect(custom?.freeReplay).toBeUndefined();
     expect(custom?.factory).not.toBeNull();
     expect(custom?.neuronsPerDecision).toBeGreaterThan(0);

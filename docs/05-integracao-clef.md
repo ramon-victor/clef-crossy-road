@@ -1,6 +1,6 @@
 # 05 · Integração com o Clef (Workers AI, REST)
 
-> **Status:** contrato verificado por execução real; configuração local testada sem API · **Verificado em:** 2026-10-15 · **Fontes:** [references.md](references.md)
+> **Status:** contrato verificado por execução real; configuração local testada sem API · **Verificado em:** 2026-10-18 · **Fontes:** [references.md](references.md)
 > Legenda de evidência: **[doc]** documentação oficial · **[ind]** teste independente, amostra pequena · **[obs]** observado neste projeto em 2026-10-14.
 
 ## Endpoint
@@ -120,6 +120,12 @@ Medida de Node, no Brasil, em 20 chamadas sequenciais com o mesmo estado (conex�
   compensar a latência; o gate usa o modo passo-a-passo ([02](02-arquitetura.md)).
 
 ## Política de erro do cliente
+
+Erros já classificados pelo transporte são preservados como `ClefError`: autenticação, cota e
+pedido inválido não são convertidos em falhas de rede retentáveis. No app, as pontes Rust/Vite
+adicionam códigos estáveis para a tradução da interface; a mensagem diagnóstica original continua
+em inglês. Isso não muda o contrato REST nem os dados do cache. Ver [i18n](12-i18n.md).
+
 
 | Situação | Ação |
 |---|---|

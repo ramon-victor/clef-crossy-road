@@ -7,8 +7,7 @@ describe("policyFacts", () => {
       model: "clef-flash",
       encoder: "json-fx",
       level: "forecast",
-      sees: expect.stringContaining("0.2 s"),
-      style: expect.stringContaining("what each move does"),
+      style: "full",
     });
     expect(policyFacts("clef:clef-flash:json:choice:full")?.level).toBe("now");
   });
@@ -16,11 +15,11 @@ describe("policyFacts", () => {
   it("names the words level, the rules style and the executor", () => {
     expect(policyFacts("clef:clef-flash:lanes:choice:rules")).toMatchObject({
       level: "words",
-      sees: expect.stringContaining("in words"),
-      style: expect.stringContaining("fields of the state"),
+      style: "rules",
       executor: false,
     });
     expect(policyFacts("clef:clef-flash:lanes:maneuver:rules")?.executor).toBe(true);
+    expect(policyFacts("clef:clef-flash:scene:route:lookup")?.executor).toBe(true);
     expect(policyFacts("clef:clef-flash:json-fx:choice:full")?.executor).toBe(false);
   });
 

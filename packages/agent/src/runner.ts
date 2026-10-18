@@ -12,7 +12,7 @@ import { emptyMemory, type Memory, remember } from "./memory.ts";
 import type { Decision, Policy, PolicyFactory } from "./policy.ts";
 
 export const DEFAULT_MAX_DECISIONS = 300;
-export const DEFAULT_STALL_LIMIT = 40;
+export const DEFAULT_STALL_LIMIT = 60;
 
 export interface EpisodeOptions {
   /** Ticks the world advances after each action. Default: one full hop (12). */
@@ -48,6 +48,19 @@ export type LatencyModel =
   | { kind: "recorded"; pipelined?: boolean };
 
 const msToTicks = (ms: number): number => Math.max(0, Math.round((ms * TICKS_PER_SECOND) / 1000));
+
+/**
+ * The strategy's own numbers worth keeping in a record. `controller` says what kind of step the route controller
+ * took, for the screen; like `sent` and `answers` it is display-only, and the `note` already says it in words, so
+ * records and exports stay as they were before it existed.
+ */
+export function recordableExtra(
+  extra: Record<string, unknown> | undefined,
+): Record<string, unknown> | undefined {
+  if (!extra) return undefined;
+  const { controller: _display, ...kept } = extra;
+  return Object.keys(kept).length > 0 ? kept : undefined;
+}
 
 export const isPipelined = (latency: LatencyModel | undefined): boolean =>
   latency !== undefined && latency.kind !== "none" && latency.pipelined === true;
@@ -197,6 +210,7 @@ function toRecord(
   if (decision.cached !== undefined) record.cached = decision.cached;
   if (decision.source === "executor") record.source = decision.source;
   if (decision.note !== undefined) record.note = decision.note;
-  if (decision.extra) record.extra = decision.extra;
+  const extra = recordableExtra(decision.extra);
+  if (extra) record.extra = extra;
   return record;
 }

@@ -1,7 +1,12 @@
 import { invoke } from "@tauri-apps/api/core";
 import { emitTo } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import type { ControlCommand, ControlsData, SendControl } from "../controls.ts";
+import {
+  type ControlCommand,
+  type ControlsData,
+  controlsForWindow,
+  type SendControl,
+} from "../controls.ts";
 
 export const WINDOW_EVENTS = {
   request: "controls:request",
@@ -22,12 +27,21 @@ interface Reply {
   ok: boolean;
 }
 
+interface RemoteSnapshot {
+  data: ControlsData;
+  timeOrigin: number;
+}
+
 export const showControls = (inspect = false): Promise<void> =>
   invoke("show_controls", { inspect });
 
 /** Register before publishing; a late/reloaded panel can always request a fresh snapshot. */
 export async function hostControls(execute: SendControl, snapshot: () => ControlsData) {
-  const publish = () => emitTo("controls", WINDOW_EVENTS.state, snapshot());
+  const publish = () =>
+    emitTo("controls", WINDOW_EVENTS.state, {
+      data: snapshot(),
+      timeOrigin: performance.timeOrigin,
+    } satisfies RemoteSnapshot);
   const stop = await getCurrentWindow().listen<Request>(WINDOW_EVENTS.request, ({ payload }) => {
     void (async () => {
       let ok = true;
@@ -52,8 +66,8 @@ export async function connectControls(onState: (data: ControlsData) => void) {
   const stops: (() => void)[] = [];
   try {
     stops.push(
-      await getCurrentWindow().listen<ControlsData>(WINDOW_EVENTS.state, ({ payload }) =>
-        onState(payload),
+      await getCurrentWindow().listen<RemoteSnapshot>(WINDOW_EVENTS.state, ({ payload }) =>
+        onState(controlsForWindow(payload.data, payload.timeOrigin, performance.timeOrigin)),
       ),
     );
     stops.push(

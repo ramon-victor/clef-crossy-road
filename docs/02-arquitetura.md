@@ -53,7 +53,11 @@ interface OraclePolicy      { kind: "oracle";      id; decide(game: Game): Promi
 
 Um modelo é sempre uma `ObservationPolicy`: **o tipo impede que ele receba o simulador**, então ele não consegue olhar o que a regra de
 justiça ([ADR-0005](adr/0005-regra-de-justica-da-observacao.md)) exclui. Só as referências (look-ahead) são `OraclePolicy`.
-`Decision` = `{ action, probabilities?, confidence?, latencyMs?, inputTokens?, neurons?, cached?, extra? }`.
+`Decision` = `{ action, probabilities?, confidence?, latencyMs?, inputTokens?, neurons?, cached?, extra? }`, mais `sent` (o pedido exatamente
+como foi enviado) e `answers` (o `choice` e as probabilidades de **cada** pergunta, que `probabilities` resume numa distribuição conjunta sobre as
+cinco jogadas); os dois são para uma pessoa olhar e **não entram** nos registros do benchmark (nem o `extra.controller`, o tipo de cada passo do controlador da rota: `hop`, `wait`, `walk` ou `hold`). `decide(obs, memory?, hooks?)` aceita um
+`DecideHooks { onAsk(input) }` opcional: é chamado com o pedido logo antes de ele sair, e não é chamado num passo que o código dá sozinho. Só observa:
+a política decide igual sem ele. É o que deixa o app mostrar a pergunta enquanto o modelo ainda lê ([08](08-ui-desktop.md), Modo Teatro).
 Humano, baselines e modelos jogam o mesmo ambiente, então as comparações são justas.
 
 ## Fluxo de uma decisão (passo-a-passo)
@@ -84,7 +88,9 @@ O desktop abre dois webviews: `main` é o único dono da `Session`, políticas, 
 e logs; `controls` recebe snapshots serializáveis e envia comandos por eventos direcionados do Tauri.
 O painel não instancia cliente nem simulação. A sincronização inicial e ao reabrir não começa outra
 partida; fechar o jogo encerra ambos. A configuração de credenciais permanece somente no painel,
-com pausa confirmada antes de abrir. Ver [08](08-ui-desktop.md).
+com pausa confirmada antes de abrir. O relógio visual da pergunta é convertido entre as origens
+de tempo dos webviews, e eventos nativos sincronizam a preferência de idioma. Nenhuma dessas
+operações altera o pedido ao modelo. Ver [08](08-ui-desktop.md).
 
 ## Desempenho (medido)
 

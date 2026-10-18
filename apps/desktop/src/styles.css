@@ -17,7 +17,9 @@
   --warn: #e8a317;
   --bad: #dc4b4b;
   --radius: 12px;
-  font-family: "Segoe UI", system-ui, sans-serif;
+  --ui-font:
+    "Segoe UI", "Yu Gothic UI", "Meiryo", "Microsoft YaHei UI", "PingFang SC", system-ui, sans-serif;
+  font-family: var(--ui-font);
   color: var(--ink);
 }
 
@@ -35,7 +37,8 @@ body,
 }
 
 .shell {
-  --panel-width: clamp(264px, 24vw, 280px);
+  --panel-width: clamp(296px, 27vw, 320px);
+  --theater-width: clamp(320px, 30vw, 400px);
   display: flex;
   height: 100%;
 }
@@ -247,7 +250,7 @@ canvas.game {
 }
 
 .over-title {
-  font-family: "Retro", monospace;
+  font-family: var(--ui-font);
   font-size: 26px;
 }
 
@@ -421,7 +424,7 @@ canvas.game {
   align-items: center;
   gap: 6px;
   row-gap: 4px;
-  font-family: "Retro", monospace;
+  font-family: var(--ui-font);
   font-size: 18px;
   margin-bottom: 8px;
 }
@@ -557,6 +560,19 @@ canvas.game {
   top: 0;
 }
 
+/* Two of them sit side by side in the decision card. */
+.decision-buttons {
+  position: absolute;
+  left: 0;
+  top: 0;
+  display: flex;
+  gap: 12px;
+}
+
+.decision-buttons .text-button {
+  position: static;
+}
+
 .text-button:hover,
 .decision-details > summary:hover {
   color: var(--ink);
@@ -591,8 +607,10 @@ canvas.game {
 }
 
 .stat-value {
-  font-family: "Retro", monospace;
-  font-size: 16px;
+  font-family: var(--ui-font);
+  font-variant-numeric: tabular-nums;
+  font-size: 20px;
+  font-weight: 700;
   line-height: 1.1;
   overflow-wrap: anywhere;
 }
@@ -744,7 +762,7 @@ fieldset.speeds {
 }
 
 .inspector-title {
-  font-family: "Retro", monospace;
+  font-family: var(--ui-font);
   font-size: 22px;
 }
 
@@ -1177,56 +1195,6 @@ canvas.game:focus-visible {
   font-size: 13px;
 }
 
-/* Detached controls must not reserve space for a sidebar outside their own viewport. */
-.controls-shell .panel {
-  width: 100%;
-  border-left: 0;
-}
-
-.controls-shell .player-info {
-  inset: 12px 12px auto;
-  width: calc(100vw - 24px);
-}
-
-.controls-shell .inspector {
-  inset: 12px;
-  overflow-y: auto;
-}
-
-.controls-shell .inspector-head {
-  flex-wrap: wrap;
-  flex: none;
-}
-
-.controls-shell .inspector-title {
-  font-family: "Segoe UI", system-ui, sans-serif;
-  font-size: 18px;
-  font-weight: 800;
-  line-height: 1.2;
-}
-
-.controls-shell .inspector-sub {
-  max-height: 96px;
-  overflow-y: auto;
-}
-
-.controls-shell .inspector-tabs {
-  flex-wrap: wrap;
-  flex: none;
-}
-
-.controls-shell .inspector-chips {
-  flex: none;
-}
-
-.controls-shell .inspector-body {
-  flex: 1 0 120px;
-}
-
-.controls-shell .inspector :is(td, th) {
-  overflow-wrap: anywhere;
-}
-
 .connection-dialog :is(button, input):focus-visible {
   outline: 3px solid var(--ink);
   outline-offset: 2px;
@@ -1264,9 +1232,1011 @@ canvas.game:focus-visible {
   }
 }
 
+/* ---------- pixel icons ---------- */
+
+.px {
+  flex: none;
+  display: inline-block;
+  vertical-align: -0.2em;
+  shape-rendering: crispEdges;
+}
+
+.px-edge {
+  fill: var(--px-edge, transparent);
+}
+
+.chosen-arrow,
+.movepill b {
+  --px-edge: rgba(255, 255, 255, 0.55);
+}
+
+/* ---------- the compass on the chicken ---------- */
+
+.compass-anchor {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 0;
+  height: 0;
+  z-index: 2;
+  pointer-events: none;
+  will-change: transform;
+}
+
+.compass {
+  --r: 84px;
+  position: absolute;
+  left: 0;
+  top: 0;
+}
+
+.cb {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 50px;
+  height: 50px;
+  margin: -25px 0 0 -25px;
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
+  border: 3px solid rgba(255, 255, 255, 0.78);
+  background: rgba(14, 24, 46, 0.84);
+  box-shadow: 0 4px 0 rgba(0, 0, 0, 0.3);
+  color: #fff;
+  opacity: 0.7;
+  transform: translate(var(--dx), var(--dy)) scale(0.9);
+}
+
+.cb[data-move="stay"] {
+  width: 38px;
+  height: 38px;
+  margin: -19px 0 0 -19px;
+}
+
+.cb small {
+  position: absolute;
+  top: calc(100% + 5px);
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 0 7px;
+  border-radius: 99px;
+  background: rgba(255, 255, 255, 0.92);
+  color: #10203c;
+  font-family: "Segoe UI", system-ui, sans-serif;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 18px;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+/* It answered: each move as big and as solid as the model wants it, the chosen one lit. */
+.compass.answered .cb {
+  opacity: calc(0.4 + var(--p) * 0.6);
+  transform: translate(var(--dx), var(--dy)) scale(calc(0.8 + var(--p) * 0.7));
+}
+
+.compass.answered .cb.win {
+  --px-edge: rgba(255, 255, 255, 0.7);
+  opacity: 1;
+  border-color: #fff;
+  background: var(--accent);
+  color: var(--accent-ink);
+  box-shadow:
+    0 0 0 6px rgba(255, 214, 64, 0.4),
+    0 0 26px rgba(255, 214, 64, 0.85);
+}
+
+/* What the chicken really does when it is not what the model chose: the controller waits, steps aside, walks a detour. */
+.compass.answered .cb.actual {
+  opacity: 1;
+  border-color: #8fe3ff;
+  box-shadow:
+    0 0 0 4px rgba(143, 227, 255, 0.45),
+    0 4px 0 rgba(0, 0, 0, 0.3);
+}
+
+/* Let go: the moves that are not what is happening step back; the choice and the move being made stay. */
+.compass.answered.go .cb:not(.win):not(.actual) {
+  opacity: 0.35;
+}
+
+/* The way ahead is closed: a block where "go straight" would be, and no bar. */
+.compass.answered .cb.blocked {
+  opacity: 0.55;
+  transform: translate(var(--dx), var(--dy)) scale(0.85);
+  border-style: dashed;
+}
+
+/* The platform under the chicken is taking it to the edge of the world: how long it has. */
+.edge-clock {
+  position: absolute;
+  /* Under the left move, clear of the down move and the pause, which sit under the chicken. */
+  left: -84px;
+  top: 56px;
+  transform: translateX(-50%);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 9px 2px 6px;
+  border-radius: 99px;
+  border: 3px solid #fff;
+  background: #0e1b33;
+  color: var(--warn);
+  font-family: "Retro", monospace;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  box-shadow: 0 4px 0 rgba(0, 0, 0, 0.3);
+}
+
+.edge-clock.now {
+  border-color: var(--bad);
+  background: var(--bad);
+  color: #fff;
+}
+
+.edge-clock b {
+  font-weight: 400;
+}
+
+/* The crossing waits for a gap: the choice stays, with a pause on it. */
+.cb-badge {
+  position: absolute;
+  top: -10px;
+  right: -10px;
+  width: 22px;
+  height: 22px;
+  display: grid;
+  place-items: center;
+  border-radius: 6px;
+  border: 2px solid #fff;
+  background: #0e1b33;
+  color: #fff;
+}
+
+.compass-caption {
+  position: absolute;
+  left: 50%;
+  bottom: 14px;
+  z-index: 3;
+  width: min(calc(100% - 28px), 460px);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 12px;
+  border-radius: 14px;
+  border: 3px solid var(--ink);
+  background: rgba(14, 24, 46, 0.9);
+  box-shadow: 0 5px 0 rgba(29, 43, 69, 0.4);
+  color: #fff;
+  pointer-events: none;
+  transform: translateX(-50%);
+}
+
+.cap-main {
+  min-height: 20px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  padding-right: 64px;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.compass-caption .dots i {
+  background: var(--accent);
+}
+
+.cap-main .sep {
+  color: var(--accent);
+}
+
+.cap-main .skip {
+  opacity: 0.5;
+}
+
+.cap-verdict {
+  font-family: var(--ui-font);
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--accent);
+}
+
+.cap-branch {
+  font-size: 12px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.cap-note {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.cap-note-tag {
+  display: inline-block;
+  margin-right: 4px;
+  padding: 0 6px;
+  border-radius: 99px;
+  background: #8fe3ff;
+  color: #0e2238;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.cap-clock {
+  margin-left: auto;
+  font-family: "Retro", monospace;
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+  color: var(--accent);
+}
+
+.cap-strip {
+  display: flex;
+  justify-content: flex-end;
+  gap: 5px;
+  overflow: hidden;
+  -webkit-mask-image: linear-gradient(to right, transparent, #000 30%);
+  mask-image: linear-gradient(to right, transparent, #000 30%);
+}
+
+.hchip {
+  flex: none;
+  min-width: 24px;
+  height: 24px;
+  padding: 0 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  border-radius: 7px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 13px;
+}
+
+.hchip-count,
+.walk-count {
+  font-family: "Segoe UI", system-ui, sans-serif;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.hchip.big {
+  border-color: var(--accent);
+  background: rgba(255, 214, 64, 0.15);
+  color: var(--accent);
+}
+
+.cap-details {
+  position: absolute;
+  top: 8px;
+  right: 12px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--accent);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  text-decoration: underline;
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+.cap-details:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* ---------- the conversation: watch it think ---------- */
+
+.theater {
+  --t-bg: #16233f;
+  --t-card: #1f2f52;
+  --t-line: #3b5183;
+  --t-text: #f3f7ff;
+  --t-soft: #a9bbdb;
+  width: var(--theater-width);
+  flex: none;
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--t-bg);
+  color: var(--t-text);
+  border-left: 4px solid var(--ink);
+  box-shadow: -6px 0 0 rgba(29, 43, 69, 0.25);
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+.theater :is(button):focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.theater-head {
+  flex: none;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 12px 12px 6px;
+}
+
+.theater-title {
+  margin: 0;
+  font-family: var(--ui-font);
+  font-size: 19px;
+  font-weight: 700;
+  line-height: 1.1;
+  overflow-wrap: anywhere;
+  color: var(--accent);
+  text-shadow: 0 3px 0 rgba(0, 0, 0, 0.35);
+}
+
+.theater-sub {
+  margin-top: 2px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--t-soft);
+}
+
+.theater-close {
+  flex: none;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  border: 2px solid var(--t-line);
+  background: transparent;
+  color: var(--t-text);
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.theater-close:hover {
+  background: var(--t-card);
+}
+
+.theater-tools {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 0 12px 6px;
+}
+
+.theater-tog {
+  padding: 2px 10px;
+  border-radius: 99px;
+  border: 2px solid var(--t-line);
+  background: transparent;
+  color: var(--t-text);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.theater-tog[aria-pressed="true"] {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+
+.theater-link {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--accent);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.theater-error {
+  margin: 0;
+  padding: 6px 10px;
+  border-radius: 10px;
+  border: 2px solid var(--bad);
+  background: rgba(220, 75, 75, 0.15);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.feed {
+  flex: 1;
+  min-height: 0;
+  padding: 8px 12px 14px;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  gap: 12px;
+  overflow: hidden;
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 18%);
+  mask-image: linear-gradient(to bottom, transparent 0, #000 18%);
+}
+
+.turn {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.turn.old {
+  opacity: 0.55;
+}
+
+.bub {
+  max-width: 94%;
+  padding: 8px 12px 10px;
+  border-radius: 16px;
+}
+
+.bub .who {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 5px;
+  font-family: var(--ui-font);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+}
+
+.bub.game {
+  align-self: flex-start;
+  border: 2px solid var(--t-line);
+  border-bottom-left-radius: 4px;
+  background: var(--t-card);
+}
+
+.bub.game .who {
+  color: var(--t-soft);
+}
+
+.bub.model {
+  align-self: flex-end;
+  width: 100%;
+  max-width: 98%;
+  border: 2px solid rgba(255, 214, 64, 0.55);
+  border-bottom-right-radius: 4px;
+  background: rgba(255, 214, 64, 0.1);
+}
+
+.bub.model .who {
+  color: var(--accent);
+}
+
+.bub.model .who span {
+  font-family: "Segoe UI", system-ui, sans-serif;
+  font-size: 11px;
+  letter-spacing: 0;
+  font-weight: 600;
+  color: var(--t-soft);
+}
+
+.seerow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 700;
+}
+
+.seerow.muted,
+.muted {
+  color: var(--t-soft);
+  font-weight: 400;
+}
+
+.bub p.muted {
+  margin: 0;
+  font-size: 12px;
+}
+
+.gaps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 12px;
+  margin-top: 5px;
+  font-size: 12px;
+  color: var(--t-soft);
+}
+
+.platform-line {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 5px;
+  font-size: 12px;
+  color: var(--t-soft);
+}
+
+.platform-line.now {
+  color: var(--bad);
+  font-weight: 700;
+}
+
+.platform-line.soon {
+  color: var(--warn);
+  font-weight: 700;
+}
+
+.scene-tile {
+  flex: none;
+  width: 24px;
+  height: 24px;
+  border-radius: 7px;
+  border: 2px solid rgba(0, 0, 0, 0.3);
+  background: #8fcf4a;
+}
+
+.scene-tile.water {
+  background: repeating-linear-gradient(135deg, #4cb4ea 0 6px, #3a9bd2 6px 12px);
+}
+
+.scene-tile.tree {
+  background: radial-gradient(circle at 50% 35%, #7fc04e 0 30%, #4f9a36 31%);
+}
+
+.scene-tile.car {
+  background:
+    linear-gradient(#e0564a, #e0564a) center / 70% 55% no-repeat,
+    #3a4254;
+}
+
+.scene-tile.log {
+  background: repeating-linear-gradient(90deg, #8c5a3a 0 5px, #a06a45 5px 10px);
+}
+
+.scene-tile.lily {
+  background: radial-gradient(circle, #5cb85c 0 45%, #3fa7e0 46%);
+}
+
+.scene-tile.train {
+  background:
+    linear-gradient(#cfd6e4, #cfd6e4) center / 80% 50% no-repeat,
+    #3a4254;
+}
+
+.scene-tile.edge {
+  background: repeating-linear-gradient(45deg, #2a3550 0 5px, #3b4a6e 5px 10px);
+}
+
+.qa {
+  display: grid;
+  gap: 8px;
+}
+
+.qa-row {
+  display: grid;
+  gap: 3px;
+}
+
+.qa-row.skip {
+  opacity: 0.5;
+}
+
+.qa-t {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--t-soft);
+}
+
+.qa-t em {
+  font-style: normal;
+  font-size: 11px;
+}
+
+.pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.pill {
+  position: relative;
+  overflow: hidden;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 9px;
+  border-radius: 99px;
+  border: 2px solid var(--t-line);
+  background: rgba(0, 0, 0, 0.18);
+  color: var(--t-soft);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.pill-p {
+  font-style: normal;
+  font-variant-numeric: tabular-nums;
+}
+
+.pill-p:empty {
+  display: none;
+}
+
+.bub.model.answered .pill.win {
+  border-color: var(--accent);
+  background: rgba(255, 214, 64, 0.18);
+  color: var(--t-text);
+}
+
+.bub.model.answered .pill:not(.win) {
+  opacity: 0.5;
+}
+
+.movepill {
+  align-self: center;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 14px 4px 5px;
+  border-radius: 99px;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-family: var(--ui-font);
+  font-size: 13px;
+}
+
+.movepill b {
+  width: 26px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: rgba(74, 54, 0, 0.18);
+  font-weight: 400;
+  font-size: 16px;
+}
+
+.said {
+  align-self: center;
+  max-width: 100%;
+  margin: 0;
+  font-size: 12px;
+  color: var(--t-soft);
+  text-align: center;
+}
+
+.said-tag {
+  display: inline-block;
+  margin-right: 4px;
+  padding: 0 6px;
+  border-radius: 99px;
+  background: #8fe3ff;
+  color: #0e2238;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.walk {
+  align-self: center;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 4px;
+}
+
+.walk li {
+  min-width: 22px;
+  height: 22px;
+  padding: 0 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  border-radius: 6px;
+  border: 2px solid var(--t-line);
+  color: var(--t-soft);
+  font-size: 12px;
+}
+
+.sum {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 4px;
+  color: var(--t-soft);
+  font-size: 12px;
+}
+
+.sum b {
+  width: 20px;
+  height: 20px;
+  display: grid;
+  place-items: center;
+  border-radius: 6px;
+  background: rgba(255, 214, 64, 0.25);
+  color: var(--accent);
+  font-weight: 400;
+}
+
+.sum em {
+  font-style: normal;
+  opacity: 0.8;
+}
+
+.theater-empty {
+  margin: 0;
+  padding: 6px 12px 12px;
+  color: var(--t-soft);
+}
+
+.theater-empty-title {
+  margin: 8px 0 6px;
+  font-family: var(--ui-font);
+  font-size: 18px;
+  color: var(--t-text);
+}
+
+.theater-empty-text {
+  margin: 0 0 6px;
+}
+
+.theater-empty b {
+  color: var(--t-text);
+}
+
+@keyframes t-rise {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes t-sweep {
+  to {
+    transform: translateX(100%);
+  }
+}
+
+@keyframes t-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.8);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes cb-wait {
+  50% {
+    box-shadow:
+      0 0 0 10px rgba(255, 214, 64, 0.15),
+      0 0 26px rgba(255, 214, 64, 0.35);
+  }
+}
+
+@keyframes cb-go {
+  to {
+    opacity: 0;
+    transform: translate(calc(var(--dx) * 1.9), calc(var(--dy) * 1.9)) scale(0.5);
+  }
+}
+
+@keyframes compass-in {
+  from {
+    opacity: 0;
+    transform: scale(0.85);
+  }
+}
+
+/* Motion only for people who have not asked for less of it. Each element's own style is its end state. */
+@media (prefers-reduced-motion: no-preference) {
+  .cb {
+    transition:
+      transform 0.6s cubic-bezier(0.2, 0.8, 0.2, 1),
+      opacity 0.5s,
+      background-color 0.3s;
+  }
+
+  .compass {
+    animation: compass-in 0.25s ease-out both;
+    transition: opacity 0.8s;
+  }
+
+  .compass.reading .cb {
+    animation: blink 1.1s infinite;
+  }
+
+  .compass.answered .cb.win.waiting {
+    animation: cb-wait 1s ease-in-out infinite;
+  }
+
+  .compass.answered.launch .cb.win {
+    animation: cb-go 0.7s ease-in 0.1s both;
+  }
+
+  .turn:not(.old) {
+    animation: t-rise 0.4s ease both;
+  }
+
+  .pill {
+    transition:
+      background-color 0.35s,
+      border-color 0.35s,
+      opacity 0.35s;
+  }
+
+  .bub.model.reading .pill::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+      100deg,
+      transparent 30%,
+      rgba(255, 214, 64, 0.35) 50%,
+      transparent 70%
+    );
+    transform: translateX(-100%);
+    animation: t-sweep 1.2s ease-in-out infinite;
+  }
+
+  .movepill {
+    animation: t-pop 0.35s cubic-bezier(0.2, 1.4, 0.4, 1) both;
+  }
+
+  .walk li {
+    animation: t-pop 0.25s both;
+  }
+
+  .compass-caption .hchip:last-child {
+    animation: t-pop 0.3s both;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .panel *,
   .player-info * {
     transition: none;
   }
+}
+
+.controls .btn,
+.panel .setup-body button,
+.stat-label,
+.tag,
+.bar-name,
+.connection-setting {
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+.decision-head,
+.player-label,
+.budget-head,
+.inspector-tabs {
+  flex-wrap: wrap;
+}
+
+.inspector .bar-row {
+  grid-template-columns: 22px minmax(55px, 100px) minmax(0, 1fr) 52px;
+}
+
+.inspector-head {
+  flex-shrink: 0;
+  max-height: 45%;
+  overflow-y: auto;
+}
+
+.inspector-chips,
+.inspector-tabs {
+  flex-shrink: 0;
+}
+
+.technical-details {
+  overflow-wrap: anywhere;
+}
+
+.technical-details summary {
+  cursor: pointer;
+}
+
+.theater-heading {
+  min-width: 0;
+}
+
+.theater-title,
+.theater-empty-title,
+.cap-verdict,
+.qa-t,
+.pill,
+.movepill {
+  overflow-wrap: anywhere;
+}
+
+/* Detached controls must not reserve space for a sidebar outside their own viewport. */
+.controls-shell .panel {
+  width: 100%;
+  border-left: 0;
+}
+
+.controls-shell .theater {
+  width: 100%;
+  height: clamp(260px, 55vh, 420px);
+  flex: none;
+  border: 2px solid var(--line);
+  border-radius: var(--radius);
+}
+
+.controls-shell .player-info {
+  inset: 12px 12px auto;
+  width: calc(100vw - 24px);
+}
+
+.controls-shell .inspector {
+  inset: 12px;
+  overflow-y: auto;
+}
+
+.controls-shell .inspector-head {
+  flex-wrap: wrap;
+  flex: none;
+  max-height: none;
+  overflow: visible;
+}
+
+.controls-shell .inspector-actions {
+  max-width: 100%;
+  flex-wrap: wrap;
+}
+
+.controls-shell .inspector-actions .btn {
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.controls-shell .inspector-title {
+  font-family: "Segoe UI", system-ui, sans-serif;
+  font-size: 18px;
+  font-weight: 800;
+  line-height: 1.2;
+}
+
+.controls-shell .inspector-sub {
+  max-height: 96px;
+  overflow-y: auto;
+}
+
+.controls-shell .inspector-tabs {
+  flex-wrap: wrap;
+  flex: none;
+}
+
+.controls-shell .inspector-chips {
+  flex: none;
+}
+
+.controls-shell .inspector-body {
+  flex: 1 0 120px;
+}
+
+.controls-shell .inspector :is(td, th) {
+  overflow-wrap: anywhere;
 }

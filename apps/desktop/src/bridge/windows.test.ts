@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { type ControlsData, playerOption } from "../controls.ts";
+import { type ControlsData, controlsForWindow, playerOption } from "../controls.ts";
 import { buildPolicyChoices } from "../policies.ts";
 import { Session } from "../session.ts";
 import { connectControls, hostControls, WINDOW_EVENTS } from "./windows.ts";
@@ -44,6 +44,9 @@ function fixture(): ControlsData {
     autoRestart: true,
     bridgeKind: "tauri",
     minimized: false,
+    theaterOpen: false,
+    compassOn: false,
+    pace: null,
   };
 }
 
@@ -54,6 +57,16 @@ afterEach(() => {
 });
 
 describe("desktop controls synchronization", () => {
+  it("keeps the real elapsed reading time after reloading the panel's clock", () => {
+    const source = fixture();
+    source.state.asking = { since: 8900, input: { model: "clef-flash", state: {}, questions: {} } };
+    const received = controlsForWindow(source, 1000, 10000);
+    expect(received.state.asking?.since).toBe(-100);
+    // At epoch 10150 both windows must show the same 250 ms since the request at epoch 9900.
+    expect(150 - (received.state.asking?.since ?? 0)).toBe(9150 - source.state.asking.since);
+    expect(source.state.asking.since).toBe(8900);
+    expect(received.state.asking?.input).toBe(source.state.asking.input);
+  });
   it("synchronizes a late panel and executes commands once on the game owner", async () => {
     const session = new Session();
     const execute = vi.fn(async () => session.setPaused(true));

@@ -3,6 +3,7 @@ import {
   type Decision,
   emptyMemory,
   type Memory,
+  type ModelInput,
   type Policy,
   type PolicyFactory,
   type RememberedMove,
@@ -16,6 +17,7 @@ import {
   observe,
   TICKS_PER_SECOND,
 } from "@ccr/core";
+import { type ErrorInfo, errorInfo } from "./bridge/errors.ts";
 import { EpisodeStats } from "./episode-stats.ts";
 
 /**
@@ -24,8 +26,11 @@ import { EpisodeStats } from "./episode-stats.ts";
  */
 export type Timing = "step" | "realtime";
 
-/** idle: waiting to ask. thinking: an answer is in flight. hopping: playing out the hop. */
-export type Phase = "idle" | "thinking" | "hopping" | "error";
+/**
+ * idle: waiting to ask. thinking: an answer is in flight. reading: the model has answered and the move is held
+ * for a moment so a person can read it (see `setLinger`). hopping: playing out the hop.
+ */
+export type Phase = "idle" | "thinking" | "reading" | "hopping" | "error";
 
 export interface DecisionLog {
   index: number;
@@ -35,6 +40,18 @@ export interface DecisionLog {
   decision: Decision;
   /** Wall-clock time the policy took, ms (network round trip for models). */
   wallMs: number;
+}
+
+/** A request on its way to the model: what it was sent, and when (in the session's clock). */
+export interface Asking {
+  input: ModelInput;
+  since: number;
+}
+
+/** One question to the model and what the controller did with the answer, for the conversation view. */
+export interface Turn {
+  model: DecisionLog;
+  steps: DecisionLog[];
 }
 
 export interface SessionState {
@@ -50,6 +67,7 @@ export interface SessionState {
   decisions: number;
   phase: Phase;
   error: string | null;
+  errorInfo: ErrorInfo | null;
   paused: boolean;
   speed: number;
   timing: Timing;
@@ -58,6 +76,17 @@ export interface SessionState {
   policyId: string | null;
   last: DecisionLog | null;
   history: readonly DecisionLog[];
+  /**
+   * The request the model is reading right now, from the moment it goes out until the answer lands. Set
+   * for any timing and only for real model calls: a step the controller takes itself never shows here.
+   */
+  asking: Asking | null;
+  /** The last decision that came from the model (not a controller step), kept however long a detour runs. */
+  lastModel: DecisionLog | null;
+  /** Controller steps taken since `lastModel`. */
+  stepsSinceModel: number;
+  /** The last few questions to the model, oldest first, each with the controller steps that followed it. */
+  turns: readonly Turn[];
   /** Mean wall-clock decision time over the decisions that were not served from the cache. */
   avgLatencyMs: number | null;
   /** Mean input tokens over decisions that reported them. */
@@ -77,6 +106,10 @@ export type SessionEvent =
   | { type: "end"; state: SessionState };
 
 const HISTORY = 14;
+/** How many questions to the model are kept for the conversation, and how many controller steps of each. */
+const TURNS = 6;
+/** More than the longest manoeuvre: a crossing waits up to 15 steps for a gap and a detour walks up to 12 hops. */
+const TURN_STEPS = 24;
 
 export class Session {
   game: Game;
@@ -96,11 +129,24 @@ export class Session {
   private paused = false;
   private singleStep = false;
   private speed = 1;
+  /** How long, in ms, a model's move is held after it answers, for a person to read it (step timing only). */
+  private lingerMs = 0;
+  /**
+   * A model's move that has been answered and shown, and will be played at `playAt`. It is counted (statistics,
+   * the log of the terminal) only when it is played, so a game that is restarted meanwhile never counts a move it
+   * did not make.
+   */
+  private held: { log: DecisionLog; playAt: number } | null = null;
   private error: string | null = null;
+  private errorInfo: ErrorInfo | null = null;
   private best = 0;
   private decisions = 0;
   private history: DecisionLog[] = [];
   private last: DecisionLog | null = null;
+  private asking: Asking | null = null;
+  private lastModel: DecisionLog | null = null;
+  private stepsSinceModel = 0;
+  private turns: Turn[] = [];
   private stats = new EpisodeStats();
   private readonly listeners = new Set<() => void>();
   private readonly eventListeners = new Set<(event: SessionEvent) => void>();
@@ -154,10 +200,16 @@ export class Session {
     this.stalled = false;
     this.phase = "idle";
     this.error = null;
+    this.errorInfo = null;
     this.singleStep = false;
     this.decisions = 0;
     this.history = [];
     this.last = null;
+    this.asking = null;
+    this.lastModel = null;
+    this.stepsSinceModel = 0;
+    this.turns = [];
+    this.held = null;
     this.stats = new EpisodeStats();
     this.endReported = false;
     this.emit();
@@ -183,6 +235,17 @@ export class Session {
   setSpeed(speed: number): void {
     this.speed = Math.max(0.1, Math.min(8, speed));
     this.emit();
+  }
+
+  /**
+   * Holds each answer of the model for this long (real milliseconds, shorter at higher speed) before the
+   * chicken makes the move, so a person can read it. Only in step timing, where the world already waits
+   * for the model: the game plays out exactly the same, it just takes longer. The answer is on record the
+   * moment it lands; the controller's own steps are never held.
+   */
+  setLinger(ms: number): void {
+    this.lingerMs = Math.max(0, ms);
+    if (this.lingerMs === 0 && this.held) this.held.playAt = 0;
   }
 
   setPaused(paused: boolean): void {
@@ -218,6 +281,7 @@ export class Session {
   frame(dt: number): number {
     if (!this.game.alive || this.stalled || (this.paused && !this.singleStep)) return 0;
 
+    this.releaseHeld();
     this.driveAi();
     if (!this.worldRuns()) {
       this.acc = 0;
@@ -253,6 +317,7 @@ export class Session {
       decisions: this.decisions,
       phase: this.phase,
       error: this.error,
+      errorInfo: this.errorInfo,
       paused: this.paused,
       speed: this.speed,
       timing: this.timing,
@@ -260,6 +325,10 @@ export class Session {
       policyId: this.policy?.id ?? null,
       last: this.last,
       history: this.history,
+      asking: this.asking,
+      lastModel: this.lastModel,
+      stepsSinceModel: this.stepsSinceModel,
+      turns: this.turns,
       avgLatencyMs: this.stats.avgLatencyMs,
       avgTokens: this.stats.avgTokens,
       neurons: this.stats.neurons,
@@ -330,20 +399,29 @@ export class Session {
     const asked =
       policy.kind === "oracle"
         ? policy.decide(this.game)
-        : policy.decide(observe(this.game), this.memory);
+        : policy.decide(observe(this.game), this.memory, {
+            onAsk: (input) => {
+              if (epoch !== this.epoch) return;
+              this.asking = { input, since: this.now() };
+              this.emit();
+            },
+          });
 
     asked.then(
       (decision) => {
         if (epoch !== this.epoch) return; // the episode was restarted meanwhile
         this.inFlight = false;
+        this.asking = null;
         if (!this.game.alive) return;
         this.apply(decision, this.now() - started);
       },
       (error: unknown) => {
         if (epoch !== this.epoch) return;
         this.inFlight = false;
+        this.asking = null;
         this.phase = "error";
         this.error = error instanceof Error ? error.message : String(error);
+        this.errorInfo = errorInfo(error);
         this.emit();
       },
     );
@@ -352,9 +430,12 @@ export class Session {
   private apply(decision: Decision, wallMs: number): void {
     const tick = this.game.tick;
     const row = this.game.heroRow;
-    const outcome = this.game.act(decision.action);
-    this.pendingMove = { action: decision.action, outcome };
+    const linger = this.lingerFor(decision);
+    if (linger === 0) this.play(decision);
 
+    // The answer is on record and on screen at once, even while the move is held for reading (see `held`):
+    // `go` tells the screen what has been let go. A restart clears all of it, so nothing outlives a move that
+    // was never played.
     const log: DecisionLog = {
       index: this.decisions,
       tick,
@@ -365,15 +446,56 @@ export class Session {
     };
     this.decisions++;
     this.last = log;
+    if (decision.source === "executor") {
+      this.stepsSinceModel++;
+      const open = this.turns.at(-1);
+      if (open && open.steps.length < TURN_STEPS) {
+        this.turns = [...this.turns.slice(0, -1), { ...open, steps: [...open.steps, log] }];
+      }
+    } else if (decision.sent) {
+      this.lastModel = log;
+      this.stepsSinceModel = 0;
+      this.turns = [...this.turns.slice(-(TURNS - 1)), { model: log, steps: [] }];
+    }
     this.history = [...this.history.slice(-(HISTORY - 1)), log];
 
-    this.stats.add(decision, wallMs);
-    this.announce({ type: "decision", seed: this.seed, policyId: this.policy?.id ?? null, log });
+    if (linger > 0) {
+      this.held = { log, playAt: this.now() + linger };
+      this.phase = "reading";
+    } else {
+      this.count(log);
+    }
+    this.emit();
+  }
 
+  /** The move is made: it enters the statistics and is told to whoever follows the game. */
+  private count(log: DecisionLog): void {
+    this.stats.add(log.decision, log.wallMs);
+    this.announce({ type: "decision", seed: this.seed, policyId: this.policy?.id ?? null, log });
+  }
+
+  /** How long this answer is held before it is played: only a model's, and only while the world waits for it. */
+  private lingerFor(decision: Decision): number {
+    const asked = decision.source !== "executor" && decision.sent !== undefined;
+    return this.stepMode && asked ? this.lingerMs / this.speed : 0;
+  }
+
+  /** The chicken makes the move. In step timing this starts the hop the next decision waits for. */
+  private play(decision: Decision): void {
+    const outcome = this.game.act(decision.action);
+    this.pendingMove = { action: decision.action, outcome };
     if (this.timing === "step") {
       this.phase = "hopping";
       this.hopTicksLeft = this.decisionTicks;
     }
+  }
+
+  private releaseHeld(): void {
+    if (!this.held || this.now() < this.held.playAt) return;
+    const { log } = this.held;
+    this.held = null;
+    this.play(log.decision);
+    this.count(log);
     this.emit();
   }
 }

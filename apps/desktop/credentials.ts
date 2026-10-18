@@ -2,9 +2,16 @@ import { randomUUID } from "node:crypto";
 import { existsSync, readFileSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { parseEnv } from "node:util";
+import { type CredentialIssue, credentialIssue } from "./src/bridge/credentials.ts";
 import type { CredentialInput, CredentialStatus } from "./src/bridge/types.ts";
 
-export class CredentialValidationError extends Error {}
+export class CredentialValidationError extends Error {
+  readonly code: CredentialIssue;
+  constructor(code: CredentialIssue, message: string) {
+    super(message);
+    this.code = code;
+  }
+}
 
 type CredentialSnapshot = { accountId: string | undefined; apiToken: string | undefined };
 
@@ -88,12 +95,14 @@ export class CredentialsStore {
     const accountId =
       typeof value?.accountId === "string" ? value.accountId.trim().toLowerCase() : "";
     const apiToken = typeof value?.apiToken === "string" ? value.apiToken.trim() : "";
-    if (!/^[a-f0-9]{32}$/.test(accountId)) {
-      throw new CredentialValidationError("Account ID must contain 32 hexadecimal characters.");
-    }
-    if (!apiToken || apiToken.length > 4096 || !/^[A-Za-z0-9._~+/-]+=*$/.test(apiToken)) {
-      throw new CredentialValidationError("Enter the API token itself, without Bearer or spaces.");
-    }
+    const issue = credentialIssue({ accountId, apiToken });
+    if (issue)
+      throw new CredentialValidationError(
+        issue,
+        issue === "account_invalid"
+          ? "Account ID must contain 32 hexadecimal characters."
+          : "Enter the API token itself, without Bearer or spaces.",
+      );
     const original = existsSync(this.path) ? readFileSync(this.path, "utf8") : "";
     const contents = updateEnv(original, accountId, apiToken);
     const temporary = `${this.path}.ccr-${randomUUID()}.tmp`;

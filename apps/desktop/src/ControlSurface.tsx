@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState } from "preact/hooks";
 import type { Bridge } from "./bridge/types.ts";
 import type { ControlCommand, ControlsData, SendControl } from "./controls.ts";
+import { useI18n } from "./i18n/provider.tsx";
 import { Panel } from "./Panel.tsx";
 import { ConnectionDialog } from "./panel/ConnectionDialog.tsx";
 import { InputInspector } from "./panel/InputInspector.tsx";
+import { Theater } from "./theater/Theater.tsx";
 
 interface Props {
   data: ControlsData;
@@ -24,8 +26,9 @@ export function ControlSurface({
   onInspect,
   hiddenVersion,
 }: Props) {
+  const { t } = useI18n();
   const [configuring, setConfiguring] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<"windows.unreachable" | "windows.pauseFailed" | null>(null);
   const [opening, setOpening] = useState(false);
   const hidden = useRef(hiddenVersion);
   const latestHidden = useRef(hiddenVersion);
@@ -41,14 +44,14 @@ export function ControlSurface({
 
   const dispatch = (command: ControlCommand) => {
     setError(null);
-    void send(command).catch(() => setError("Could not reach the game. Try again."));
+    void send(command).catch(() => setError("windows.unreachable"));
   };
 
   return (
     <>
       <Panel
         {...data}
-        controlError={error}
+        controlError={error ? t(error) : null}
         configuring={opening}
         onConfigure={() => {
           if (opening) return;
@@ -60,7 +63,7 @@ export function ControlSurface({
             .then(() => {
               if (latestHidden.current === startedAt) setConfiguring(true);
             })
-            .catch(() => setError("Could not pause the game. Try again."))
+            .catch(() => setError("windows.pauseFailed"))
             .finally(() => setOpening(false));
         }}
         onSelect={(id) => dispatch({ type: "select", id })}
@@ -71,6 +74,20 @@ export function ControlSurface({
         onRetry={() => dispatch({ type: "retry" })}
         onNewMap={() => dispatch({ type: "newMap" })}
         onInspect={() => onInspect(true)}
+        onTheater={() => dispatch({ type: "theater", enabled: true })}
+        onPace={(pace) => dispatch({ type: "pace", pace })}
+        conversation={
+          data.bridgeKind === "tauri" && data.theaterOpen ? (
+            <Theater
+              state={data.state}
+              kind={data.choices.find((choice) => choice.id === data.selectedId)?.kind}
+              compassOn={data.compassOn}
+              onCompass={() => dispatch({ type: "compass", enabled: !data.compassOn })}
+              onClose={() => dispatch({ type: "theater", enabled: false })}
+              onInspect={() => onInspect(true)}
+            />
+          ) : undefined
+        }
         onSeed={(seed) => dispatch({ type: "seed", seed })}
         onSound={(enabled) => dispatch({ type: "sound", enabled })}
         onAutoRestart={(enabled) => dispatch({ type: "autoRestart", enabled })}

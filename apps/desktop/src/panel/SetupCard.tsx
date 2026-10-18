@@ -1,13 +1,13 @@
 import { useState } from "preact/hooks";
 import type { CredentialStatus } from "../bridge/types.ts";
+import { useI18n } from "../i18n/provider.tsx";
 import { parseSeedText } from "../seed.ts";
 import type { SessionState, Timing } from "../session.ts";
+import { PACES, type Pace } from "../theater/preference.ts";
+import { LanguageSelect } from "./LanguageSelect.tsx";
 
 const SPEEDS = [0.5, 1, 2, 4];
-const TIMINGS: readonly { value: Timing; label: string; title: string }[] = [
-  { value: "step", label: "Step", title: "The world waits while the model thinks" },
-  { value: "realtime", label: "Real-time", title: "Cars keep moving while the model thinks" },
-];
+const TIMINGS = ["step", "realtime"] as const;
 
 export interface SetupCardProps {
   state: SessionState;
@@ -16,6 +16,9 @@ export interface SetupCardProps {
   configuring: boolean;
   onConfigure(): void;
   onTiming(timing: Timing): void;
+  /** How long a model's answer stands before the chicken moves; null for a player that asks no model. */
+  pace: Pace | null;
+  onPace(pace: Pace): void;
   onSpeed(speed: number): void;
   onSeed(seed: number): void;
   onAutoRestart(on: boolean): void;
@@ -28,40 +31,66 @@ export function SetupCard({
   configuring,
   onConfigure,
   onTiming,
+  pace,
+  onPace,
   onSpeed,
   onSeed,
   onAutoRestart,
 }: SetupCardProps) {
+  const { t, number } = useI18n();
   const [seedText, setSeedText] = useState("");
-  const timing = state.human ? "You" : state.timing === "step" ? "Step" : "Real-time";
+  const timing = t(state.human ? "setup.human" : `setup.${state.timing}`);
   return (
     <details class="card setup">
       <summary>
-        <span class="setup-label">Setup</span>
+        <span class="setup-label">{t("setup.title")}</span>
         <span class="setup-current">
-          {timing} · {state.speed}× · seed {state.seed}
+          {t("setup.summary", { timing, speed: state.speed, seed: String(state.seed) })}
         </span>
       </summary>
       <div class="setup-body">
+        <LanguageSelect />
         {!state.human && (
           <fieldset class="segmented">
-            <legend>Timing</legend>
-            {TIMINGS.map((t) => (
+            <legend>{t("setup.timing")}</legend>
+            {TIMINGS.map((timingOption) => (
               <button
                 type="button"
-                key={t.value}
-                class={state.timing === t.value ? "on" : ""}
-                aria-pressed={state.timing === t.value}
-                onClick={() => onTiming(t.value)}
-                title={t.title}
+                key={timingOption}
+                class={state.timing === timingOption ? "on" : ""}
+                aria-pressed={state.timing === timingOption}
+                onClick={() => onTiming(timingOption)}
+                title={t(`setup.${timingOption}Help`)}
               >
-                {t.label}
+                {t(`setup.${timingOption}`)}
               </button>
             ))}
           </fieldset>
         )}
+        {pace !== null && (
+          <fieldset class="segmented" aria-describedby="pace-help">
+            <legend>{t("setup.pace")}</legend>
+            {PACES.map((option) => (
+              <button
+                type="button"
+                key={option}
+                class={pace === option ? "on" : ""}
+                aria-pressed={pace === option}
+                disabled={state.timing !== "step"}
+                onClick={() => onPace(option)}
+              >
+                {t(`setup.pace.${option}`)}
+              </button>
+            ))}
+          </fieldset>
+        )}
+        {pace !== null && (
+          <p id="pace-help" class="hint">
+            {state.timing === "step" ? t("setup.paceHelp") : t("setup.paceStepOnly")}
+          </p>
+        )}
         <fieldset class="speeds">
-          <legend>Speed</legend>
+          <legend>{t("setup.speed")}</legend>
           {SPEEDS.map((speed) => (
             <button
               type="button"
@@ -70,7 +99,7 @@ export function SetupCard({
               aria-pressed={state.speed === speed}
               onClick={() => onSpeed(speed)}
             >
-              {speed}×
+              {number(speed)}×
             </button>
           ))}
         </fieldset>
@@ -85,7 +114,7 @@ export function SetupCard({
           }}
         >
           <label class="field-label" for="map-seed">
-            Map seed
+            {t("setup.seed")}
           </label>
           <div class="seed">
             <input
@@ -97,7 +126,7 @@ export function SetupCard({
               onInput={(event) => setSeedText(event.currentTarget.value)}
             />
             <button type="submit" class="btn small">
-              Go
+              {t("setup.go")}
             </button>
           </div>
         </form>
@@ -109,10 +138,10 @@ export function SetupCard({
               aria-describedby="auto-restart-help"
               onChange={(event) => onAutoRestart(event.currentTarget.checked)}
             />
-            Auto-restart
+            {t("setup.autoRestart")}
           </label>
           <p id="auto-restart-help" class="hint">
-            Only free reference players restart automatically. Models never do.
+            {t("setup.autoRestartHelp")}
           </p>
         </div>
         <div class="connection-setting">
@@ -120,14 +149,14 @@ export function SetupCard({
             <strong>Cloudflare</strong>
             <p class="hint">
               {credentials === null
-                ? "Status unavailable"
+                ? t("setup.statusUnavailable")
                 : credentials.configured
-                  ? "Configured locally"
-                  : "Not configured"}
+                  ? t("setup.configured")
+                  : t("setup.notConfigured")}
             </p>
           </div>
           <button type="button" class="btn small" onClick={onConfigure} disabled={configuring}>
-            {configuring ? "Pausing…" : "Configure"}
+            {t(configuring ? "windows.pausing" : "setup.configure")}
           </button>
         </div>
       </div>

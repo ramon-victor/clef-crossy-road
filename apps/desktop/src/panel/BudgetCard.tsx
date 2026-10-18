@@ -1,5 +1,6 @@
 import type { BudgetStatus } from "../bridge/types.ts";
 import { meterLevel } from "../format.ts";
+import { useI18n } from "../i18n/provider.tsx";
 
 export interface BudgetCardProps {
   budget: BudgetStatus | null;
@@ -8,15 +9,18 @@ export interface BudgetCardProps {
 }
 
 export function BudgetCard({ budget, gameNeurons }: BudgetCardProps) {
+  const { t, number } = useI18n();
   const exhausted = budget !== null && budget.spent >= budget.limit;
   return (
     <section class={`card budget${exhausted ? " warn" : ""}`}>
       <div class="budget-head">
-        <div class="field-label">Neurons today (UTC)</div>
+        <div class="field-label" title={t("budget.help")}>
+          {t("budget.today")}
+        </div>
         {budget && (
           <div class="budget-total">
-            <strong>{Math.round(budget.spent).toLocaleString("en-US")}</strong>
-            <span> / {budget.limit.toLocaleString("en-US")}</span>
+            <strong>{number(Math.round(budget.spent))}</strong>
+            <span> / {number(budget.limit)}</span>
           </div>
         )}
       </div>
@@ -26,23 +30,32 @@ export function BudgetCard({ budget, gameNeurons }: BudgetCardProps) {
             class="meter"
             data-level={meterLevel(budget.spent, budget.limit)}
             role="progressbar"
-            aria-label="Daily free neurons used"
+            aria-label={t("budget.label")}
             aria-valuemin={0}
             aria-valuemax={budget.limit}
             aria-valuenow={Math.min(budget.spent, budget.limit)}
-            aria-valuetext={`${Math.round(budget.spent)} of ${budget.limit} neurons used`}
+            aria-valuetext={t("budget.used", {
+              spent: Math.round(budget.spent),
+              limit: budget.limit,
+            })}
           >
             <div
               class="meter-fill"
               style={{ width: `${Math.min(100, (budget.spent / budget.limit) * 100)}%` }}
             />
           </div>
-          {exhausted && <p class="hint">Limit reached · new calls refused.</p>}
+          {exhausted && <p class="hint">{t("budget.limit")}</p>}
         </>
       ) : (
-        <p class="hint">unavailable</p>
+        <p class="hint">{t("common.unavailable")}</p>
       )}
-      <p class="hint">This game: {gameNeurons.toFixed(1)} neurons</p>
+      <p class="hint">
+        {t("budget.game", {
+          value: gameNeurons,
+          minimumFractionDigits: 1,
+          maximumFractionDigits: 1,
+        })}
+      </p>
     </section>
   );
 }

@@ -65,10 +65,29 @@ const AROUND_EXAMPLES = [
   "left two_away but recently_failed yes, right none -> wait_here.",
 ].join(" ");
 
+/**
+ * The fourth question, only on a platform. Its note lives here and not in `LOOKUP_GAME`, so that every other request
+ * stays as it was. It asks for a plain match of one word: asked in words the model said `leaving` in 3 of 12 states a
+ * moment from the edge, asked "is edge_in a_moment?" in 12 of 12 (docs/07).
+ */
+const RIDE_NOTE =
+  "The state has an entry chicken: edge_in is one of a_moment, soon, later or not_carried.";
+
+const RIDE_EXAMPLES = [
+  "Examples:",
+  "chicken.edge_in a_moment -> leaving.",
+  "chicken.edge_in soon -> staying.",
+  "chicken.edge_in later -> staying.",
+  "chicken.edge_in not_carried -> staying.",
+].join(" ");
+
 export const ROUTE_QUESTION_IDS = ["cell", "moving", "around"] as const;
+export const RIDE_QUESTION_ID = "ride";
 export const CELL_OPTIONS = ["stand", "no_stand"] as const;
 export const MOVING_OPTIONS = ["moving", "still"] as const;
 export const AROUND_OPTIONS = ["detour_left", "detour_right", "wait_here"] as const;
+export type AroundOption = (typeof AROUND_OPTIONS)[number];
+export const RIDE_OPTIONS = ["leaving", "staying"] as const;
 
 export const CELL_CRITERIA: Readonly<Record<(typeof CELL_OPTIONS)[number], string>> = {
   stand: `cross_ahead.lands_on is ${STANDABLE_WORDS}.`,
@@ -80,7 +99,7 @@ export const MOVING_CRITERIA: Readonly<Record<(typeof MOVING_OPTIONS)[number], s
   still: "cross_ahead.things_move is still.",
 };
 
-export const AROUND_CRITERIA: Readonly<Record<(typeof AROUND_OPTIONS)[number], string>> = {
+export const AROUND_CRITERIA: Readonly<Record<AroundOption, string>> = {
   detour_left:
     "The left side has an opening (detour_left.opening_ahead is not none and detour_left.recently_failed is no) and the right side has none or a farther one; or both are equally near and chicken.place_in_world is middle, right or at_right_edge.",
   detour_right:
@@ -89,12 +108,26 @@ export const AROUND_CRITERIA: Readonly<Record<(typeof AROUND_OPTIONS)[number], s
     "Neither side has an opening: both opening_ahead are none, or the side that has one has recently_failed yes.",
 };
 
+export const RIDE_CRITERIA: Readonly<Record<(typeof RIDE_OPTIONS)[number], string>> = {
+  leaving: "chicken.edge_in is a_moment.",
+  staying: "chicken.edge_in is soon, later or not_carried.",
+};
+
 /**
- * The three questions of the `route` strategy. `cell` and `moving` read the row straight ahead; `around`
- * only matters when the way straight ahead is closed (the cell cannot be stood on and nothing moves).
+ * The three questions of the `route` strategy, and `ride` while the chicken stands on a platform. `cell` and
+ * `moving` read the row straight ahead; `around` only matters when the way straight ahead is closed.
  */
-export function routeQuestions(): Record<string, Question> {
+export function routeQuestions(riding = false): Record<string, Question> {
   const ahead = `${LOOKUP_GAME} ${AHEAD_NOTE}`;
+  const ride: Record<string, Question> = riding
+    ? {
+        [RIDE_QUESTION_ID]: {
+          type: "choice",
+          instructions: `${LOOKUP_GAME} ${RIDE_NOTE} Is chicken.edge_in a_moment? Read only chicken.edge_in. ${RIDE_EXAMPLES}`,
+          criteria: { ...RIDE_CRITERIA },
+        },
+      }
+    : {};
   return {
     cell: {
       type: "choice",
@@ -111,5 +144,6 @@ export function routeQuestions(): Record<string, Question> {
       instructions: `${LOOKUP_GAME} ${SCENE_NOTE} Suppose the way straight ahead is closed. Which manoeuvre does the chicken start? Compare the two sides, nearer is better: adjacent, then two_away, then three_or_more. ${AROUND_EXAMPLES}`,
       criteria: { ...AROUND_CRITERIA },
     },
+    ...ride,
   };
 }

@@ -70,6 +70,7 @@ describe("stepPlan: one step of a manoeuvre, reading the world as it is now", ()
     expect(stepPlan({ maneuver: "cross_ahead", waited: 0 }, withForward("tree"))).toEqual({
       kind: "handback",
       why: "tree does not go away",
+      reason: { kind: "permanent", cell: "tree" },
     });
   });
 

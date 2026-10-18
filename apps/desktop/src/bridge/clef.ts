@@ -1,10 +1,8 @@
 import {
   type CachedEntry,
   ClefClient,
-  ClefError,
   type DecisionCache,
   FREE_NEURONS_PER_DAY,
-  isBudgetRefusal,
   type SpendBudget,
   type Transport,
   type TransportRequest,
@@ -16,9 +14,6 @@ import type { Bridge } from "./types.ts";
 
 export const createBridge = (): Bridge => (isTauri() ? tauriBridge : httpBridge);
 
-/** Missing credentials never fix themselves, so they must not be retried like a network blip. */
-const CREDENTIALS_MESSAGE = /CF_API_TOKEN|CF_ACCOUNT_ID/;
-
 /** Sends requests through the native side, which holds the credentials. */
 class BridgeTransport implements Transport {
   private readonly bridge: Bridge;
@@ -28,14 +23,7 @@ class BridgeTransport implements Transport {
   }
 
   async post(request: TransportRequest): Promise<TransportResponse> {
-    try {
-      return await this.bridge.run(request.model, request.body);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      if (isBudgetRefusal(message)) throw new ClefError("quota", message);
-      if (CREDENTIALS_MESSAGE.test(message)) throw new ClefError("auth", message);
-      throw new Error(message);
-    }
+    return this.bridge.run(request.model, request.body);
   }
 }
 
@@ -61,7 +49,6 @@ class BridgeCache implements DecisionCache {
  */
 class BridgeBudget implements SpendBudget {
   readonly dailyLimit = FREE_NEURONS_PER_DAY;
-  private lastSpent = 0;
   private readonly bridge: Bridge;
 
   constructor(bridge: Bridge) {
@@ -69,8 +56,7 @@ class BridgeBudget implements SpendBudget {
   }
 
   async spentToday(): Promise<number> {
-    this.lastSpent = (await this.bridge.budget()).spent;
-    return this.lastSpent;
+    return (await this.bridge.budget()).spent;
   }
 
   async canSpend(): Promise<boolean> {

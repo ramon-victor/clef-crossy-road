@@ -1,3 +1,4 @@
+import { type BridgeFailure, bridgeError } from "./errors.ts";
 import type { Bridge, BudgetStatus, CredentialStatus } from "./types.ts";
 
 async function call<T>(path: string, body?: unknown): Promise<T> {
@@ -6,10 +7,10 @@ async function call<T>(path: string, body?: unknown): Promise<T> {
     headers: { "content-type": "application/json" },
     ...(body === undefined ? {} : { body: JSON.stringify(body) }),
   });
-  const json = (await response.json()) as T & { error?: string };
+  const json = (await response.json()) as T & { error?: BridgeFailure | string };
   // The dev bridge answers a relayed Workers AI call with 200 (the real status is inside the body), so
   // any other status is the bridge itself refusing or failing: surface its message, never a fake response.
-  if (!response.ok) throw new Error(json.error ?? `bridge error ${response.status}`);
+  if (!response.ok) throw bridgeError(json.error ?? `bridge error ${response.status}`);
   return json;
 }
 

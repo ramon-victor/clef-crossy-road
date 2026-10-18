@@ -1,13 +1,16 @@
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { useEffect, useState } from "preact/hooks";
+import { useEffect, useRef, useState } from "preact/hooks";
 import { tauriBridge } from "./bridge/tauri.ts";
 import { connectControls, WINDOW_EVENTS } from "./bridge/windows.ts";
 import { ControlSurface } from "./ControlSurface.tsx";
 import type { ControlsData } from "./controls.ts";
+import { useI18n } from "./i18n/provider.tsx";
+import { commandForKey } from "./keymap.ts";
 import { runControlsSelfTest } from "./selftest-controls.ts";
 
 /** A presentation only: no Session, renderer, policy or ClefClient is created here. */
 export function ControlsApp() {
+  const { t } = useI18n();
   const [data, setData] = useState<ControlsData | null>(null);
   const [connection, setConnection] = useState<Awaited<ReturnType<typeof connectControls>> | null>(
     null,
@@ -15,6 +18,8 @@ export function ControlsApp() {
   const [inspecting, setInspecting] = useState(false);
   const [hiddenVersion, setHiddenVersion] = useState(0);
   const [failed, setFailed] = useState(false);
+  const latest = useRef({ data, connection });
+  latest.current = { data, connection };
 
   useEffect(() => {
     let disposed = false;
@@ -61,22 +66,28 @@ export function ControlsApp() {
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
+      const command = commandForKey(event);
+      if (!command) return;
       if (
-        event.defaultPrevented ||
-        event.ctrlKey ||
-        event.metaKey ||
-        event.altKey ||
-        event.isComposing
+        event.target instanceof Element &&
+        event.target.closest(
+          'input, select, textarea, button, summary, dialog, a[href], [contenteditable], [role="dialog"]',
+        )
       )
         return;
-      if (
-        event.key.toLowerCase() !== "i" ||
-        (event.target instanceof Element &&
-          event.target.closest("input, select, textarea, button, dialog, [contenteditable]"))
-      )
-        return;
-      event.preventDefault();
-      setInspecting((open) => !open);
+      const { data, connection } = latest.current;
+      if (command.type === "inspect") {
+        event.preventDefault();
+        setInspecting((open) => !open);
+      } else if (data && connection && (command.type === "theater" || command.type === "compass")) {
+        event.preventDefault();
+        void connection
+          .send({
+            type: command.type,
+            enabled: !(command.type === "theater" ? data.theaterOpen : data.compassOn),
+          })
+          .catch(() => setFailed(true));
+      }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -95,9 +106,7 @@ export function ControlsApp() {
         />
       ) : (
         <p class="connection-status" role="status">
-          {failed
-            ? "Waiting for the game. Reopen the panel to reconnect."
-            : "Connecting to the game…"}
+          {failed ? t("windows.reconnect") : t("windows.connecting")}
         </p>
       )}
     </div>

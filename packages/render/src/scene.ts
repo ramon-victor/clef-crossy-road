@@ -147,11 +147,14 @@ export class GameView {
     this.renderer.render(this.scene, this.camera);
   }
 
-  /** CSS-pixel position of the hero relative to the canvas, for overlays such as the thought bubble. */
-  heroScreenPosition(): { x: number; y: number } | null {
+  /**
+   * CSS-pixel position of the hero relative to the canvas, for overlays. `lift` is how far above its feet,
+   * in world units: the default is above the head (the thought bubble), about 0.5 is its middle.
+   */
+  heroScreenPosition(lift = 1.1): { x: number; y: number } | null {
     this.hero.updateWorldMatrix(true, false);
     this.tmp.setFromMatrixPosition(this.hero.matrixWorld);
-    this.tmp.y += 1.1; // above the head
+    this.tmp.y += lift;
     this.tmp.project(this.camera);
     if (!Number.isFinite(this.tmp.x) || !Number.isFinite(this.tmp.y)) return null;
     return {

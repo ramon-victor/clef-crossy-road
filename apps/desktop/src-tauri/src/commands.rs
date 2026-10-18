@@ -86,11 +86,15 @@ pub async fn clef_run(
     model: String,
     body: Value,
 ) -> CommandResult<RunResponse> {
-    let usd_per_million = ledger::usd_per_million(&model)
-        .ok_or_else(|| CommandError::new(format!("model not allowed: {model}")))?;
+    let usd_per_million = ledger::usd_per_million(&model).ok_or_else(|| {
+        CommandError::coded("model_not_allowed", format!("model not allowed: {model}"))
+    })?;
     let credentials = state.credentials.lock()?.clone();
     let account = credentials.account_id.ok_or_else(|| {
-        CommandError::new("CF_ACCOUNT_ID is not set. Open Setup and configure Cloudflare.")
+        CommandError::coded(
+            "credentials_missing",
+            "CF_ACCOUNT_ID is not set. Open Setup and configure Cloudflare.",
+        )
     })?;
     let tag = ledger::account_tag(&account);
     let day = clock::utc_day_now();
@@ -99,7 +103,8 @@ pub async fn clef_run(
         let _guard = state.ledger.lock()?;
         let spent = ledger::spent_on(&state.root, &day, Some(&tag));
         if spent >= ledger::DAILY_LIMIT_NEURONS {
-            return Err(CommandError::new(ledger::refusal_message(spent)));
+            return Err(CommandError::coded("quota", ledger::refusal_message(spent))
+                .with_params(json!({ "spent": spent, "limit": ledger::DAILY_LIMIT_NEURONS })));
         }
     }
 
@@ -109,7 +114,10 @@ pub async fn clef_run(
     }
 
     let token = credentials.api_token.ok_or_else(|| {
-        CommandError::new("CF_API_TOKEN is not set. Open Setup and configure Cloudflare.")
+        CommandError::coded(
+            "credentials_missing",
+            "CF_API_TOKEN is not set. Open Setup and configure Cloudflare.",
+        )
     })?;
     let url = format!(
         "https://api.cloudflare.com/client/v4/accounts/{account}/ai/run/@cf/cloudflare/{model}"
@@ -121,7 +129,7 @@ pub async fn clef_run(
         .json(&body)
         .send()
         .await
-        .map_err(|e| CommandError::new(format!("network error: {}", e.without_url())))?;
+        .map_err(|e| CommandError::coded("network", format!("network error: {}", e.without_url())))?;
 
     let status = response.status().as_u16();
     let retry_after_ms = response

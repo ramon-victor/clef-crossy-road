@@ -13,6 +13,7 @@ import { CLEF_CACHED_SEEDS, CLEF_ID, type PolicyChoice } from "./policies.ts";
 const CACHED_SEED = Number(CLEF_CACHED_SEEDS.split("-")[0]);
 
 import type { Session } from "./session.ts";
+import { type Pace, PREFERENCE_KEYS } from "./theater/preference.ts";
 
 interface Context {
   session: Session;
@@ -20,6 +21,8 @@ interface Context {
   bridge: Bridge;
   choices: PolicyChoice[];
   select(id: string): void;
+  /** `persist: false` is for this run only, so a check never leaves its own choice as the person's. */
+  setPace(pace: Pace, persist?: boolean): void;
 }
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -116,6 +119,24 @@ async function checkWindows(ctx: Context): Promise<Report> {
   const visible = controls !== null && (await controls.isVisible());
   const sameSession = ctx.session.state().seed === seed && ctx.session.state().human;
 
+  const originalLanguage = document.documentElement.lang;
+  const originalGame = ctx.session.game;
+  let language: Report;
+  try {
+    const changed = await controlsReport("language");
+    await sleep(200);
+    language = {
+      controls: changed.language,
+      game: document.documentElement.lang,
+      synchronized: changed.language === document.documentElement.lang,
+      sameGame: ctx.session.game === originalGame && ctx.session.state().seed === seed,
+    };
+  } finally {
+    await controlsReport("restore-language");
+    await sleep(200);
+  }
+  language.restored = document.documentElement.lang === originalLanguage;
+
   ctx.session.setPaused(false);
   await invoke("selftest_window_action", { action: "minimize" });
   await sleep(1500);
@@ -140,6 +161,7 @@ async function checkWindows(ctx: Context): Promise<Report> {
       visible,
       reopened,
       sameSession,
+      language,
       pausedOnMinimize,
       stopped,
       stayedPaused,
@@ -319,6 +341,109 @@ async function checkInspector(ctx: Context): Promise<Report> {
   return { inspector: await controlsReport("inspector") };
 }
 
+/** What the person had chosen, to put back after a check that presses the keys that save a choice. */
+function savePreferences(): Array<[string, string | null]> {
+  return PREFERENCE_KEYS.map((key): [string, string | null] => {
+    try {
+      return [key, localStorage.getItem(key)];
+    } catch {
+      return [key, null];
+    }
+  });
+}
+
+function restorePreferences(saved: ReadonlyArray<readonly [string, string | null]>): void {
+  try {
+    for (const [key, value] of saved) {
+      if (value === null) localStorage.removeItem(key);
+      else localStorage.setItem(key, value);
+    }
+  } catch {
+    // Storage is not available; nothing was kept either.
+  }
+}
+
+/**
+ * What shows the model deciding, in the real window: the compass around the chicken (five moves, one lit, a
+ * caption) and the conversation column (a CLEF bubble whose options carry the model's pick). C and T hide
+ * and bring them back.
+ */
+async function checkTheater(ctx: Context): Promise<Report> {
+  const saved = savePreferences();
+  ctx.setPace("live", false);
+  ctx.select(CLEF_ID);
+  ctx.session.setSpeed(4);
+  ctx.session.start(CACHED_SEED);
+  const count = (selector: string) => document.querySelectorAll(selector).length;
+  const press = async (key: string) => {
+    window.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true }));
+    await sleep(250);
+  };
+  const started = performance.now();
+  while (
+    performance.now() - started < 12_000 &&
+    ctx.session.state().decisions < 1 &&
+    ctx.session.state().phase !== "error"
+  )
+    await sleep(100);
+  // A choice saved by an earlier session may have hidden one of them; the check is about the views themselves.
+  const compassByDefault = count(".compass-anchor") === 1;
+  if (!compassByDefault) await press("c");
+  const conversation = async () =>
+    (await controlsReport("status")).conversation as {
+      shown: boolean;
+      bubbles: number;
+      questions: number;
+      picks: number;
+    };
+  const conversationByDefault = (await conversation()).shown;
+  if (!conversationByDefault) await press("t");
+  // The cached game keeps going: wait for a moment when an answer, not a question, is on screen.
+  while (
+    performance.now() - started < 20_000 &&
+    count(".compass.answered .cb.win") === 0 &&
+    ctx.session.state().phase !== "error"
+  )
+    await sleep(50);
+  const buttons = count(".compass .cb");
+  const lit = count(".compass .cb.win");
+  const caption = document.querySelector(".cap-main")?.textContent ?? "";
+  const { bubbles, picks, questions } = await conversation();
+  await press("c");
+  const compassHiddenWithC = count(".compass-anchor") === 0;
+  await press("c");
+  const compassShownAgain = count(".compass-anchor") === 1;
+  await press("t");
+  const conversationHiddenWithT = !(await conversation()).shown;
+  await press("t");
+  const conversationShownAgain = (await conversation()).shown;
+  // The checks that follow run against the window as it started: both views end up shown, so hide what was hidden.
+  if (!compassByDefault) await press("c");
+  if (!conversationByDefault) await press("t");
+  restorePreferences(saved);
+  return {
+    theater: {
+      compassByDefault,
+      conversationByDefault,
+      compass: {
+        buttons,
+        lit,
+        caption,
+        hiddenWithC: compassHiddenWithC,
+        shownAgain: compassShownAgain,
+      },
+      conversation: {
+        bubbles,
+        questions,
+        picks,
+        everyQuestionHasAPick: questions > 0 && picks === questions,
+        hiddenWithT: conversationHiddenWithT,
+        shownAgain: conversationShownAgain,
+      },
+    },
+  };
+}
+
 /**
  * Only runs in the desktop app when launched with CCR_SELFTEST=1: checks rendering, the budget,
  * the cached Clef pipeline and the keyboard, writes runs/selftest.json and exits.
@@ -334,6 +459,8 @@ export async function runSelfTest(ctx: Context): Promise<void> {
   if (!enabled) return;
 
   const report: Report = { startedAt: new Date().toISOString() };
+  // Full speed, as before the pace existed: the checks wait on the game, not on a person reading.
+  ctx.setPace("live", false);
   try {
     for (const check of [
       checkRendering,
@@ -341,6 +468,7 @@ export async function runSelfTest(ctx: Context): Promise<void> {
       checkBudget,
       checkClefFromCache,
       checkInspector,
+      checkTheater,
       checkHumanKeys,
       checkHeldKey,
     ]) {

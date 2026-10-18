@@ -1,6 +1,7 @@
 import type { BudgetStatus, CredentialStatus } from "./bridge/types.ts";
 import type { PolicyChoice } from "./policies.ts";
 import type { SessionState, Timing } from "./session.ts";
+import type { Pace } from "./theater/preference.ts";
 
 /** The panel never receives policy factories or owns a model client. */
 export type PlayerOption = Omit<PolicyChoice, "factory"> & { available: boolean };
@@ -20,6 +21,26 @@ export interface ControlsData {
   autoRestart: boolean;
   bridgeKind: "tauri" | "http";
   minimized: boolean;
+  theaterOpen: boolean;
+  compassOn: boolean;
+  pace: Pace | null;
+}
+
+/** A newly opened/reloaded webview has its own performance clock origin. Only display time moves. */
+export function controlsForWindow(
+  data: ControlsData,
+  senderOrigin: number,
+  receiverOrigin: number,
+): ControlsData {
+  const asking = data.state.asking;
+  if (!asking) return data;
+  return {
+    ...data,
+    state: {
+      ...data.state,
+      asking: { ...asking, since: asking.since + senderOrigin - receiverOrigin },
+    },
+  };
 }
 
 export type ControlCommand =
@@ -34,6 +55,9 @@ export type ControlCommand =
   | { type: "seed"; seed: number }
   | { type: "sound"; enabled: boolean }
   | { type: "autoRestart"; enabled: boolean }
+  | { type: "theater"; enabled: boolean }
+  | { type: "compass"; enabled: boolean }
+  | { type: "pace"; pace: Pace }
   | { type: "credentialsSaved" };
 
 export type SendControl = (command: ControlCommand) => Promise<void>;

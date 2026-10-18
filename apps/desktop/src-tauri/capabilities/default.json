@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Core events and window queries for the game and controls. Window lifecycle operations are native app commands.",
+  "description": "Game and controls windows: core events, window queries and read-only system locale. Lifecycle operations are native app commands.",
   "windows": ["main", "controls"],
-  "permissions": ["core:default"]
+  "permissions": ["core:default", "os:allow-locale"]
 }

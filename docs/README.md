@@ -21,6 +21,7 @@
 | 09 | [Roadmap](09-roadmap.md) | Fases e critérios de saída |
 | 10 | [Segurança e licenças](10-seguranca-e-licencas.md) | Token, Tauri, MIT, IP dos assets |
 | 11 | [Lições dos 13 jogos do Jev](11-licoes-dos-jogos-do-jev.md) | O que os outros jogos controlados pelo Jev fazem e o que levamos |
+| 12 | [Internacionalização](12-i18n.md) | Idiomas, detecção, glossário, catálogos e validação |
 | — | [Referências](references.md) | Fontes com URL e data |
 | — | [ADRs](adr/) | Decisões de arquitetura registradas |
 
