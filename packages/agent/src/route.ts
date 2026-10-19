@@ -92,7 +92,7 @@ export function searchRoute(obs: Observation, request: RouteRequest): Route | nu
     obs,
     depth,
     (node) => node.dz >= goalDz && (side === "left" ? node.c < col0 : node.c > col0),
-    (node) => node.dz >= goalDz,
+    { isDead: (node) => node.dz >= goalDz },
   );
 }
 
@@ -110,7 +110,13 @@ function walk(
   obs: Observation,
   depth: number,
   isGoal: (node: WalkNode) => boolean,
-  isDead: (node: WalkNode) => boolean = () => false,
+  {
+    isDead = () => false,
+    railTransit = false,
+  }: {
+    isDead?: (node: WalkNode) => boolean;
+    railTransit?: boolean;
+  } = {},
 ): Route | null {
   // `v` is the speed (columns per second) of the platform the chicken stands on, which carries it while it waits.
   let level: Array<{ dz: number; c: number; v: number; path: Action[] }> = [
@@ -132,7 +138,9 @@ function walk(
           ddz === 0
             ? cellWindow(row, c, d * T, (d + 0.5) * T, move === "stay")
             : hopWindow(row, node.c, d * T, (d + 0.5) * T);
-        if (!canStand(cell)) continue;
+        // An exit may cross a warned rail, but never a train in this hop's window. Its goal still
+        // has to be somewhere to rest: a warning alone must not trap the chicken on a drifting log.
+        if (!canStand(cell) && !(railTransit && cell === "train_coming")) continue;
         const key = `${dz},${Math.round(c * 2)},${d}`;
         if (seen.has(key)) continue;
         seen.add(key);
@@ -153,17 +161,24 @@ export function searchEscape(obs: Observation): Route | null {
   return walk(obs, 4, (node) => Math.abs(node.c + node.v) <= MAX_ABS_X - EDGE_MARGIN);
 }
 
+/** Shared by the exit search and its executor: a transit cell is not a completed exit. */
+function exitSettled(obs: Observation, node: WalkNode): boolean {
+  return (
+    secondsToLimit(node.c, node.v, MAX_ABS_X - EDGE_MARGIN) >= EDGE_SOON &&
+    canStand(cellWindow(rowAt(obs, node.dz), node.c, node.d * T, (node.d + 1) * T, true))
+  );
+}
+
 /**
  * The shortest way off a platform that carries the chicken to the edge, onto a row ahead if there is one and only
  * then back: leaving by the way it came made it board the same log again and again (48.7 rows fell to 42.1 on
  * the free reference).
  */
 export function searchExit(obs: Observation): Route | null {
-  const settled = (node: WalkNode): boolean =>
-    secondsToLimit(node.c, node.v, MAX_ABS_X - EDGE_MARGIN) >= EDGE_SOON &&
-    canStand(cellWindow(rowAt(obs, node.dz), node.c, node.d * T, (node.d + 1) * T, true));
+  const settled = (node: WalkNode): boolean => exitSettled(obs, node);
   return (
-    walk(obs, EXIT_DEPTH, (node) => node.dz >= 1 && settled(node)) ?? walk(obs, EXIT_DEPTH, settled)
+    walk(obs, EXIT_DEPTH, (node) => node.dz >= 1 && settled(node), { railTransit: true }) ??
+    walk(obs, EXIT_DEPTH, settled, { railTransit: true })
   );
 }
 
@@ -232,7 +247,7 @@ function legAct(
 }
 
 /** A refusal never leaves the chicken standing where a vehicle is about to arrive: it steps off a cell it cannot stay on. */
-function safeHold(obs: Observation, memory: Memory): RouteAct {
+function safeHold(obs: Observation, memory: Memory): RouteAct & { exit?: Route } {
   const off = driftingOff(obs);
   if (off === "no" && canStand(lanesState(obs, memory).chicken.stays_on)) {
     return {
@@ -243,13 +258,15 @@ function safeHold(obs: Observation, memory: Memory): RouteAct {
     };
   }
   const why = off === "no" ? "unsafe_here" : "edge";
-  const away = (off === "no" ? null : searchExit(obs)) ?? searchEscape(obs);
+  const exit = off === "no" ? null : searchExit(obs);
+  const away = exit ?? searchEscape(obs);
   if (away) {
     return {
       action: away.first,
       note: `stepping off a cell it cannot stay on: ${legOf(away)}`,
       notice: { kind: "escape", action: away.first, remaining: away.path.length },
       step: { kind: "hold", why },
+      ...(exit ? { exit } : {}),
     };
   }
   return {
@@ -348,7 +365,10 @@ export class RouteExecutor {
 
   /** A refused manoeuvre still costs the chicken a step: it waits, or steps off a cell that cannot hold it. */
   private hold(obs: Observation, memory: Memory): RouteAct {
-    const held = safeHold(obs, memory);
+    const { exit, ...held } = safeHold(obs, memory);
+    // A refusal can begin a multi-hop exit too. Keep control across its transit cells just as
+    // when the model chose leave_platform, rather than asking again on a warned rail.
+    if (exit) this.plan = { kind: "leave", steps: 1 };
     return {
       ...held,
       note: `${this.last ?? "hold"}; ${held.note}`,
@@ -447,11 +467,11 @@ export class RouteExecutor {
   }
 
   private leaveStep(plan: LeavePlan, obs: Observation, starting: boolean): RouteAct | null {
-    if (secondsToEdge(obs) >= EDGE_SOON) {
-      if (starting) {
-        const why = "the chicken is not being carried towards the edge";
-        return this.giveBack(true, "leave_platform", why, { kind: "not_carried" });
-      }
+    if (starting && secondsToEdge(obs) >= EDGE_SOON) {
+      const why = "the chicken is not being carried towards the edge";
+      return this.giveBack(true, "leave_platform", why, { kind: "not_carried" });
+    }
+    if (!starting && exitSettled(obs, { dz: 0, c: obs.player.col, v: ridingSpeed(obs), d: 0 })) {
       this.last = `leave_platform: off the platform's way after ${plan.steps} hop(s)`;
       this.plan = null;
       return null;

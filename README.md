@@ -40,7 +40,7 @@ Nothing is deployed to Cloudflare. The project only calls the Workers AI REST AP
 | Clef-flash, top-down image of the observation | 100 | 3.36 (worse) |
 | Clef-flash + route controller (`scene` · `route` · `lookup`, earlier revision) | 7 | **22.4** [10.9, 35.7] |
 | Scripted controller, **no model** (`exec-route`, same earlier revision) | 100 | 48.3 |
-| Scripted controller, **no model** (`exec-route`, current revision; stall limit 60) | 100 | 61.6 |
+| Scripted controller, **no model** (`exec-route`, 2026-10-17 revision; stall limit 60) | 100 | 61.6 |
 | `lookahead` (reads the simulator, no model) | 100 | 44.75 |
 
 Given the game state and a plain question, Clef-flash plays like "always forward": it puts its highest probability on advancing
@@ -55,7 +55,7 @@ Read the numbers with these caveats:
   `always-forward`. Every condition is labelled with how much help the code gives.
 - **The historical model row is 7 games**, hence the wide interval. The 100-seed gate is still pending; its earlier estimate was 25,000–30,000 neurons over several days and needs replanning for current gameplay. These seven games span two controller revisions and are not a matched comparison with
   the 100-game scripted references.
-- **Current gameplay has changed.** The controller now retries failed sides, walks longer detours and stops after 60 decisions without progress. Its current scripted reference makes 61.6 rows. There is no matched model evaluation for that version; the seven-game mean above belongs to the earlier controller and stall limit 40.
+- **Current gameplay has changed.** The controller now retries failed sides, walks longer detours and stops after 60 decisions without progress. The 2026-10-17 scripted reference made 61.6 rows. A later platform-exit fix crosses warned rails when the train is distant and keeps control until a resting place; it has no full benchmark yet. There is no matched model evaluation for these versions; the seven-game mean above belongs to the earlier controller and stall limit 40.
 
 Full tables, method and open questions: [docs/results.md](docs/results.md).
 
@@ -135,7 +135,7 @@ request costs roughly 6 neurons and a game takes tens of requests; the 27B model
 `pnpm bench plan` before any benchmark that calls a model: it estimates the cost and splits a run into days that fit.
 
 **Replays are free only with a local cache.** The decision cache lives in `runs/` (gitignored), so a fresh clone has none. The
-desktop app opens on Clef-flash at seed 6, which then calls the API and needs credentials. Use the look-ahead player to stay at
+desktop app opens on Clef-flash at seed 7, which then calls the API and needs credentials. Use the look-ahead player to stay at
 zero cost.
 
 ## Benchmark

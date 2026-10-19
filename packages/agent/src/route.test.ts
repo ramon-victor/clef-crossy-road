@@ -1,9 +1,18 @@
-import type { Observation, ObsRow } from "@ccr/core";
+import { type Observation, type ObsRow, observe } from "@ccr/core";
 import { describe, expect, it } from "vitest";
 import { alwaysForward } from "./baselines.ts";
 import { emptyMemory } from "./memory.ts";
 import { driftingOff } from "./platform.ts";
-import { boxedIn, grass, road, scene, water, world } from "./route.testing.ts";
+import {
+  boxedIn,
+  grass,
+  road,
+  scene,
+  seed6PlatformExit,
+  warnedRailsExit,
+  water,
+  world,
+} from "./route.testing.ts";
 import {
   execRoute,
   MAX_CROSS_WAIT,
@@ -94,6 +103,71 @@ describe("searchExit: the way off a platform that carries the chicken to the edg
     const alone = world([water([{ col: 4.2, speed: 3, type: "log", half: 1.5 }], 0)], 4.2, true);
     expect(searchExit(alone)).toBeNull();
   });
+
+  const railBehind = (trainCol = 50, speed = -48, bank = true): Observation =>
+    world(
+      [
+        water([{ col: 3, speed: 3, type: "log", half: 1.6 }], 0),
+        {
+          dz: -1,
+          kind: "rail",
+          warning_light: "on",
+          train: { col: trainCol, half_extent: 10.25, speed_cols_per_s: speed },
+        },
+        ...(bank ? [grass([], -2)] : []),
+        water([], 1),
+      ],
+      3,
+      true,
+    );
+
+  it("crosses a warned rail to reach the bank when the train is still far away", () => {
+    expect(searchExit(railBehind())?.path).toEqual(["hop_back", "hop_back"]);
+  });
+
+  it("does not finish its exit on a warned rail even when the train is distant", () => {
+    expect(searchExit(railBehind(50, -48, false))).toBeNull();
+  });
+
+  it("refuses a rail occupied by a train throughout the exit window", () => {
+    expect(searchExit(railBehind(3, 0))).toBeNull();
+  });
+
+  it("lets the train pass while still on the log rather than landing on or waiting in its path", () => {
+    const route = searchExit(railBehind(14));
+    expect(route?.path).toHaveLength(4);
+    expect(route?.path.slice(0, 2)).not.toContain("hop_back");
+    expect(route?.path.slice(2)).toEqual(["hop_back", "hop_back"]);
+  });
+
+  it("rejects a wait on the rail when a train passes between otherwise clear hop landings", () => {
+    const waitingForLog = (trainCol: number): Observation =>
+      world(
+        [
+          water([{ col: 3, speed: 3, type: "log", half: 1.6 }], 0),
+          {
+            dz: -1,
+            kind: "rail",
+            warning_light: "on",
+            train: { col: trainCol, half_extent: 0.25, speed_cols_per_s: -48 },
+          },
+          // It reaches column 3 at 0.6 s: the chicken must wait on the rail from 0.2 to 0.4 s.
+          water([{ col: -3, speed: 10, type: "log", half: 0.4 }], -2),
+          grass([], -3),
+          water([], 1),
+        ],
+        3,
+        true,
+      );
+    expect(searchExit(waitingForLog(100))?.path).toEqual([
+      "hop_back",
+      "stay",
+      "hop_back",
+      "hop_back",
+    ]);
+    // This train crosses column 3 at 0.3 s, between the two landing instants.
+    expect(searchExit(waitingForLog(17.4))).toBeNull();
+  });
 });
 
 describe("RouteExecutor: leave_platform", () => {
@@ -119,6 +193,61 @@ describe("RouteExecutor: leave_platform", () => {
     expect(executor.next(onGrass, emptyMemory())).toBeNull();
     expect(executor.lastResult).toBe("leave_platform: off the platform's way after 1 hop(s)");
   });
+
+  it("gets off seed 6's log through the warned rail and keeps control until it reaches a resting place", () => {
+    const game = seed6PlatformExit();
+    const executor = new RouteExecutor();
+    expect(game.heroRow).toBe(17);
+    expect(observe(game).player).toMatchObject({ riding: true, col: -2.05 });
+    const stranded = game.clone();
+    stranded.advance(60);
+    expect(stranded.deathCause).toBe("out_of_bounds");
+
+    const first = executor.start("leave_platform", observe(game), emptyMemory());
+    expect(first).toMatchObject({ action: "hop_back", step: { kind: "leave", n: 1, left: 2 } });
+    game.step(first.action);
+    expect(observe(game).player.standing_on).toBe("rail");
+
+    const second = executor.next(observe(game), emptyMemory());
+    expect(second).toMatchObject({ action: "hop_back", step: { kind: "leave", n: 2, left: 1 } });
+    if (!second) throw new Error("exit ended on the warned rail");
+    game.step(second.action);
+    expect(game.heroRow).toBe(15);
+    expect(executor.next(observe(game), emptyMemory())).toBeNull();
+    expect(executor.lastResult).toContain("after 2 hop(s)");
+    game.advance(60);
+    expect(game.alive).toBe(true);
+  });
+
+  it("uses the same exit through the rail when another maneuver cannot wait on the log", () => {
+    const obs = observe(seed6PlatformExit());
+    for (const maneuver of ["wait_here", "cross_ahead"] as const) {
+      const act = new RouteExecutor().start(maneuver, obs, emptyMemory());
+      expect(act).toMatchObject({ action: "hop_back", step: { kind: "hold", why: "edge" } });
+    }
+  });
+
+  it.each(["wait_here", "cross_ahead"] as const)(
+    "continues the emergency exit after %s across two warned rails to the bank",
+    (maneuver) => {
+      const game = warnedRailsExit();
+      const executor = new RouteExecutor();
+      const first = executor.start(maneuver, observe(game), emptyMemory());
+      expect(first).toMatchObject({ action: "hop_back", step: { kind: "hold", why: "edge" } });
+      game.step(first.action);
+      for (const n of [2, 3]) {
+        expect(observe(game).player.standing_on).toBe("rail");
+        const step = executor.next(observe(game), emptyMemory());
+        expect(step).toMatchObject({ action: "hop_back", step: { kind: "leave", n } });
+        if (!step) throw new Error("emergency exit ended on a warned rail");
+        game.step(step.action);
+      }
+      expect(game.heroRow).toBe(6);
+      expect(executor.next(observe(game), emptyMemory())).toBeNull();
+      game.advance(60);
+      expect(game.alive).toBe(true);
+    },
+  );
 
   it.each([
     [
