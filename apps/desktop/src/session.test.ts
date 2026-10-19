@@ -656,6 +656,8 @@ describe("Session: holding a model's move for a person to read", () => {
     expect(s.state().lastModel?.index).toBe(0);
     expect(s.state().asking).toBeNull();
     expect(s.game.tick).toBe(0);
+    expect(s.state().last?.observed).toEqual({ tick: 0, row: 8 });
+    expect(s.state().playback).toBeNull();
 
     run(s, 0.5); // frames go by, the clock does not
     expect(s.state().phase).toBe("reading");
@@ -669,6 +671,7 @@ describe("Session: holding a model's move for a person to read", () => {
     at(1000);
     s.frame(FRAME);
     expect(s.state().phase).toBe("hopping");
+    expect(s.state().playback).toMatchObject({ index: 0, outcome: "hop" });
     run(s, 0.5);
     expect(s.game.score).toBe(1);
   });

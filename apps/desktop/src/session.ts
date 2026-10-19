@@ -14,6 +14,7 @@ import {
   DECISION_TICKS,
   type DeathCause,
   Game,
+  type MoveOutcome,
   observe,
   TICKS_PER_SECOND,
 } from "@ccr/core";
@@ -40,6 +41,8 @@ export interface DecisionLog {
   decision: Decision;
   /** Wall-clock time the policy took, ms (network round trip for models). */
   wallMs: number;
+  /** Display-only origin captured before the policy reads the world, including network delay. */
+  observed?: { tick: number; row: number };
 }
 
 /** A request on its way to the model: what it was sent, and when (in the session's clock). */
@@ -79,6 +82,8 @@ export interface SessionState {
   human: boolean;
   policyId: string | null;
   last: DecisionLog | null;
+  /** Result of applying the latest released decision, never a held answer. */
+  playback?: { index: number; outcome: MoveOutcome } | null;
   history: readonly DecisionLog[];
   /**
    * The request the model is reading right now, from the moment it goes out until the answer lands. Set
@@ -147,6 +152,7 @@ export class Session {
   private decisions = 0;
   private history: DecisionLog[] = [];
   private last: DecisionLog | null = null;
+  private playback: Exclude<SessionState["playback"], undefined> = null;
   private asking: Asking | null = null;
   private lastModel: DecisionLog | null = null;
   private stepsSinceModel = 0;
@@ -209,6 +215,7 @@ export class Session {
     this.decisions = 0;
     this.history = [];
     this.last = null;
+    this.playback = null;
     this.asking = null;
     this.lastModel = null;
     this.stepsSinceModel = 0;
@@ -329,6 +336,7 @@ export class Session {
       human: this.factory === null,
       policyId: this.policy?.id ?? null,
       last: this.last,
+      playback: this.playback,
       history: this.history,
       asking: this.asking,
       lastModel: this.lastModel,
@@ -401,6 +409,7 @@ export class Session {
     this.inFlight = true;
     if (this.stepMode) this.phase = "thinking";
     const started = this.now();
+    const observed = { tick: this.game.tick, row: this.game.heroRow };
     const asked =
       policy.kind === "oracle"
         ? policy.decide(this.game)
@@ -418,7 +427,7 @@ export class Session {
         this.inFlight = false;
         this.asking = null;
         if (!this.game.alive) return;
-        this.apply(decision, this.now() - started);
+        this.apply(decision, this.now() - started, observed);
       },
       (error: unknown) => {
         if (epoch !== this.epoch) return;
@@ -432,7 +441,11 @@ export class Session {
     );
   }
 
-  private apply(decision: Decision, wallMs: number): void {
+  private apply(
+    decision: Decision,
+    wallMs: number,
+    observed: NonNullable<DecisionLog["observed"]>,
+  ): void {
     const tick = this.game.tick;
     const row = this.game.heroRow;
     const linger = this.lingerFor(decision);
@@ -448,6 +461,7 @@ export class Session {
       action: decision.action,
       decision,
       wallMs,
+      observed,
     };
     this.decisions++;
     this.last = log;
@@ -486,8 +500,9 @@ export class Session {
   }
 
   /** The chicken makes the move. In step timing this starts the hop the next decision waits for. */
-  private play(decision: Decision): void {
+  private play(decision: Decision, index = this.decisions): void {
     const outcome = this.game.act(decision.action);
+    this.playback = { index, outcome };
     this.pendingMove = { action: decision.action, outcome };
     if (this.timing === "step") {
       this.phase = "hopping";
@@ -499,7 +514,7 @@ export class Session {
     if (!this.held || this.now() < this.held.playAt) return;
     const { log } = this.held;
     this.held = null;
-    this.play(log.decision);
+    this.play(log.decision, log.index);
     this.count(log);
     this.emit();
   }

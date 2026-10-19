@@ -1,6 +1,11 @@
 import type { Catalog } from "./en.ts";
 
 export const zhHans = {
+  "compass.now": "当前：{{step}}",
+  "compass.chosen": "Clef 的选择：{{move}}",
+  "compass.path": "预计路径",
+  "compass.blocked": "移动受阻",
+  "compass.idle": "等待下一步行动",
   "windows.openControls": "打开控制窗口",
   "windows.openControlsHelp": "打开控制面板（F2）",
   "windows.paused": "已暂停 · 按空格键继续",

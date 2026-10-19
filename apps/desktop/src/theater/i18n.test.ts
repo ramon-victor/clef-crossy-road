@@ -52,7 +52,6 @@ it("retranslates recorded model turns without changing their input, choices or g
       ),
     );
     expect(view.moves).toEqual(compass.moves);
-    expect(view.branch).toEqual(compass.branch);
     expect(view.strip).toEqual(compass.strip);
   }
   expect(titles.size).toBe(LOCALES.length);

@@ -1,4 +1,9 @@
 export const en = {
+  "compass.now": "Now: {{step}}",
+  "compass.chosen": "Clef chose: {{move}}",
+  "compass.path": "Predicted path",
+  "compass.blocked": "Move blocked",
+  "compass.idle": "Awaiting next action",
   "windows.openControls": "Open controls window",
   "windows.openControlsHelp": "Open controls (F2)",
   "windows.paused": "Paused · Space to resume",

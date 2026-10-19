@@ -95,6 +95,7 @@ export type {
   Policy,
   PolicyFactory,
   QuestionAnswer,
+  RoutePreview,
 } from "./policy.ts";
 export {
   ACTION_CRITERIA,

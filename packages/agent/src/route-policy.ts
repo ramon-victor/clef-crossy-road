@@ -67,6 +67,7 @@ export function routePolicy(
         if (step) {
           return {
             action: step.action,
+            ...(step.preview ? { preview: step.preview } : {}),
             source: "executor",
             note: step.note,
             notice: step.notice,
@@ -90,6 +91,7 @@ export function routePolicy(
                 ),
               }),
           action: act.action,
+          ...(act.preview ? { preview: act.preview } : {}),
           source: "model",
           note: `model chose ${chosen.maneuver}; ${note}`,
           notice: { kind: "model", maneuver: chosen.maneuver, step: notice },

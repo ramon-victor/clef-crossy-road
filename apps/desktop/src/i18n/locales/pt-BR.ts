@@ -1,6 +1,11 @@
 import type { Catalog } from "./en.ts";
 
 export const ptBR = {
+  "compass.now": "Agora: {{step}}",
+  "compass.chosen": "Clef escolheu: {{move}}",
+  "compass.path": "Caminho previsto",
+  "compass.blocked": "Movimento bloqueado",
+  "compass.idle": "Aguardando a próxima ação",
   "windows.openControls": "Abrir janela de controles",
   "windows.openControlsHelp": "Abrir controles (F2)",
   "windows.paused": "Pausado · Espaço para retomar",

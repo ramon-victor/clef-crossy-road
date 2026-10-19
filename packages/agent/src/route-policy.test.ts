@@ -193,7 +193,15 @@ describe("the route strategy through the Clef policy", () => {
       maneuver: "detour_right",
       controller: { kind: "walk", n: 1 },
     });
+    expect(first.preview?.steps.map((step) => step.action)).toEqual([
+      "hop_back",
+      "hop_right",
+      "hop_right",
+      "hop_forward",
+      "hop_forward",
+    ]);
     expect(second.source).toBe("executor");
+    expect(second.preview).toEqual(first.preview);
     expect(second.extra).toEqual({ controller: { kind: "walk", n: 2, left: expect.any(Number) } });
   });
 
@@ -217,6 +225,7 @@ describe("the route strategy through the Clef policy", () => {
     expect(episode.records.some((record) => record.source === "executor")).toBe(true);
     for (const record of episode.records) {
       expect(record.extra ?? {}).not.toHaveProperty("controller");
+      expect(record).not.toHaveProperty("preview");
     }
     // What a strategy reports for the benchmark is kept.
     expect(episode.records.find((record) => record.extra?.maneuver)?.extra).toMatchObject({

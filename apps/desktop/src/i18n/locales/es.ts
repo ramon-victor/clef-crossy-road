@@ -1,6 +1,11 @@
 import type { Catalog } from "./en.ts";
 
 export const es = {
+  "compass.now": "Ahora: {{step}}",
+  "compass.chosen": "Clef eligió: {{move}}",
+  "compass.path": "Camino previsto",
+  "compass.blocked": "Movimiento bloqueado",
+  "compass.idle": "Esperando la próxima acción",
   "windows.openControls": "Abrir ventana de controles",
   "windows.openControlsHelp": "Abrir controles (F2)",
   "windows.paused": "En pausa · Espacio para continuar",

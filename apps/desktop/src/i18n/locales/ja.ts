@@ -1,6 +1,11 @@
 import type { Catalog } from "./en.ts";
 
 export const ja = {
+  "compass.now": "現在：{{step}}",
+  "compass.chosen": "Clefの選択：{{move}}",
+  "compass.path": "予測経路",
+  "compass.blocked": "移動できません",
+  "compass.idle": "次のアクションを待機中",
   "windows.openControls": "操作ウィンドウを開く",
   "windows.openControlsHelp": "操作パネルを開く（F2）",
   "windows.paused": "一時停止中 · スペースキーで再開",

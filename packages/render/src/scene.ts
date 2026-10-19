@@ -11,6 +11,7 @@ import {
   WebGLRenderer,
 } from "three";
 import { type Assets, loadAssets } from "./assets.ts";
+import { type DecisionOverlay, DecisionOverlayView } from "./decision-overlay.ts";
 import {
   cameraTargetX,
   facingFor,
@@ -38,6 +39,7 @@ export interface ViewStats {
   rows: number;
   drawCalls: number;
   triangles: number;
+  decisionMarkers: number;
 }
 
 const SKY = 0x87c6ff;
@@ -52,6 +54,8 @@ export class GameView {
   private readonly camera: OrthographicCamera;
   private readonly world = new Group();
   private readonly hero = new Group();
+  private readonly decisionOverlay = new DecisionOverlayView();
+  private overlay: DecisionOverlay | null = null;
   private readonly heroBody: Group;
   private readonly rows = new Map<number, RowView>();
   private readonly assets: Assets;
@@ -110,6 +114,7 @@ export class GameView {
     this.heroBody.scale.setScalar(this.heroScale);
     this.hero.add(this.heroBody);
     this.world.add(this.hero);
+    this.world.add(this.decisionOverlay.group);
   }
 
   static async create(options: GameViewOptions): Promise<GameView> {
@@ -141,6 +146,11 @@ export class GameView {
     this.syncRows(snap, alpha);
     this.updateHero(snap, alpha);
     this.updateCamera(snap, dt);
+    this.decisionOverlay.update(this.overlay, snap, alpha);
+  }
+
+  setDecisionOverlay(overlay: DecisionOverlay | null): void {
+    this.overlay = overlay;
   }
 
   render(): void {
@@ -177,10 +187,16 @@ export class GameView {
 
   stats(): ViewStats {
     const info = this.renderer.info.render;
-    return { rows: this.rows.size, drawCalls: info.calls, triangles: info.triangles };
+    return {
+      rows: this.rows.size,
+      drawCalls: info.calls,
+      triangles: info.triangles,
+      decisionMarkers: this.decisionOverlay.visibleMarkers,
+    };
   }
 
   dispose(): void {
+    this.decisionOverlay.dispose();
     this.renderer.dispose();
   }
 

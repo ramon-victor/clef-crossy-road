@@ -31,6 +31,16 @@ describe("searchRoute: the way round, over the words alone", () => {
       "hop_forward",
     ]);
     expect(route?.first).toBe("hop_back");
+    expect(route?.preview).toEqual({
+      col: 0,
+      steps: [
+        { action: "hop_back", col: 0, dz: -1 },
+        { action: "hop_right", col: 1, dz: -1 },
+        { action: "hop_right", col: 2, dz: -1 },
+        { action: "hop_forward", col: 2, dz: 0 },
+        { action: "hop_forward", col: 2, dz: 1 },
+      ],
+    });
   });
 
   it("walks a long way to a lily pad, further than the first eight hops", () => {
@@ -384,6 +394,9 @@ describe("RouteExecutor: the manoeuvre in progress", () => {
     const act = executor.start("cross_ahead", world(rows, 0.7, true), emptyMemory());
     expect(act.action).toBe("stay");
     expect(act.step).toMatchObject({ kind: "wait", cell: "vehicle" });
+    expect(act.preview?.conditional).toBe(true);
+    expect(act.preview?.steps[0]?.col).toBeCloseTo(0.9);
+    expect(act.preview?.steps[1]).toEqual({ action: "hop_forward", col: 1, dz: 1 });
   });
 });
 

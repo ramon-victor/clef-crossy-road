@@ -8,6 +8,7 @@ import { ErrorMessage } from "./panel/ErrorMessage.tsx";
 import type { Session, SessionState } from "./session.ts";
 import { Compass } from "./theater/Compass.tsx";
 import { modelChoice } from "./theater/choice.ts";
+import { buildExecution, type ExecutionView } from "./theater/execution.ts";
 import { Glyph } from "./theater/Glyph.tsx";
 
 export interface GameCanvasProps {
@@ -38,6 +39,12 @@ export function GameCanvas(props: GameCanvasProps) {
   const compassRef = useRef<HTMLDivElement>(null);
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
   const [errorText, setErrorText] = useState("");
+  const [execution, setExecution] = useState<ExecutionView>({
+    action: null,
+    next: null,
+    blocked: false,
+    overlay: null,
+  });
   const latest = useRef(props);
   latest.current = props;
 
@@ -71,6 +78,8 @@ export function GameCanvas(props: GameCanvasProps) {
         let wasMoving = false;
         let wasAlive = true;
         let lastReport = last;
+        let executionKey = "";
+        const reducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)");
 
         const loop = (now: number) => {
           frameId = requestAnimationFrame(loop);
@@ -80,6 +89,22 @@ export function GameCanvas(props: GameCanvasProps) {
 
           const alpha = session.frame(dt);
           const snap = session.game.snapshot();
+          const live = session.state();
+          const executing = buildExecution(live, snap);
+          const key = `${live.episode}:${live.last?.index}:${executing.action}:${executing.next}:${executing.blocked}:${!!executing.overlay}:${latest.current.compass.on}`;
+          if (key !== executionKey) {
+            executionKey = key;
+            setExecution(executing);
+          }
+          const overlay = latest.current.compass.on ? executing.overlay : null;
+          view?.setDecisionOverlay(
+            overlay
+              ? {
+                  ...overlay,
+                  pulse: overlay.pulse && !reducedMotion?.matches,
+                }
+              : null,
+          );
           view?.update(snap, alpha, dt);
           view?.render();
 
@@ -213,6 +238,7 @@ export function GameCanvas(props: GameCanvasProps) {
         <Compass
           session={session}
           state={state}
+          execution={execution}
           anchorRef={compassRef}
           conversationOpen={props.compass.conversationOpen}
           onConversation={props.compass.onConversation}
