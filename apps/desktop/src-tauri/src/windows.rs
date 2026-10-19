@@ -90,25 +90,17 @@ struct Layout {
 fn layout(width: f64, height: f64, frame_width: f64, frame_height: f64) -> Layout {
     let margin = 16.0;
     let gap = 12.0;
-    let available = (width - margin * 2.0).max(1.0);
-    let controls_width = if available >= 640.0 + 360.0 + gap + frame_width * 2.0 {
-        360.0
-    } else {
-        320.0
-    };
-    let game_width = (available - controls_width - gap - frame_width * 2.0).clamp(640.0, 900.0);
-    let total = game_width + controls_width + gap + frame_width * 2.0;
-    let game_x = ((width - total) / 2.0).max(margin);
-    let controls_x = if total <= available {
-        game_x + game_width + frame_width + gap
-    } else {
-        // On a small display both windows remain reachable; the panel may overlap the game.
-        (width - controls_width - frame_width - margin).max(0.0)
-    };
-    let height = (height - margin * 2.0 - frame_height).clamp(480.0, 800.0);
-    let decisions_width = (width - margin * 2.0 - frame_width).clamp(400.0, 520.0);
-    let preferred_x = controls_x + controls_width + frame_width + gap;
-    let decisions_x = preferred_x.min((width - decisions_width - frame_width - margin).max(0.0));
+    let available = (width - margin * 2.0 - frame_width).max(1.0);
+    let game_width = 640.0_f64.min(available);
+    let controls_width = 320.0_f64.min(available);
+    let decisions_width = 360.0_f64.min(available);
+    let game_x = ((width - game_width - frame_width) / 2.0).max(0.0);
+    let controls_x = (game_x - gap - controls_width - frame_width)
+        .max(margin)
+        .min((width - controls_width - frame_width).max(0.0));
+    let decisions_x = (game_x + game_width + frame_width + gap)
+        .min((width - decisions_width - frame_width - margin).max(0.0));
+    let height = (height - margin * 2.0 - frame_height).max(1.0).min(720.0);
     Layout {
         decisions_width,
         decisions_x,
@@ -117,7 +109,7 @@ fn layout(width: f64, height: f64, frame_width: f64, frame_height: f64) -> Layou
         height,
         game_x,
         controls_x,
-        y: margin,
+        y: margin.min((height / 2.0).max(0.0)),
     }
 }
 
@@ -144,6 +136,16 @@ pub fn setup(app: &tauri::App) -> tauri::Result<()> {
         );
         let x = f64::from(area.position.x) / scale;
         let y = f64::from(area.position.y) / scale;
+        for (window, width) in [
+            (&game, placement.game_width),
+            (&controls, placement.controls_width),
+            (&decisions, placement.decisions_width),
+        ] {
+            window.set_min_size(Some(LogicalSize::new(
+                width,
+                480.0_f64.min(placement.height),
+            )))?;
+        }
         game.set_size(LogicalSize::new(placement.game_width, placement.height))?;
         controls.set_size(LogicalSize::new(placement.controls_width, placement.height))?;
         game.set_position(LogicalPosition::new(x + placement.game_x, y + placement.y))?;
@@ -160,7 +162,6 @@ pub fn setup(app: &tauri::App) -> tauri::Result<()> {
             y + placement.y,
         ))?;
     }
-    controls.show()?;
     game.show()?;
     game.set_focus()?;
     Ok(())
@@ -171,19 +172,20 @@ mod tests {
     use super::*;
 
     #[test]
-    fn places_both_windows_side_by_side_when_they_fit() {
+    fn opens_compact_windows_on_each_side_of_the_centered_game() {
         let p = layout(1440.0, 900.0, 8.0, 32.0);
-        assert_eq!(p.game_width, 900.0);
-        assert_eq!(p.controls_width, 360.0);
-        assert_eq!(p.height, 800.0);
-        assert!(p.controls_x >= p.game_x + p.game_width + 8.0);
+        assert_eq!(p.game_width, 640.0);
+        assert_eq!(p.controls_width, 320.0);
+        assert_eq!(p.decisions_width, 360.0);
+        assert_eq!(p.height, 720.0);
+        assert!(p.controls_x + p.controls_width + 8.0 <= p.game_x);
         assert!(p.controls_x + p.controls_width + 8.0 <= 1440.0);
     }
 
     #[test]
     fn shrinks_the_game_to_the_monitor_work_area() {
         let p = layout(1180.0, 728.0, 8.0, 32.0);
-        assert_eq!(p.game_width, 760.0);
+        assert_eq!(p.game_width, 640.0);
         assert_eq!(p.height, 664.0);
         assert!(p.controls_x + p.controls_width + 8.0 <= 1180.0);
     }
@@ -202,9 +204,25 @@ mod tests {
         // 1366x768 and a 1920x1080 screen at 150%, excluding taskbar space.
         for (width, height) in [(1366.0, 728.0), (1280.0, 680.0), (1920.0, 1040.0)] {
             let p = layout(width, height, 8.0, 32.0);
-            assert!(p.decisions_width >= 400.0);
+            assert_eq!(p.decisions_width, 360.0);
             assert!(p.decisions_x >= 0.0);
             assert!(p.decisions_x + p.decisions_width + 8.0 <= width);
+            assert!(p.y + p.height + 32.0 <= height);
+        }
+    }
+
+    #[test]
+    fn fits_each_window_even_when_scaling_leaves_less_than_the_usual_minimum() {
+        for (width, height) in [(600.0, 440.0), (320.0, 360.0), (960.0, 500.0)] {
+            let p = layout(width, height, 8.0, 32.0);
+            for (x, w) in [
+                (p.game_x, p.game_width),
+                (p.controls_x, p.controls_width),
+                (p.decisions_x, p.decisions_width),
+            ] {
+                assert!(x >= 0.0);
+                assert!(x + w + 8.0 <= width);
+            }
             assert!(p.y + p.height + 32.0 <= height);
         }
     }

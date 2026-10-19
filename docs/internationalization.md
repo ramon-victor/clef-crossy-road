@@ -6,7 +6,7 @@ How the seven UI languages are selected, how translation stays separate from mod
 
 The UI has local catalogs for English (`en`), Brazilian Portuguese (`pt-BR`), Spanish (`es`), French (`fr`), German (`de`), Japanese (`ja`) and Simplified Chinese (`zh-Hans`). No translation service or runtime download is involved.
 
-**Setup → Language** changes presentation immediately without rebuilding the session, policies or canvas. The preference is saved under `ccr.locale`; blocked storage leaves it active only until reload. **Automatic (system)** restores detection, whose result is also displayed. Languages use their own names, without flags.
+**Settings → Appearance and sound → Language** changes presentation immediately without rebuilding the session, policies or canvas. The preference is saved under `ccr.locale`; blocked storage leaves it active only until reload. **Automatic (system)** restores detection, whose result is also displayed. Languages use their own names, without flags.
 
 Tauri obtains the system BCP 47 locale through the OS plugin with only `os:allow-locale`. Browser development uses the first `navigator.languages` entry, falling back to `navigator.language`. Initial detection resolves before the UI mounts.
 
@@ -38,7 +38,7 @@ Each language has a fixed translator rather than mutating a global language sing
 
 `SessionState.errorInfo` allows an already displayed error to be translated again; `BridgeError` preserves classification across Rust/Vite, client and session. Inspector tabs use stable `data-tab` attributes so self-tests do not depend on English labels. CLI, reports and terminal logs remain English/ASCII. No dependencies or behavior were added to the deterministic core for localization.
 
-Only non-sensitive preferences use browser storage: `ccr.locale`, `ccr.theater`, `ccr.compass` and `ccr.theater.pace`. Credentials remain in the backend ([SECURITY.md](../SECURITY.md)).
+Only non-sensitive preferences use browser storage: `ccr.locale`, `ccr.theater`, `ccr.compass` and `ccr.theater.pace`. Native auxiliary-window visibility is per run; `ccr.theater` controls the browser column only. Pinned decisions are retranslated from original records. Credentials remain in the backend ([SECURITY.md](../SECURITY.md)).
 
 ## Editing catalogs
 

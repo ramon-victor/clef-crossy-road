@@ -1,9 +1,9 @@
 import { useState } from "preact/hooks";
-import type { CredentialStatus } from "../bridge/types.ts";
+import type { BudgetStatus, CredentialStatus } from "../bridge/types.ts";
 import { useI18n } from "../i18n/provider.tsx";
 import { parseSeedText } from "../seed.ts";
 import type { SessionState, Timing } from "../session.ts";
-import { PACES, type Pace } from "../theater/preference.ts";
+import { BudgetCard } from "./BudgetCard.tsx";
 import { LanguageSelect } from "./LanguageSelect.tsx";
 
 const SPEEDS = [0.5, 1, 2, 4];
@@ -13,130 +13,90 @@ export interface SetupCardProps {
   state: SessionState;
   autoRestart: boolean;
   credentials: CredentialStatus | null;
+  budget: BudgetStatus | null;
+  soundOn: boolean;
   configuring: boolean;
   onConfigure(): void;
   onTiming(timing: Timing): void;
-  /** How long a model's answer stands before the chicken moves; null for a player that asks no model. */
-  pace: Pace | null;
-  onPace(pace: Pace): void;
   onSpeed(speed: number): void;
   onSeed(seed: number): void;
   onAutoRestart(on: boolean): void;
+  onSound(on: boolean): void;
 }
 
-export function SetupCard({
-  state,
-  autoRestart,
-  credentials,
-  configuring,
-  onConfigure,
-  onTiming,
-  pace,
-  onPace,
-  onSpeed,
-  onSeed,
-  onAutoRestart,
-}: SetupCardProps) {
+/** Settings have no decision telemetry; account usage belongs with the account. */
+export function SetupCard(props: SetupCardProps) {
+  const { state } = props;
   const { t, number } = useI18n();
   const [seedText, setSeedText] = useState("");
-  const timing = t(state.human ? "setup.human" : `setup.${state.timing}`);
   return (
-    <details class="card setup">
-      <summary>
-        <span class="setup-label">{t("setup.title")}</span>
-        <span class="setup-current">
-          {t("setup.summary", { timing, speed: state.speed, seed: String(state.seed) })}
-        </span>
-      </summary>
-      <div class="setup-body">
-        <LanguageSelect />
-        {!state.human && (
-          <fieldset class="segmented">
-            <legend>{t("setup.timing")}</legend>
-            {TIMINGS.map((timingOption) => (
+    <>
+      <details class="card setup" open>
+        <summary>{t("settings.game")}</summary>
+        <div class="setup-body">
+          {!state.human && (
+            <fieldset class="segmented">
+              <legend>{t("setup.timing")}</legend>
+              {TIMINGS.map((timing) => (
+                <button
+                  type="button"
+                  key={timing}
+                  class={state.timing === timing ? "on" : ""}
+                  aria-pressed={state.timing === timing}
+                  onClick={() => props.onTiming(timing)}
+                >
+                  {t(`setup.${timing}`)}
+                </button>
+              ))}
+            </fieldset>
+          )}
+          <fieldset class="speeds">
+            <legend>{t("setup.speed")}</legend>
+            {SPEEDS.map((speed) => (
               <button
                 type="button"
-                key={timingOption}
-                class={state.timing === timingOption ? "on" : ""}
-                aria-pressed={state.timing === timingOption}
-                onClick={() => onTiming(timingOption)}
-                title={t(`setup.${timingOption}Help`)}
+                key={speed}
+                class={state.speed === speed ? "on" : ""}
+                aria-pressed={state.speed === speed}
+                onClick={() => props.onSpeed(speed)}
               >
-                {t(`setup.${timingOption}`)}
+                {number(speed)}×
               </button>
             ))}
           </fieldset>
-        )}
-        {pace !== null && (
-          <fieldset class="segmented" aria-describedby="pace-help">
-            <legend>{t("setup.pace")}</legend>
-            {PACES.map((option) => (
-              <button
-                type="button"
-                key={option}
-                class={pace === option ? "on" : ""}
-                aria-pressed={pace === option}
-                disabled={state.timing !== "step"}
-                onClick={() => onPace(option)}
-              >
-                {t(`setup.pace.${option}`)}
+          <form
+            onSubmit={(event) => {
+              event.preventDefault();
+              const seed = parseSeedText(seedText);
+              if (seed !== undefined) {
+                props.onSeed(seed);
+                setSeedText("");
+              }
+            }}
+          >
+            <label class="field-label" for="map-seed">
+              {t("setup.seed")}
+            </label>
+            <div class="seed">
+              <input
+                id="map-seed"
+                class="input"
+                inputMode="numeric"
+                placeholder={String(state.seed)}
+                value={seedText}
+                onInput={(event) => setSeedText(event.currentTarget.value)}
+              />
+              <button type="submit" class="btn small">
+                {t("setup.go")}
               </button>
-            ))}
-          </fieldset>
-        )}
-        {pace !== null && (
-          <p id="pace-help" class="hint">
-            {state.timing === "step" ? t("setup.paceHelp") : t("setup.paceStepOnly")}
-          </p>
-        )}
-        <fieldset class="speeds">
-          <legend>{t("setup.speed")}</legend>
-          {SPEEDS.map((speed) => (
-            <button
-              type="button"
-              key={speed}
-              class={state.speed === speed ? "on" : ""}
-              aria-pressed={state.speed === speed}
-              onClick={() => onSpeed(speed)}
-            >
-              {number(speed)}×
-            </button>
-          ))}
-        </fieldset>
-        <form
-          onSubmit={(event) => {
-            event.preventDefault();
-            const seed = parseSeedText(seedText);
-            if (seed !== undefined) {
-              onSeed(seed);
-              setSeedText("");
-            }
-          }}
-        >
-          <label class="field-label" for="map-seed">
-            {t("setup.seed")}
-          </label>
-          <div class="seed">
-            <input
-              id="map-seed"
-              class="input"
-              inputMode="numeric"
-              placeholder={String(state.seed)}
-              value={seedText}
-              onInput={(event) => setSeedText(event.currentTarget.value)}
-            />
-            <button type="submit" class="btn small">
-              {t("setup.go")}
-            </button>
-          </div>
-        </form>
-        <div>
+            </div>
+          </form>
           <label class="check">
             <input
               type="checkbox"
-              checked={autoRestart}
+              checked={props.autoRestart}
               aria-describedby="auto-restart-help"
-              onChange={(event) => onAutoRestart(event.currentTarget.checked)}
+              onChange={(event) => props.onAutoRestart(event.currentTarget.checked)}
             />
             {t("setup.autoRestart")}
           </label>
@@ -144,22 +104,42 @@ export function SetupCard({
             {t("setup.autoRestartHelp")}
           </p>
         </div>
-        <div class="connection-setting">
-          <div>
-            <strong>Cloudflare</strong>
-            <p class="hint">
-              {credentials === null
-                ? t("setup.statusUnavailable")
-                : credentials.configured
-                  ? t("setup.configured")
-                  : t("setup.notConfigured")}
-            </p>
-          </div>
-          <button type="button" class="btn small" onClick={onConfigure} disabled={configuring}>
-            {t(configuring ? "windows.pausing" : "setup.configure")}
-          </button>
+      </details>
+      <details class="card setup appearance-settings">
+        <summary>{t("settings.appearance")}</summary>
+        <div class="setup-body">
+          <LanguageSelect />
+          <label class="check">
+            <input
+              type="checkbox"
+              checked={props.soundOn}
+              onChange={(event) => props.onSound(event.currentTarget.checked)}
+            />
+            {t("footer.sound")}
+          </label>
         </div>
-      </div>
-    </details>
+      </details>
+      <details class="card setup account-settings">
+        <summary>Cloudflare</summary>
+        <div class="setup-body">
+          <div class="connection-setting">
+            <p class="hint">
+              {props.credentials === null
+                ? t("setup.statusUnavailable")
+                : t(props.credentials.configured ? "setup.configured" : "setup.notConfigured")}
+            </p>
+            <button
+              type="button"
+              class="btn small"
+              onClick={props.onConfigure}
+              disabled={props.configuring}
+            >
+              {t(props.configuring ? "windows.pausing" : "setup.configure")}
+            </button>
+          </div>
+          <BudgetCard budget={props.budget} />
+        </div>
+      </details>
+    </>
   );
 }

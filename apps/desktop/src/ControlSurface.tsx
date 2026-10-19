@@ -9,21 +9,13 @@ interface Props {
   data: ControlsData;
   bridge: Bridge;
   send: SendControl;
-  onInspect(): void;
   externalError?: string | null;
   /** Changes when the native panel is hidden, so write-only forms are discarded. */
   hiddenVersion?: number;
 }
 
 /** Shared by the browser sidebar and the native controls window. */
-export function ControlSurface({
-  data,
-  bridge,
-  send,
-  onInspect,
-  hiddenVersion,
-  externalError,
-}: Props) {
+export function ControlSurface({ data, bridge, send, hiddenVersion, externalError }: Props) {
   const { t } = useI18n();
   const [configuring, setConfiguring] = useState(false);
   const [error, setError] = useState<"windows.unreachable" | "windows.pauseFailed" | null>(null);
@@ -70,9 +62,6 @@ export function ControlSurface({
         onStep={() => dispatch({ type: "step" })}
         onRetry={() => dispatch({ type: "retry" })}
         onNewMap={() => dispatch({ type: "newMap" })}
-        onInspect={onInspect}
-        onTheater={() => dispatch({ type: "theater", enabled: true })}
-        onPace={(pace) => dispatch({ type: "pace", pace })}
         onSeed={(seed) => dispatch({ type: "seed", seed })}
         onSound={(enabled) => dispatch({ type: "sound", enabled })}
         onAutoRestart={(enabled) => dispatch({ type: "autoRestart", enabled })}

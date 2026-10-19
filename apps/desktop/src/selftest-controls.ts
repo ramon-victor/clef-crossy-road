@@ -35,7 +35,7 @@ export async function runControlsSelfTest(): Promise<() => void> {
           }
           report = { language: document.documentElement.lang };
         } else if (payload.action === "settings") {
-          const setup = document.querySelector<HTMLDetailsElement>("details.setup");
+          const setup = document.querySelector<HTMLDetailsElement>("details.account-settings");
           if (setup) setup.open = true;
           document.querySelector<HTMLButtonElement>(".connection-setting button")?.click();
           for (let i = 0; i < 30 && !document.querySelector(".connection-dialog"); i++)
@@ -58,6 +58,8 @@ export async function runControlsSelfTest(): Promise<() => void> {
             paused:
               document.querySelector(".controls button")?.getAttribute("aria-pressed") === "true",
             conversationAbsent: document.querySelector(".theater") === null,
+            decisionsAbsent:
+              document.querySelector(".decision, .stats, .inspector, #pace") === null,
             language: document.documentElement.lang,
           };
         }

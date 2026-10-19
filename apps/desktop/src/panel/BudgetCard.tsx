@@ -4,11 +4,9 @@ import { useI18n } from "../i18n/provider.tsx";
 
 export interface BudgetCardProps {
   budget: BudgetStatus | null;
-  /** Neurons charged during the current game. */
-  gameNeurons: number;
 }
 
-export function BudgetCard({ budget, gameNeurons }: BudgetCardProps) {
+export function BudgetCard({ budget }: BudgetCardProps) {
   const { t, number } = useI18n();
   const exhausted = budget !== null && budget.spent >= budget.limit;
   return (
@@ -49,13 +47,6 @@ export function BudgetCard({ budget, gameNeurons }: BudgetCardProps) {
       ) : (
         <p class="hint">{t("common.unavailable")}</p>
       )}
-      <p class="hint">
-        {t("budget.game", {
-          value: gameNeurons,
-          minimumFractionDigits: 1,
-          maximumFractionDigits: 1,
-        })}
-      </p>
     </section>
   );
 }

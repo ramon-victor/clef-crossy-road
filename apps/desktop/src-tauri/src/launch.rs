@@ -57,9 +57,9 @@ pub fn selftest_window_action(app: AppHandle, action: &str) -> CommandResult<()>
         }
         "small-decisions" | "restore-decisions-size" => {
             let (width, height) = if action == "small-decisions" {
-                (400.0, 480.0)
+                (360.0, 480.0)
             } else {
-                (520.0, 800.0)
+                (360.0, 720.0)
             };
             app.get_webview_window("decisions")
                 .ok_or_else(|| CommandError::new("decisions missing"))?

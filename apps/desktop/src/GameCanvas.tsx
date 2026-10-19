@@ -189,6 +189,23 @@ export function GameCanvas(props: GameCanvasProps) {
         </div>
       )}
 
+      {state.error && status === "ready" && (
+        <section class="game-error">
+          <strong>{t("error.stopped")}</strong>
+          <ErrorMessage info={{ code: state.errorInfo?.code ?? "unknown", detail: "" }} />
+          <div class="game-error-actions">
+            {props.onShowControls && (
+              <button type="button" class="btn small" onClick={props.onShowControls}>
+                {t("setup.configure")}
+              </button>
+            )}
+            <button type="button" class="btn small" onClick={props.compass.onConversation}>
+              {t("decisions.details")}
+            </button>
+          </div>
+        </section>
+      )}
+
       <div ref={bubbleRef} class="bubble-anchor">
         {showBubble && last && (
           <div class="bubble" key={last.index}>

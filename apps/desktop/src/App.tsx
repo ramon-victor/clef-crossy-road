@@ -82,7 +82,9 @@ export function App({ desktop = false }: { desktop?: boolean }) {
   const [decisionsVisible, setDecisionsShown] = useState(false);
   const [windowFailed, setWindowFailed] = useState(false);
   // What the person chose for the Theater, or null if they never did (then a model player opens it).
-  const [theaterChoice, setTheaterChoice] = useState<boolean | null>(() => readFlag("theater"));
+  const [theaterChoice, setTheaterChoice] = useState<boolean | null>(() =>
+    desktop ? false : readFlag("theater"),
+  );
   const [compassChoice, setCompassChoice] = useState<boolean | null>(() => readFlag("compass"));
   const [pace, setPaceState] = useState<Pace>(() => readPace());
   const viewRef = useRef<GameView | null>(null);
@@ -195,7 +197,7 @@ export function App({ desktop = false }: { desktop?: boolean }) {
   const setTheater = useCallback(
     (on: boolean) => {
       setTheaterChoice(on);
-      writeFlag("theater", on);
+      if (!desktop) writeFlag("theater", on);
       // Browser hiding unmounts the conversation, so its consumed request must not replay on reopen.
       if (!desktop && !on) setInspectVersion(0);
     },
@@ -226,7 +228,8 @@ export function App({ desktop = false }: { desktop?: boolean }) {
     if (persist) writePace(next);
   }, []);
   // Only someone watching a model gets the wait that leaves time to read an answer; everyone else plays at full speed.
-  const watching = (showTheater || showCompass) && selected?.kind === "model";
+  const watching =
+    ((desktop ? decisionsVisible : showTheater) || showCompass) && selected?.kind === "model";
   useEffect(() => {
     session.setLinger(watching ? PACE_MS[pace] : 0);
   }, [session, watching, pace]);
@@ -538,16 +541,12 @@ export function App({ desktop = false }: { desktop?: boolean }) {
           inspectVersion={inspectVersion}
           onPause={() => void execute({ type: "pause" })}
           minimized={minimized}
+          pace={selected?.kind === "model" ? pace : null}
+          onPace={setPace}
+          fps={fps}
         />
       )}
-      {!desktop && (
-        <ControlSurface
-          data={controls}
-          bridge={bridge}
-          send={execute}
-          onInspect={() => void openDecisions(true)}
-        />
-      )}
+      {!desktop && <ControlSurface data={controls} bridge={bridge} send={execute} />}
     </div>
   );
 }

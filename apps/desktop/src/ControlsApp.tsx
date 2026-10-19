@@ -104,10 +104,6 @@ export function ControlsApp() {
             setFailed(false);
             return connection.send(command);
           }}
-          onInspect={() => {
-            setFailed(false);
-            void connection.send({ type: "inspect" }).catch(() => setFailed(true));
-          }}
           hiddenVersion={hiddenVersion}
           externalError={failed || syncFailed ? t("windows.unreachable") : null}
         />
