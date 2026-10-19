@@ -9,13 +9,15 @@ How to run Clef Crossy Road in the browser or its three Tauri windows, who can p
 | Browser | `pnpm install`, then `pnpm run dev` | Serves http://localhost:5173 (fixed port, Ctrl+C stops it). The first run downloads Evan Bacon's models, audio and font with `git` (internet required) and reuses them afterwards. Opens on the free **look-ahead** player: no credentials, cache or Rust needed. |
 | Desktop (development) | `pnpm run dev:desktop` | Prepares the assets and runs `tauri dev`, which starts its own Vite server and a window with hot reload. Do not run it together with `pnpm run dev`: both use port 5173. |
 | Desktop (release) | `pnpm install`, `node scripts/fetch-assets.mjs`, `pnpm --filter @ccr/desktop build`, then `cd apps/desktop && pnpm tauri build --no-bundle` | Produces `apps/desktop/src-tauri/target/release/clef-crossy-road.exe`. |
-| Launchers | `play.cmd`, `play-clef.cmd` | Windows `.cmd` files for the release build. `play.cmd` opens the app and prints in its terminal what the model is sent (`CCR_LOG=full` unless already set). `play-clef.cmd` does the same on Clef-flash, seed 6. |
+| Launchers | `play.cmd`, `play-clef.cmd` | Windows `.cmd` files for the release build. `play.cmd` opens the app and prints in its terminal what the model is sent (`CCR_LOG=full` unless already set). `play-clef.cmd` does the same on Clef-flash, seed 7. |
 
 **Platform.** The desktop app needs Node 24+, pnpm 12.14.0 and Rust with the [Tauri prerequisites](https://v2.tauri.app/start/prerequisites/) for the platform (MSVC C++ build tools and WebView2 on Windows). Desktop launch has been verified on Windows, and backend tests have also run on Linux. CI checks TypeScript and the web build on Windows, Linux and macOS; this does not establish native UI support on every platform. The launchers are Windows scripts.
 
-Desktop uses three independent native windows: the game starts at 900×800 (minimum 640×480), controls at 360×800 (minimum 320×480), and decisions at 520×800 (minimum 400×480). Each can be moved and resized separately; initial placement stays inside the monitor work area, overlapping when necessary. Browser development keeps the game and panel together.
+Desktop starts with only the game visible. Settings and decisions are created hidden and open from the two matching game buttons: **F2** for settings, **T** for decisions, and **I** for the latest exact model request. An earlier visibility preference never opens an auxiliary window at native startup. Browser development keeps an integrated layout.
 
-Closing controls hides it and discards open dialogs and unsaved credential input; the game continues. **Open controls** or **F2** reopens it. The matching conversation button immediately below the game's controls button shows or hides the decisions window (**T**); **I** shows its latest answered request as inline technical details. Closing decisions hides it and remembers that preference, keeping its current reading position. Closing the game exits all windows. Minimizing the game pauses it; restoring requires an explicit resume. Changing focus, hiding either auxiliary window or reading the conversation does not pause play. Decisions has its own **Pause/Resume** control. Only the game window owns a session and model client; reopening controls never starts another game.
+Initial client widths are compact: game 640, settings 320, decisions 360 logical pixels. Height is at most 720 logical pixels. Placement uses the monitor work area, scale factor and window decorations; effective minimum sizes shrink if the available work area is smaller. The game is centered, settings sits to its left and decisions to its right when possible. Windows overlap within the work area when necessary. Hiding and reopening preserves manual positioning and resizing within a run.
+
+Closing an auxiliary window hides it. Closing settings also discards dialogs and unsaved credential input. Closing the game exits all windows. Minimizing the game pauses it until explicit resume; changing focus and reading pinned decisions do not pause the game. Model errors remain visible in the game even with both auxiliaries hidden. Only the game owns a session and model client.
 
 ## pnpm setup
 
@@ -39,11 +41,11 @@ Pick a player under **Who plays**. The info button next to it shows the player's
 | Look-ahead, Always forward, Random | no | References: a 4-hop search over the simulator, the floor, and uniform random. |
 | **Custom** | yes, on a cache miss | Appears only when `CCR_PLAYER` names another model combination (see below). Uses the same request cache as other model players. |
 
-The desktop app opens on **Clef-flash** at the first cached map (seed 6). The browser opens on **look-ahead**. The other benchmark conditions are not standing entries; see [benchmark.md](benchmark.md) and [results.md](results.md).
+The desktop app opens on **Clef-flash** at the first cached map (seed 7). The browser opens on **look-ahead**. The other benchmark conditions are not standing entries; see [benchmark.md](benchmark.md) and [results.md](results.md).
 
 ## Replays, cache and cost
 
-`CLEF_CACHED_SEEDS` (seeds 6-8) lists maps whose Clef-flash decisions were recorded by the benchmark, and **New map** walks through them before choosing a random seed. A replay is free **only if the local cache `runs/cache/clef.ndjson` exists**. That file is gitignored, so **a fresh clone has no cache**: the first Clef game on any seed asks the model, spends neurons and needs credentials (**Setup > Cloudflare > Configure**, or `CF_API_TOKEN` and `CF_ACCOUNT_ID` in `.env`). Without them the desktop default stops with an error card. Cost depends on request size and game length; the platform lookup adds a fourth question. Current and historical replays are distinguished in [results.md](results.md#current-controller-revision).
+`CLEF_CACHED_SEEDS` (range `7-7`, only seed 7) lists maps whose complete Clef-flash replay was verified against the current controller, and **New map** walks through them before choosing a random seed. Seeds 6 and 8 need new answers after the platform-exit fix and are no longer listed. A replay is free **only if the local cache `runs/cache/clef.ndjson` exists**. That file is gitignored, so **a fresh clone has no cache**: the first Clef game on any seed asks the model, spends neurons and needs credentials (**Setup > Cloudflare > Configure**, or `CF_API_TOKEN` and `CF_ACCOUNT_ID` in `.env`). Without them the desktop default stops with an error card. Cost depends on request size and game length; the platform lookup adds a fourth question. Current and historical replays are distinguished in [results.md](results.md#current-controller-revision).
 
 The free path is look-ahead, the other references, or You. A cached replay also only holds while the prompts and the controller are unchanged since the decisions were recorded.
 
@@ -66,28 +68,33 @@ Movement and timing keys are ignored while a field, button, expander or dialog h
 | T | Show or hide the independent decisions window (conversation column in browser development) |
 | Esc | Close the inspector, the info popover or the Cloudflare dialog |
 
-## The panel
+## Settings and decisions
 
-| Area | What it shows |
+Settings contains the player selector and game controls, followed by three groups: **Game** (timing, speed, map seed and auto-restart), **Appearance and sound** (language and audio), and **Cloudflare** (write-only credentials and daily account usage). Decision telemetry and episode cost appear only in decisions. Opening credential input first requires an acknowledged pause; saving never calls the API.
+
+Decisions has three tabs:
+
+| Tab | What it shows |
 |---|---|
-| Top | Player selector, **Pause**, **Step**, **Retry**, **New map**. |
-| **Setup** (collapsed) | Language; timing (**Step** or **Real-time**); speed 0.5x-4x; model reading pace (**Live**, **Relaxed**, **Slow**); map seed; **Auto-restart**; **Cloudflare > Configure**. The credential form opens only after the game confirms a pause, never shows saved values, and saving does not call the API. |
-| Last decision | The chosen maneuver, the controller's actual step, probability bars, recent moves and **Details**. For `route`, the bars summarize the routing branch selected by the model; the benchmark records joint probabilities instead. These are not a direct model vote over moves. Controller-only steps report no probabilities. `confidence` remains labelled undocumented. |
-| Counters | Rows, Decisions, Latency, Tokens, Invalid, Cached. |
-| Budget | Neurons used today (UTC) against the limit, a meter, the cost of the current game, and a notice once the limit is reached. A cached decision costs 0. |
-| Footer | Sound toggle and frames per second. |
-| **What it read** (I) | The request exactly as the policy sent it: **State**, **Question**, **Options** and **Answer** (probabilities, tokens, neurons, latency, cache). Open a round’s **Technical details** to inspect or copy its exact request as JSON. Details include only that round’s controller steps. After controller steps it still shows the last model request. |
-| End of game | Cause of death, rows crossed, best of the session, **Retry same map** and **New map**. An AI player that goes 60 decisions without a new row is stopped and stops spending. |
+| **Now** | One current action, a schematic isometric chicken and intended direction, the model's chosen maneuver, a short controller explanation and the answers used for this move. The sketch represents recorded actions rather than an inferred safe route. |
+| **History** | The six retained consultations, newest first. Selecting one pins its original records and returns to the visual explanation. |
+| **Details** | All question answers and probabilities, unused-answer reasons, controller steps, episode statistics and neurons, rendering FPS, compass toggle, and exact **State / Question / Options / Answer** with JSON copy. Controller steps belong only to the selected consultation. |
 
-**Auto-restart** starts a new map 2.2 s after a game ends, but only for free reference players. A player that calls the model never restarts by itself, so a forgotten window cannot use up the day's budget.
+**Pin this move** freezes the explanation; **Back to live** follows current records again. Opening History or Details also pins reading. Scrolling does not change reading mode. The game keeps running independently; **Pause game** is explicit. A new episode, player or map clears the pinned state. Changing language retranslates original records without rewriting model input. History and pinned snapshots are bounded.
 
 The compass keeps its pixel-art cross and highlights **only the current action**: pause while waiting, then the actual hop when it starts. Other directions stay subdued; probabilities remain in the decisions window. The caption puts “Now” or “Next” first, with the chosen maneuver as secondary context. Held and queued answers are labelled “Next”; blocked moves never look like executed hops. A countdown on the chicken shows how soon a moving platform carries it past the world edge.
 
-A subtle **Predicted path** connects the remaining planned destinations on the ground. Gold marks the executing destination; cyan marks the forecast. A crossing's continuation is dashed while waiting for a gap. The controller replans after every step, so the path can change; it is not a guarantee that the whole maneuver will finish. Completed segments disappear, and a refusal shows only its authorized step. Delayed forecasts that no longer match the current origin are hidden. **C** toggles the arrows and path together. Game pause freezes effects, reduced-motion preferences disable pulses, and visual effects never delay a move.
+A subtle **Predicted path** connects the remaining planned destinations on the ground. Gold marks the executing destination; cyan marks the forecast. A crossing's continuation is dashed while waiting for a gap. The controller replans after every step, so the path can change; it is not a guarantee that the whole maneuver will finish. Completed segments disappear, and a one-step refusal shows only its authorized step. Retained emergency exits show their full remaining route. Delayed forecasts that no longer match the current origin are hidden. **C** toggles the arrows and path together. Game pause freezes effects, reduced-motion preferences disable pulses, and visual effects never delay a move.
 
-The conversation lives in its own desktop window. Each round separates the game’s description, the model’s answers and chosen maneuver, and the controller’s actual actions. A held answer is marked as waiting for reading time before its action is sent to the game. Earlier rounds are expandable; alternative answers and their probabilities are collapsed by default. Percentages describe answers to questions, not survival chances. The session retains six model consultations plus the current request. Scrolling up, expanding an old round or opening technical details freezes a bounded reading snapshot; **Back to live** resumes following new rounds. The original request remains available while reading even after it leaves the live buffer. Starting a new game clears the snapshot. The window opens for a model player unless a saved preference says otherwise; automatic opening keeps focus on the game. Reading pace delays applying a model answer only in step timing, where the world is already paused; controller steps are never held for reading.
+The main visual distinguishes what the model chose from the action the controller actually sent: choosing forward can mean waiting for a vehicle first. A held answer is shown as ready and omitted from sent actions, while its exact request remains inspectable. Earlier consultations keep their recorded action when the live game pauses, stops or ends. Controller steps make no new model call. Alternative-answer percentages are available under Details and are not survival probabilities. Unknown metrics remain unavailable; cached latency is labelled as the original consultation's latency.
 
-**Setup → Language** selects English, Brazilian Portuguese, Spanish, French, German, Japanese or Simplified Chinese. Automatic selection follows the system/browser, with English fallback. Changes reach all three windows without restarting the session. Prompts, inspector JSON, CLI and logs stay in English. See [internationalization.md](internationalization.md).
+Reading pace is in the decisions footer (**Live**, **Relaxed**, **Slow**). It delays applying model answers only in step timing, where the world already waits. Controller steps are never delayed for reading. Pinning affects presentation only. Reference players and humans have distinct states with no manufactured model consultations.
+
+**Auto-restart** starts a new map 2.2 s after a free reference game ends. Model players never restart automatically. The game HUD retains score and end-of-game controls; an AI player that makes 60 decisions without a new row is stopped and stops spending.
+
+The visual panel uses the game's light palette, pixel glyphs, a local SVG illustration and brief CSS transitions. Reduced-motion preferences disable decorative movement. It has no additional WebGL renderer or runtime dependency.
+
+**Settings → Appearance and sound → Language** selects English, Brazilian Portuguese, Spanish, French, German, Japanese or Simplified Chinese. Automatic selection follows the system/browser, with English fallback. Changes reach all three windows without restarting the session. Prompts, inspector JSON, CLI and logs stay in English. See [internationalization.md](internationalization.md).
 
 ## Launch options
 

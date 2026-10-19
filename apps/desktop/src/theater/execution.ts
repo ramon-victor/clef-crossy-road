@@ -33,7 +33,7 @@ export function buildExecution(state: SessionState, snap: Snapshot): ExecutionVi
     !held &&
     log?.action === "stay" &&
     outcome === "stay" &&
-    snap.tick - log.tick < DECISION_TICKS;
+    (state.timing === "step" ? state.phase === "hopping" : snap.tick - log.tick < DECISION_TICKS);
   const action = moving ?? (waiting ? "stay" : null);
   const next = held ? log.action : snap.hero.queued;
   const blocked = !moving && !held && outcome === "blocked" && !state.asking;

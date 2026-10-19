@@ -121,6 +121,9 @@ export function DecisionsApp() {
           onPause={() => send({ type: "pause" })}
           minimized={data.minimized}
           inspectVersion={data.inspectVersion}
+          pace={data.pace}
+          onPace={(pace) => send({ type: "pace", pace })}
+          fps={data.fps}
         />
       ) : (
         <p class="connection-status" role="status">

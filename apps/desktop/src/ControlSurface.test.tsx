@@ -53,19 +53,21 @@ function data(): ControlsData {
 }
 
 describe("detached control surface", () => {
-  it("keeps decisions out of controls and routes pace changes to the owner", () => {
+  it("keeps decision telemetry, pace and episode cost out of settings", () => {
     const send = vi.fn<SendControl>(async () => {});
     const view = render(
       <LanguageProvider initial={{ preference: "en", detected: "en" }}>
-        <ControlSurface data={data()} bridge={{} as Bridge} send={send} onInspect={vi.fn()} />
+        <ControlSurface data={data()} bridge={{} as Bridge} send={send} />
       </LanguageProvider>,
     );
     const setup = view.container.querySelector<HTMLDetailsElement>("details.setup");
     if (setup) setup.open = true;
-    fireEvent.click(view.getByRole("button", { name: "Slow", exact: true }));
     expect(view.container.querySelector(".theater")).toBeNull();
     expect(view.container.querySelector(".inspector")).toBeNull();
-    expect(send.mock.calls.map(([command]) => command)).toEqual([{ type: "pace", pace: "slow" }]);
+    expect(view.container.querySelector(".decision, .stats")).toBeNull();
+    expect(view.queryByText("Slow", { exact: true })).toBeNull();
+    expect(view.queryByText(/This game:/)).toBeNull();
+    expect(send).not.toHaveBeenCalled();
   });
 
   it("does not reopen credential input after hiding while pause confirmation is pending", async () => {
@@ -74,7 +76,6 @@ describe("detached control surface", () => {
       new Promise<void>((resolve) => {
         acknowledge = resolve;
       });
-    const inspect = vi.fn();
     const snapshot = data();
     const surface = (hiddenVersion: number) => (
       <LanguageProvider initial={{ preference: "en", detected: "en" }}>
@@ -82,13 +83,12 @@ describe("detached control surface", () => {
           data={snapshot}
           bridge={{} as Bridge}
           send={send}
-          onInspect={inspect}
           hiddenVersion={hiddenVersion}
         />
       </LanguageProvider>
     );
     const view = render(surface(0));
-    const setup = view.container.querySelector<HTMLDetailsElement>("details.setup");
+    const setup = view.container.querySelector<HTMLDetailsElement>("details.account-settings");
     if (setup) setup.open = true;
     fireEvent.click(view.getByRole("button", { name: "Configure", exact: true }));
     expect(view.container.querySelector(".connection-dialog")).toBeNull();

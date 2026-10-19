@@ -114,13 +114,15 @@ The 2026-10-17 revision adds the platform clock, a fourth lookup while riding, e
 | Scripted reference | Seeds | Mean rows | Stall limit |
 |---|---|---|---|
 | `exec-route`, revised controller | 100 | 57.6 | 40 |
-| `exec-route`, revised controller | 100 | 61.6 | 60 (current default) |
+| `exec-route`, revised controller | 100 | 61.6 | 60 (still the default limit; before the exit fix below) |
 
 No paired interval was recorded for this revision. With limit 60, 24 games stalled, including 6 facing still water; deaths were car 20, edge 17 and train 3. These counts belong to the scripted reference, not Clef-flash.
 
 On the platform probe, asking whether `edge_in` equals `a_moment` produced `leaving` in 12 of 12 near-edge states and 0 of 12 other platform states; asking in general language whether the platform would carry the chicken out produced 3 of 12. This is a small rule-following probe, not a gameplay evaluation.
 
-Recorded Clef-flash replays on seeds 6 and 7 still end at 9 and 8 rows. Seed 8 rose from 39 to 115 rows within the 300-decision benchmark cap, or 183 when recorded to completion (671 decisions, `--max-decisions 1000`). Its 31 refused maneuvers pass to other model-ranked detours without a new request. The three complete replays have 272 cache hits and no new calls in the recorded validation. Do not combine that uncapped game with the historical seven-game benchmark mean.
+Before the platform-exit fix, recorded Clef-flash replays on seeds 6 and 7 ended at 9 and 8 rows. Seed 8 rose from 39 to 115 rows within the 300-decision benchmark cap, or 183 when recorded to completion (671 decisions, `--max-decisions 1000`). Its 31 refused maneuvers passed to other model-ranked detours without a new request. The three complete replays had 272 cache hits and no new calls in that validation. Do not combine that uncapped game with the historical seven-game benchmark mean.
+
+The 2026-10-19 platform-exit fix lets the controller transit a warned rail when the train's forecast permits it, retaining control until it reaches a resting place. This includes emergency exits begun after a refusal: review found and fixed a missing continuation that could return control on an intermediate warned rail. The seed 6 regression now leaves the log with two backward hops instead of waiting for an edge death; a separate regression crosses two warned rails during an emergency exit. This is controller help, with no prompt or observation change; the 61.6-row scripted result predates the fix. Cache-only checks of the reviewed controller (`--max-decisions 1000 --daily-neurons 0`, runs `platform-exit-review-20261019-s6`, `-s7`, `-s8`) completed seed 7 with 19 cache hits. Seeds 6 and 8 stopped on missing answers after 14 and 119 hits respectively; all three checks made zero API calls. The app now advertises only seed 7 as cached. No new full model evaluation was recorded.
 
 The updated controller and model still need a matched-seed evaluation. The formal 100-seed gate remains pending.
 
@@ -142,7 +144,7 @@ A Clef-flash round trip measured from Brazil is p50 about 326 ms with a small pr
 
 ## Limits and honesty
 
-- The last row of the historical table is **7 games** (interval [10.85, 35.71], games from 4 to 51 rows). Seeds 2 to 5 used a controller without `canSettle`, seeds 6 to 8 used the then-current revision. The scripted controller averaged 48.3 rows after that change versus 47.5 before it; no paired interval was recorded. Current cached seeds 6 to 8 include later controller changes, so they no longer reproduce that historical sample as a whole.
+- The last row of the historical table is **7 games** (interval [10.85, 35.71], games from 4 to 51 rows). Seeds 2 to 5 used a controller without `canSettle`, seeds 6 to 8 used the then-current revision. The scripted controller averaged 48.3 rows after that change versus 47.5 before it; no paired interval was recorded. Later controller changes mean those replays no longer reproduce the historical sample as a whole; only seed 7 remains a complete cached replay after the platform-exit fix.
 - The condition is the whole stack and is not evidence that the model plays zero-shot. Zero-shot results are the first rows of the headline table.
 - **The gate is pending.** It needs at least 100 seeds; the only intervals above zero come from 40 and 7 games.
 - One prompt text per condition (plus a minimal variant). The 27B JSON run records no mean; the `exec-route` interval is not recorded.

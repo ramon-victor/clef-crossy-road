@@ -120,7 +120,8 @@ describe("game window shortcuts", () => {
     );
   });
 
-  it("routes I and the HUD toggle to decisions, remembers close and restores a minimized window", async () => {
+  it("starts native decisions hidden despite an old preference, routes I and restores a minimized window", async () => {
+    localStorage.setItem("ccr.theater", "on");
     const view = render(
       <LanguageProvider initial={{ preference: "en", detected: "en" }}>
         <App desktop />
@@ -141,7 +142,8 @@ describe("game window shortcuts", () => {
     fireEvent.click(toggle);
     await waitFor(() => expect(toggle.getAttribute("aria-pressed")).toBe("true"));
     act(() => runtime.listeners.get("decisions:closed")?.({ payload: null }));
-    await waitFor(() => expect(localStorage.getItem("ccr.theater")).toBe("off"));
+    await waitFor(() => expect(toggle.getAttribute("aria-pressed")).toBe("false"));
+    expect(localStorage.getItem("ccr.theater")).toBe("on");
     expect(game.getAttribute("data-paused")).toBe("false");
     expect(showControls).not.toHaveBeenCalled();
     expect(runtime.bridge.run).not.toHaveBeenCalled();

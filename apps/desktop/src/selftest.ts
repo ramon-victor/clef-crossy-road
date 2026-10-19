@@ -102,6 +102,13 @@ async function controlsReport(
 }
 
 async function checkWindows(ctx: Context): Promise<Report> {
+  const initialControls = await Window.getByLabel("controls");
+  const initialDecisions = await Window.getByLabel("decisions");
+  const auxiliariesHiddenAtLaunch =
+    initialControls !== null &&
+    initialDecisions !== null &&
+    !(await initialControls.isVisible()) &&
+    !(await initialDecisions.isVisible());
   ctx.select("human");
   ctx.session.start(1);
   ctx.session.setPaused(false);
@@ -198,6 +205,7 @@ async function checkWindows(ctx: Context): Promise<Report> {
   return {
     windows: {
       gameHasNoPanel: document.querySelector(".panel") === null,
+      auxiliariesHiddenAtLaunch,
       initial,
       focusKeepsPlaying,
       settings,
@@ -423,8 +431,8 @@ function restorePreferences(saved: ReadonlyArray<readonly [string, string | null
 }
 
 /**
- * What shows live execution in the real window: the compass around the chicken (five moves, one active, a
- * caption) and the conversation column (a CLEF bubble whose options carry the model's pick). C and T hide
+ * What shows live execution in the real window: five compass moves, one active,
+ * a caption and the visual decision panel. C and T hide
  * and bring them back.
  */
 async function checkTheater(ctx: Context): Promise<Report> {
@@ -451,9 +459,10 @@ async function checkTheater(ctx: Context): Promise<Report> {
   const conversation = async () =>
     (await controlsReport("status", "decisions")).conversation as {
       shown: boolean;
-      bubbles: number;
-      questions: number;
-      picks: number;
+      diagram: boolean;
+      action: string;
+      intent: string;
+      tabs: number;
     };
   const conversationByDefault = (await conversation()).shown;
   if (!conversationByDefault) await press("t");
@@ -472,7 +481,8 @@ async function checkTheater(ctx: Context): Promise<Report> {
   const activeMatches = document.querySelector(".cb.actual")?.getAttribute("data-move") === actual;
   const pathMarkers = ctx.view.stats().decisionMarkers;
   const caption = document.querySelector(".cap-main")?.textContent ?? "";
-  const { bubbles, picks, questions } = await conversation();
+  await controlsReport("now", "decisions");
+  const { diagram, action, intent, tabs } = await conversation();
   await invoke("selftest_window_action", { action: "small-decisions" });
   await sleep(250);
   const smallWindow = await controlsReport("status", "decisions");
@@ -508,10 +518,10 @@ async function checkTheater(ctx: Context): Promise<Report> {
       },
       conversation: {
         smallWindow,
-        bubbles,
-        questions,
-        picks,
-        everyQuestionHasAPick: questions > 0 && picks === questions,
+        diagram,
+        action,
+        intent,
+        tabs,
         hiddenWithT: conversationHiddenWithT,
         shownAgain: conversationShownAgain,
       },

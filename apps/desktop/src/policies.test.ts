@@ -134,9 +134,16 @@ describe("free replay seeds", () => {
 
   it("'New map' walks through the cached seeds in order, so it keeps costing nothing", () => {
     const clef = byId(CLEF_ID);
-    const range = freeSeedRange(clef) ?? { min: 0, max: 0 };
-    expect(nextMapSeed(clef, undefined, random)).toEqual({ seed: range.min, free: true });
-    expect(nextMapSeed(clef, range.min, random)).toEqual({ seed: range.min + 1, free: true });
+    if (!clef) throw new Error("expected the Clef-flash player");
+    for (const choice of [clef, { ...clef, freeReplay: "10-12" }]) {
+      const range = freeSeedRange(choice);
+      if (!range) throw new Error("expected a cached seed range");
+      expect(nextMapSeed(choice, undefined, random)).toEqual({ seed: range.min, free: true });
+      for (let seed = range.min; seed < range.max; seed++) {
+        expect(nextMapSeed(choice, seed, random)).toEqual({ seed: seed + 1, free: true });
+      }
+      expect(nextMapSeed(choice, range.max, random)).toEqual({ seed: random(), free: false });
+    }
   });
 
   it("only after the cached seeds are used up does it fall back to a random (paid) map", () => {

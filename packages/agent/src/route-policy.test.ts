@@ -11,7 +11,14 @@ import {
 import { decisionCost } from "./cost.ts";
 import { emptyMemory } from "./memory.ts";
 import type { ModelInput } from "./policy.ts";
-import { boxedIn, grass, water, world } from "./route.testing.ts";
+import {
+  boxedIn,
+  grass,
+  seed6PlatformExit,
+  warnedRailsExit,
+  water,
+  world,
+} from "./route.testing.ts";
 import { MAX_CROSS_WAIT } from "./route.ts";
 import { fromRoute, refusalOrder } from "./route-policy.ts";
 import { playEpisode } from "./runner.ts";
@@ -297,6 +304,68 @@ describe("the route strategy through the Clef policy", () => {
       const decision = await policyOf(client).decide(logAtEdge());
       expect(decision.extra).toMatchObject({ maneuver: "cross_ahead", ride: "staying" });
       expect(sum(decision.probabilities)).toBeCloseTo(1, 5);
+    });
+
+    it("executes the whole seed 6 exit from one model answer, including the transit over the rail", async () => {
+      const game = seed6PlatformExit();
+      const { client, requests } = clientAnswering("no_stand", "still", "wait_here", 0.1, {
+        choice: "leaving",
+        pLeaving: 0.8,
+      });
+      const policy = policyOf(client);
+      const first = await policy.decide(observe(game));
+      expect(first).toMatchObject({
+        action: "hop_back",
+        source: "model",
+        extra: { maneuver: "leave_platform", controller: { kind: "leave", n: 1, left: 2 } },
+      });
+      expect(sum(first.probabilities)).toBeCloseTo(1, 5);
+      game.step(first.action);
+      const second = await policy.decide(observe(game));
+      expect(second).toMatchObject({
+        action: "hop_back",
+        source: "executor",
+        extra: { controller: { kind: "leave", n: 2, left: 1 } },
+      });
+      expect(second.inputTokens).toBeUndefined();
+      expect(requests).toHaveLength(1);
+      game.step(second.action);
+      game.advance(60);
+      expect(game.alive).toBe(true);
+    });
+
+    it("retains an emergency exit across warned rails without another model request", async () => {
+      const game = warnedRailsExit();
+      const { client, requests } = clientAnswering("no_stand", "still", "wait_here", 0.1, {
+        choice: "staying",
+        pLeaving: 0.1,
+      });
+      const policy = policyOf(client);
+      const first = await policy.decide(observe(game));
+      expect(first).toMatchObject({
+        action: "hop_back",
+        source: "model",
+        extra: { maneuver: "wait_here", controller: { kind: "hold", why: "edge" } },
+      });
+      expect(first.preview?.steps.map((step) => step.action)).toEqual([
+        "hop_back",
+        "hop_back",
+        "hop_back",
+      ]);
+      game.step(first.action);
+      for (const n of [2, 3]) {
+        const step = await policy.decide(observe(game));
+        expect(step).toMatchObject({
+          action: "hop_back",
+          source: "executor",
+          extra: { controller: { kind: "leave", n } },
+        });
+        expect(step.preview?.steps).toHaveLength(4 - n);
+        game.step(step.action);
+      }
+      expect(requests).toHaveLength(1);
+      expect(game.heroRow).toBe(6);
+      expect(game.alive).toBe(true);
     });
   });
 

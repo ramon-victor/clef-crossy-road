@@ -31,6 +31,18 @@ async function playing(action: Action, preview?: RoutePreview, held = false) {
 }
 
 describe("live execution presentation", () => {
+  it("clears a completed wait at the session's actual step boundary", async () => {
+    const s = new Session({ decisionTicks: 1 });
+    s.setPolicy(constantPolicy("stay"));
+    s.start(1);
+    s.frame(1 / 60);
+    await settle();
+    expect(buildExecution(s.state(), s.game.snapshot()).action).toBe("stay");
+    s.frame(1 / 60);
+    expect(s.state().phase).toBe("idle");
+    expect(buildExecution(s.state(), s.game.snapshot()).action).toBeNull();
+  });
+
   it("highlights the wait before forward and makes the continuation conditional", async () => {
     const s = await playing("stay", {
       col: 0,

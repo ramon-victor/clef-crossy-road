@@ -55,26 +55,37 @@ export async function runDecisionsSelfTest(): Promise<() => void> {
               document.querySelector(".theater-pause")?.getAttribute("aria-pressed") === "true",
           };
         } else {
+          if (payload.action === "now") {
+            document.querySelector<HTMLButtonElement>(".back-to-live")?.click();
+            document.querySelector<HTMLButtonElement>('[data-view="now"]')?.click();
+            await sleep(100);
+          }
+          const footer = document.querySelector(".decision-footer")?.getBoundingClientRect();
           report = {
             viewport: [window.innerWidth, window.innerHeight],
             noHorizontalOverflow: document.documentElement.scrollWidth <= window.innerWidth,
-            contentFits: [...document.querySelectorAll(".theater button, .bub, .inspector")].every(
-              (node) => {
-                const bounds = node.getBoundingClientRect();
-                return bounds.left >= 0 && bounds.right <= window.innerWidth + 1;
-              },
-            ),
+            contentFits: [
+              ...document.querySelectorAll(".theater button, .decision-intent, .inspector"),
+            ].every((node) => {
+              const bounds = node.getBoundingClientRect();
+              return bounds.left >= 0 && bounds.right <= window.innerWidth + 1;
+            }),
             canvasAbsent: document.querySelector("canvas.game") === null,
             panelAbsent: document.querySelector(".panel") === null,
             language: document.documentElement.lang,
             conversation: {
+              startsAtTop: document.querySelector(".decision-content")?.scrollTop === 0,
               shown: (await current.isVisible()) && !(await current.isMinimized()),
-              readable: [...document.querySelectorAll(".turn")].every(
+              readable: [...document.querySelectorAll(".decision-now")].every(
                 (node) => getComputedStyle(node).opacity === "1",
               ),
-              bubbles: document.querySelectorAll(".bub.model").length,
-              questions: document.querySelectorAll(".turn.current .qa-row").length,
-              picks: document.querySelectorAll(".turn.current .answer-sentence strong").length,
+              diagram: document.querySelector(".decision-scene svg") !== null,
+              action: text(".decision-action h3"),
+              intent: text(".decision-intent strong"),
+              primaryFits: [
+                ...document.querySelectorAll(".decision-action, .decision-intent"),
+              ].every((node) => node.getBoundingClientRect().bottom <= (footer?.top ?? 0)),
+              tabs: document.querySelectorAll('[role="tab"]').length,
             },
           };
         }
