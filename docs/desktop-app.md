@@ -19,6 +19,8 @@ The game opens in a phone-like portrait window, up to 440 × 800 CSS pixels. Set
 
 The main webview reports its device pixel ratio before the first show, and Rust converts the layout to physical pixels. This preserves the intended content sizes under fractional scaling, including XWayland where GTK and WebKit can report different scales. Initialization happens once per app run: hiding, reopening or reloading a webview preserves manual position and size.
 
+Resize minimums are stored in native logical units, accounting for the CSS/native scale ratio, so they follow per-monitor DPI changes rather than retaining the first monitor's physical pixel limits. Initial placement is best effort: a monitor/positioning failure falls back to the system window defaults, and a focus refusal never prevents the interface from opening. The OS/window manager retains control of activation and placement ([Windows foreground rules](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-setforegroundwindow), [GTK positioning](https://docs.gtk.org/gtk3/method.Window.move.html)). Native title bars, resize/maximize controls and Windows Snap remain available; the app does not use frameless, topmost or modal companion windows.
+
 Closing an auxiliary window hides it. Hiding settings from either its game button or title bar discards dialogs and unsaved credential input. Closing the game exits all windows. Minimizing the game pauses it until explicit resume; changing focus and reading pinned decisions do not pause the game. Model errors remain visible in the game even with both auxiliaries hidden. Only the game owns a session and model client.
 
 ### Linux display compatibility
@@ -139,6 +141,8 @@ The panels share light surfaces, system typography, restrained borders, yellow p
 ## Self-test
 
 `CCR_SELFTEST=1` makes the desktop app measure FPS and check rendering, keyboard, controls and decisions lifecycle, the inline inspector, budget refusal and the cached Clef pipeline, write `runs/selftest.json` and exit. Native self-tests are cache-only: Rust refuses cache misses without sending a request, even when credentials are configured.
+
+For a desktop platform review, also check startup and settings/decisions toggles with native title bars, ordinary resize/maximize, taskbar/work-area limits, and moving windows between displays. On Windows, test 100%, 150% and 200% scaling, change scaling while running, and move from a higher-DPI monitor to a lower-DPI monitor and back. Unit tests cover the logical minimum-size conversion; they do not replace a native Windows/WebView2 visual run. The Fedora native self-test exercises the XWayland compatibility path at fractional scaling; native Wayland remains a separate validation target. These checks follow the [Windows layout and DPI guidance](https://learn.microsoft.com/en-us/windows/apps/get-started/best-practices#layout).
 
 ## Open questions
 
