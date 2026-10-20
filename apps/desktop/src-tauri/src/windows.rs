@@ -2,7 +2,10 @@
 
 use std::sync::OnceLock;
 
-use tauri::{AppHandle, Emitter, Manager, PhysicalPosition, PhysicalSize, State, WindowEvent};
+use tauri::{
+    AppHandle, Emitter, LogicalSize, Manager, PhysicalPosition, PhysicalSize, State, WebviewWindow,
+    WindowEvent,
+};
 
 use crate::error::{CommandError, CommandResult};
 
@@ -24,7 +27,8 @@ pub fn show_controls(app: AppHandle) -> CommandResult<()> {
         .ok_or_else(|| CommandError::new("Controls window is unavailable"))?;
     controls.unminimize()?;
     controls.show()?;
-    controls.set_focus()?;
+    // Foreground activation is advisory; the OS may deny it while another app is active.
+    let _ = controls.set_focus();
     app.emit_to("controls", "controls:shown", ())?;
     app.emit_to("main", "controls:visible", true)?;
     Ok(())
@@ -61,7 +65,7 @@ pub fn set_decisions_visible(app: AppHandle, visible: bool, focus: bool) -> Comm
         decisions.unminimize()?;
         decisions.show()?;
         if focus {
-            decisions.set_focus()?;
+            let _ = decisions.set_focus();
         }
         app.emit_to("decisions", "decisions:shown", ())?;
     } else {
@@ -147,30 +151,30 @@ fn layout(width: f64, height: f64, frame_width: f64, frame_height: f64) -> Layou
     }
 }
 
-/// The main webview reports its CSS scale before the first show. XWayland's GTK monitor
-/// scale can differ from WebKit's fractional scale; using only the former shrinks the UI.
-#[tauri::command]
-pub fn show_game(
-    app: AppHandle,
-    state: State<'_, WindowLayout>,
+/// Persist resize limits in native logical units so Windows can rescale them on WM_DPICHANGED.
+/// XWayland may have a different CSS scale, so first account for that ratio.
+pub fn minimum_size_for_css(
+    width: f64,
+    height: f64,
     pixel_ratio: f64,
-) -> CommandResult<()> {
-    if !pixel_ratio.is_finite() || pixel_ratio <= 0.0 {
-        return Err(CommandError::new("Invalid window pixel ratio"));
-    }
-    if state.pixel_ratio.get().is_some() {
-        return Ok(());
-    }
-    let game = app
-        .get_webview_window("main")
-        .ok_or_else(|| CommandError::new("Game window is unavailable"))?;
+    native_scale: f64,
+) -> LogicalSize<f64> {
+    let css_to_native = pixel_ratio / native_scale;
+    LogicalSize::new(width * css_to_native, height * css_to_native)
+}
+
+fn place_windows(app: &AppHandle, game: &WebviewWindow, pixel_ratio: f64) -> CommandResult<()> {
     let controls = app
         .get_webview_window("controls")
         .ok_or_else(|| CommandError::new("Controls window is unavailable"))?;
     let decisions = app
         .get_webview_window("decisions")
         .ok_or_else(|| CommandError::new("Decisions window is unavailable"))?;
-    if let Some(monitor) = game.current_monitor()?.or(game.primary_monitor()?) {
+    let monitor = match game.current_monitor()? {
+        Some(monitor) => Some(monitor),
+        None => game.primary_monitor()?,
+    };
+    if let Some(monitor) = monitor {
         let scale = pixel_ratio;
         let area = monitor.work_area();
         let inner = game.inner_size()?;
@@ -186,13 +190,15 @@ pub fn show_game(
         let x = f64::from(area.position.x) / scale;
         let y = f64::from(area.position.y) / scale;
         for (window, width, minimum_width, offset_x) in [
-            (&game, placement.game_width, 360.0_f64, placement.game_x),
+            (game, placement.game_width, 360.0_f64, placement.game_x),
             (&controls, placement.controls_width, 320.0, placement.controls_x),
             (&decisions, placement.decisions_width, 360.0, placement.decisions_x),
         ] {
-            window.set_min_size(Some(PhysicalSize::new(
-                minimum_width.min(width) * scale,
-                640.0_f64.min(placement.height) * scale,
+            window.set_min_size(Some(minimum_size_for_css(
+                minimum_width.min(width),
+                640.0_f64.min(placement.height),
+                scale,
+                window.scale_factor()?,
             )))?;
             window.set_size(PhysicalSize::new(width * scale, placement.height * scale))?;
             window.set_position(PhysicalPosition::new(
@@ -201,8 +207,40 @@ pub fn show_game(
             ))?;
         }
     }
-    game.show()?;
-    game.set_focus()?;
+    Ok(())
+}
+
+fn show_with_layout_fallback(
+    placement: CommandResult<()>,
+    show: impl FnOnce() -> CommandResult<()>,
+) -> CommandResult<()> {
+    if let Err(error) = placement {
+        eprintln!("Initial window placement unavailable; using system defaults: {error:?}");
+    }
+    show()
+}
+
+/// Report CSS scale before the first show. Placement/focus failures must not block UI startup.
+#[tauri::command]
+pub fn show_game(
+    app: AppHandle,
+    state: State<'_, WindowLayout>,
+    pixel_ratio: f64,
+) -> CommandResult<()> {
+    if !pixel_ratio.is_finite() || pixel_ratio <= 0.0 {
+        return Err(CommandError::new("Invalid window pixel ratio"));
+    }
+    if state.pixel_ratio.get().is_some() {
+        return Ok(());
+    }
+    let game = app
+        .get_webview_window("main")
+        .ok_or_else(|| CommandError::new("Game window is unavailable"))?;
+    show_with_layout_fallback(place_windows(&app, &game, pixel_ratio), || {
+        game.show()?;
+        let _ = game.set_focus();
+        Ok(())
+    })?;
     let _ = state.pixel_ratio.set(pixel_ratio);
     Ok(())
 }
@@ -210,6 +248,53 @@ pub fn show_game(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn shows_the_game_even_when_the_window_manager_rejects_placement() {
+        let shown = std::cell::Cell::new(false);
+        let result = show_with_layout_fallback(
+            Err(CommandError::new("Window placement is not supported")),
+            || {
+                shown.set(true);
+                Ok(())
+            },
+        );
+        assert!(result.is_ok());
+        assert!(shown.get());
+    }
+
+    #[test]
+    fn reports_an_actual_show_failure_even_when_placement_succeeded() {
+        let result = show_with_layout_fallback(Ok(()), || {
+            Err(CommandError::new("Window is no longer available"))
+        });
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn minimum_sizes_follow_windows_dpi_changes_in_both_directions() {
+        for (width, source_scale, destination_scale) in [
+            (360.0, 2.0, 1.0),
+            (320.0, 1.0, 2.0),
+            (360.0, 1.25, 1.5),
+        ] {
+            let minimum = minimum_size_for_css(width, 640.0, source_scale, source_scale);
+            assert_eq!(
+                minimum.to_physical::<u32>(destination_scale),
+                PhysicalSize::new(
+                    (width * destination_scale).round() as u32,
+                    (640.0 * destination_scale).round() as u32,
+                )
+            );
+        }
+    }
+
+    #[test]
+    fn preserves_css_minimums_when_webkit_and_gtk_disagree_on_scale() {
+        let minimum = minimum_size_for_css(360.0, 640.0, 1.6, 1.0);
+        assert_eq!(minimum.to_physical::<u32>(1.0), PhysicalSize::new(576, 1024));
+        assert_eq!(minimum.to_physical::<u32>(2.0), PhysicalSize::new(1152, 2048));
+    }
 
     #[test]
     fn opens_compact_windows_on_each_side_of_the_centered_game() {

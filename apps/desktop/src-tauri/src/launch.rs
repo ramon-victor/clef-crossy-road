@@ -7,7 +7,7 @@ use tauri::{AppHandle, Manager, PhysicalSize, State};
 
 use crate::{
     error::{CommandError, CommandResult},
-    windows::WindowLayout,
+    windows::{minimum_size_for_css, WindowLayout},
     AppState,
 };
 
@@ -75,7 +75,12 @@ pub fn selftest_window_action(
                 .get_webview_window("decisions")
                 .ok_or_else(|| CommandError::new("decisions missing"))?;
             let ratio = layout.pixel_ratio();
-            decisions.set_min_size(Some(PhysicalSize::new(360.0 * ratio, minimum_height * ratio)))?;
+            decisions.set_min_size(Some(minimum_size_for_css(
+                360.0,
+                minimum_height,
+                ratio,
+                decisions.scale_factor()?,
+            )))?;
             decisions.set_size(PhysicalSize::new(360.0 * ratio, height * ratio))?;
         }
         "minimize" => game.minimize()?,
