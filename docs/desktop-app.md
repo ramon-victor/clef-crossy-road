@@ -29,6 +29,23 @@ npx --yes get-pnpm@0.0.5 12.14.0
 
 Reopen the terminal, confirm `pnpm --version` prints `12.14.0`, then run `pnpm install --frozen-lockfile`. Do not downgrade the project pin to match an old installer. In PowerShell, `Get-Command pnpm` identifies which installation the shell uses.
 
+## App icon and favicon
+
+The app uses **Neural Pilot**: a white voxel chicken with a red comb, orange beak and feet, and a navy
+visor with a cyan light. It was selected from three AI-generated concepts based on the in-game chicken.
+The [generation prompt](artwork/app-icon-prompt.md) records the reference and design constraints.
+
+The approved master is `apps/desktop/src-tauri/icons/source.png`, a 1024 × 1024 RGBA PNG with a transparent
+background and margins around the character. After changing the master, run `pnpm icons` to rebuild the
+desktop PNG, Windows ICO, macOS ICNS and Windows Store sizes with the installed Tauri CLI. The same command
+exports `apps/desktop/public/favicon-16x16.png`, `favicon-32x32.png` and a compact `favicon.ico` containing
+16, 32 and 48 px frames. `index.html` declares these sizes explicitly for the browser and all webviews.
+The exporter needs no credentials, network calls or new dependencies, and does not regenerate the art.
+It orders ICNS entries consistently so exporting unchanged artwork produces no binary differences.
+
+Check the exported 16 and 32 px images at their actual size on light and dark surfaces before accepting
+an artwork change. Rebuild the native app to update the executable's embedded icon.
+
 ## Who plays
 
 Pick a player under **Who plays**. The info button next to it shows the player's description, estimated cost and the shortcuts.
