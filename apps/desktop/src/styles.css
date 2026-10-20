@@ -6,17 +6,20 @@
 
 :root {
   --sky: #87c6ff;
-  --ink: #1d2b45;
-  --ink-soft: #52627f;
+  --ink: #213047;
+  --ink-soft: #53627a;
   --card: #ffffff;
-  --panel: #e8f1ff;
-  --line: #c9d9f2;
+  --panel: #f4f6fa;
+  --line: #dce3ed;
   --accent: #ffd640;
   --accent-ink: #5a4300;
   --good: #3fae5a;
   --warn: #e8a317;
   --bad: #dc4b4b;
-  --radius: 12px;
+  --radius: 10px;
+  --space-sm: 8px;
+  --space-md: 12px;
+  --space-lg: 16px;
   --ui-font:
     "Segoe UI", "Yu Gothic UI", "Meiryo", "Microsoft YaHei UI", "PingFang SC", system-ui, sans-serif;
   font-family: var(--ui-font);
@@ -274,7 +277,7 @@ canvas.game {
 
 .card {
   background: var(--card);
-  border: 2px solid var(--line);
+  border: 1px solid var(--line);
   border-radius: var(--radius);
   padding: 10px 12px;
 }
@@ -291,10 +294,8 @@ canvas.game {
 
 .field-label {
   display: block;
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
+  font-size: 12px;
+  font-weight: 600;
   color: var(--ink-soft);
   margin-bottom: 6px;
 }
@@ -316,7 +317,7 @@ canvas.game {
 .input {
   width: 100%;
   padding: 8px 10px;
-  border: 2px solid var(--line);
+  border: 1px solid var(--line);
   border-radius: 8px;
   background: #fff;
   color: var(--ink);
@@ -333,7 +334,7 @@ canvas.game {
 .speeds {
   display: flex;
   margin-top: 8px;
-  border: 2px solid var(--line);
+  border: 1px solid var(--line);
   border-radius: 8px;
   overflow: hidden;
 }
@@ -343,7 +344,7 @@ canvas.game {
   flex: 1;
   padding: 6px 4px;
   border: 0;
-  border-right: 2px solid var(--line);
+  border-right: 1px solid var(--line);
   background: #fff;
   color: var(--ink);
   font: inherit;
@@ -370,87 +371,46 @@ canvas.game {
 }
 
 .btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 36px;
   padding: 8px 12px;
-  border: 2px solid var(--ink);
-  border-radius: 9px;
-  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--card);
   color: var(--ink);
-  font: inherit;
-  font-weight: 700;
+  font: 600 13px / 1.3 var(--ui-font);
   cursor: pointer;
-  box-shadow: 0 3px 0 var(--ink);
-  transition:
-    transform 0.05s,
-    box-shadow 0.05s;
 }
-
 .btn:hover:not(:disabled) {
-  background: #f3f8ff;
+  background: #eaf0f7;
+  border-color: #adbbcf;
 }
-
 .btn:active:not(:disabled) {
-  transform: translateY(2px);
-  box-shadow: 0 1px 0 var(--ink);
+  background: #dde6f2;
 }
-
 .btn:disabled {
-  opacity: 0.4;
+  opacity: 0.45;
   cursor: default;
 }
-
 .btn.primary {
   background: var(--accent);
+  border-color: #e5bc28;
   color: var(--accent-ink);
 }
-
+.btn.primary:hover:not(:disabled) {
+  background: #ffdf67;
+  border-color: #c7a01c;
+}
 .btn.small {
-  padding: 6px 14px;
+  padding: 6px 10px;
 }
-
-.decision-head {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  min-height: 21px;
-}
-
-.decision-head .field-label {
-  margin: 0;
-}
-
-.decision .chosen {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 6px;
-  row-gap: 4px;
-  font-family: var(--ui-font);
-  font-size: 18px;
-  margin-bottom: 8px;
-}
-
-.chosen-arrow {
-  display: inline-grid;
-  place-items: center;
-  width: 28px;
-  height: 28px;
+.ui-icon {
+  width: 17px;
+  height: 17px;
   flex: none;
-  border-radius: 8px;
-  background: var(--accent);
-  color: var(--accent-ink);
-  font-size: 22px;
-}
-
-.tag {
-  margin-left: auto;
-  padding: 1px 5px;
-  border-radius: 99px;
-  border: 2px solid var(--line);
-  font-family: "Segoe UI", system-ui, sans-serif;
-  font-size: 11px;
-  font-weight: 700;
-  color: var(--ink-soft);
-  white-space: nowrap;
 }
 
 .bars {
@@ -495,104 +455,6 @@ canvas.game {
   font-size: 13px;
   font-weight: 700;
   text-align: right;
-}
-
-.history {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-  margin-top: 8px;
-}
-
-.panel .bars {
-  gap: 2px;
-}
-
-.panel .bar-row {
-  min-height: 14px;
-  line-height: 1;
-  grid-template-columns: 16px minmax(0, 1fr) 34px;
-  gap: 6px;
-}
-
-.panel .bar-glyph {
-  font-size: 14px;
-  line-height: 1;
-}
-
-.panel .bar {
-  height: 8px;
-}
-
-.panel .bar-num {
-  font-size: 11px;
-}
-
-.panel .history {
-  display: grid;
-  grid-template-columns: repeat(14, minmax(0, 1fr));
-  gap: 2px;
-}
-
-.decision-actions {
-  position: relative;
-  min-height: 28px;
-  margin-top: 6px;
-}
-
-.text-button,
-.decision-details > summary {
-  min-height: 28px;
-  padding: 4px 0;
-  border: 0;
-  background: none;
-  color: var(--ink-soft);
-  font: inherit;
-  font-size: 12px;
-  font-weight: 600;
-  text-align: left;
-  cursor: pointer;
-}
-
-.text-button {
-  position: absolute;
-  left: 0;
-  top: 0;
-}
-
-/* Two of them sit side by side in the decision card. */
-.decision-buttons {
-  position: absolute;
-  left: 0;
-  top: 0;
-  display: flex;
-  gap: 12px;
-}
-
-.decision-buttons .text-button {
-  position: static;
-}
-
-.text-button:hover,
-.decision-details > summary:hover {
-  color: var(--ink);
-  text-decoration: underline;
-}
-
-.decision-details > summary {
-  width: max-content;
-  margin-left: auto;
-}
-
-.chip {
-  display: inline-grid;
-  place-items: center;
-  width: 24px;
-  height: 24px;
-  border-radius: 6px;
-  background: #eef4ff;
-  border: 1px solid var(--line);
-  font-size: 15px;
 }
 
 .stats {
@@ -682,22 +544,11 @@ canvas.game {
   background: var(--bad);
 }
 
-.foot {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px 14px;
-  align-items: center;
-  justify-content: space-between;
-  font-size: 11px;
-  color: var(--ink-soft);
-  padding: 0 2px;
-}
-
 .check {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  min-height: 28px;
+  min-height: 36px;
   cursor: pointer;
 }
 
@@ -733,6 +584,7 @@ fieldset.speeds {
   border-radius: 10px;
   color: var(--ink);
   background: var(--panel);
+  container-type: inline-size;
 }
 
 .inspector-head {
@@ -797,21 +649,28 @@ fieldset.speeds {
 }
 
 .inspector-tabs {
-  display: flex;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 4px;
-  border-bottom: 2px solid var(--line);
 }
 
 .inspector-tabs button {
-  padding: 6px 14px;
-  border: 2px solid var(--line);
-  border-bottom: 0;
-  border-radius: 8px 8px 0 0;
+  min-width: 0;
+  min-height: 36px;
+  padding: 6px 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
   background: #eef4ff;
   color: var(--ink);
   font: inherit;
   font-weight: 700;
   cursor: pointer;
+}
+
+@container (min-width: 360px) {
+  .inspector-tabs {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
 }
 
 .inspector-tabs button.on {
@@ -830,7 +689,7 @@ fieldset.speeds {
   margin: 4px 0 10px;
   padding: 10px 12px;
   background: #f5f9ff;
-  border: 2px solid var(--line);
+  border: 1px solid var(--line);
   border-radius: 8px;
   font-family: Consolas, "Cascadia Mono", monospace;
   font-size: 12px;
@@ -872,126 +731,185 @@ table.options th {
   color: var(--ink-soft);
 }
 
-/* ---------- panel ---------- */
-
+/* ---------- shared control surface ---------- */
 .panel {
   width: var(--panel-width);
   flex: none;
   height: 100%;
   min-height: 0;
-  padding: 8px;
   background: var(--panel);
-  border-left: 4px solid var(--ink);
+  border-left: 1px solid var(--line);
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  font-size: 14px;
-  line-height: 1.5;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  font: 14px / 1.45 var(--ui-font);
 }
-
-.panel-top,
-.panel-bottom {
+.panel-top {
   flex: none;
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  min-width: 0;
+  gap: var(--space-md);
+  padding: var(--space-lg);
+  background: var(--card);
+  border-bottom: 1px solid var(--line);
 }
-
+.panel-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.panel-heading h2 {
+  margin: 0;
+  font-size: 20px;
+  letter-spacing: -0.5px;
+}
+.surface-status {
+  padding: 3px 7px;
+  border-radius: 5px;
+  background: #edf2f8;
+  color: #455671;
+  font-size: 11px;
+  font-weight: 600;
+}
 .panel-body {
+  display: flex;
   flex: 1;
+  flex-direction: column;
+  gap: 10px;
   min-height: 0;
   overflow-y: auto;
+  padding: var(--space-lg);
+  scrollbar-gutter: stable;
   overscroll-behavior: contain;
-  scrollbar-width: thin;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding: 3px;
-  margin: -3px;
 }
-
 .panel-body > * {
   flex: none;
 }
-
 .panel .card {
   min-width: 0;
-  padding: 8px;
+  padding: 8px 12px;
+  box-shadow: none;
 }
-
 .panel :is(button, summary, input, select, a):focus-visible,
-.player-info :is(button, a):focus-visible {
-  outline: 3px solid var(--ink);
+.player-info :is(button, a):focus-visible,
+.btn:focus-visible {
+  outline: 3px solid #315f9b;
   outline-offset: 2px;
 }
-
 canvas.game:focus-visible {
   outline: 3px solid var(--accent);
   outline-offset: -4px;
 }
-
 .player-row {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
 }
-
 .player-row .select {
   min-width: 0;
   flex: 1;
+  font-weight: 600;
 }
-
 .player-label {
   display: flex;
+  flex-wrap: wrap;
   align-items: baseline;
   justify-content: space-between;
   gap: 4px;
-  margin-bottom: 4px;
+  margin-bottom: 6px;
 }
-
 .player-label .field-label {
   margin: 0;
-  font-size: 10px;
 }
-
 .player-kind {
-  font-size: 10px;
-  color: var(--ink-soft);
-  text-align: right;
-}
-
-.panel .spend-note {
-  margin-top: 4px;
   font-size: 11px;
+  color: var(--ink-soft);
 }
-
 .panel .spend-note {
-  color: var(--accent-ink);
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--ink-soft);
 }
-
-.info-button {
-  flex: none;
-  display: inline-grid;
-  place-items: center;
-  width: 28px;
-  height: 28px;
+.panel .budget {
+  padding: 10px 0 0;
+  border-top: 1px solid var(--line);
+}
+.budget .field-label {
+  font-size: 12px;
+  text-transform: none;
+}
+.panel .budget-total strong {
+  font-size: 13px;
+}
+.panel .budget.warn {
+  color: #8a4400;
+}
+.controls {
+  gap: 8px;
   padding: 0;
-  border: 2px solid var(--line);
-  border-radius: 50%;
-  background: #fff;
+}
+.panel .btn,
+.panel .select,
+.panel .input {
+  min-height: 36px;
+}
+.panel .controls .btn {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.playback-settings {
+  display: grid;
+  gap: 12px;
+  padding-bottom: 6px;
+}
+.playback-settings :is(.segmented, .speeds) {
+  margin: 0;
+  border: 0;
+  gap: 4px;
+  overflow: visible;
+}
+.playback-settings legend {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-soft);
+  padding: 0;
+  margin-bottom: 6px;
+}
+.playback-settings button {
+  min-width: 0;
+  min-height: 36px;
+  padding: 6px 4px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  font-size: 13px;
+  background: #e8edf5;
+}
+.playback-settings button.on {
+  background: white;
+  border-color: #b6c4d7;
   color: var(--ink);
-  font:
-    bold 16px Georgia,
-    serif;
+  box-shadow: 0 1px 2px #2130470c;
+}
+.info-button {
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: white;
+  color: var(--ink-soft);
+  font: 600 16px var(--ui-font);
   cursor: pointer;
 }
-
 .info-button:hover {
-  border-color: var(--ink);
-  background: #f3f8ff;
+  background: #edf2f8;
+  color: var(--ink);
 }
-
 .player-info {
   position: fixed;
   inset: 12px calc(var(--panel-width) + 8px) auto auto;
@@ -999,151 +917,111 @@ canvas.game:focus-visible {
   width: min(360px, calc(100vw - var(--panel-width) - 32px));
   max-height: calc(100dvh - 24px);
   overflow-y: auto;
-  padding: 14px;
-  border: 3px solid var(--ink);
+  padding: 18px;
+  border: 1px solid var(--line);
   border-radius: var(--radius);
   background: var(--card);
   color: var(--ink);
-  box-shadow: 0 5px 0 rgba(29, 43, 69, 0.25);
+  box-shadow: 0 12px 40px #21304724;
   font-size: 13px;
-  line-height: 1.45;
+  line-height: 1.5;
   overflow-wrap: anywhere;
 }
-
 .info-head {
   display: flex;
   align-items: flex-start;
   gap: 8px;
 }
-
 .info-head h2 {
   flex: 1;
   margin: 0;
-  font-family: "Retro", monospace;
-  font-size: 18px;
-  font-weight: 400;
+  font: 650 19px var(--ui-font);
 }
-
 .player-info h3 {
-  margin: 14px 0 4px;
+  margin: 16px 0 4px;
   font-size: 14px;
 }
-
-.panel .player-info p {
+.player-info p {
   margin: 6px 0;
 }
-
 .key-help {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
-  gap: 6px 12px;
-  margin: 8px 0;
+  gap: 8px 12px;
+  margin: 10px 0;
   font-size: 12px;
 }
-
 .key-help dt {
-  font-weight: 700;
+  font-weight: 600;
 }
-
 .key-help dd {
   margin: 0;
   color: var(--ink-soft);
 }
-
 .setup > summary {
   display: flex;
-  align-items: baseline;
-  gap: 6px;
-  min-height: 28px;
-  margin: -4px;
-  padding: 4px;
+  align-items: center;
+  gap: 8px;
+  min-height: 36px;
   cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  list-style: none;
 }
-
-.panel .setup {
-  padding-block: 4px;
+.setup > summary::-webkit-details-marker {
+  display: none;
 }
-
 .setup > summary::before {
   content: "›";
-  font-weight: 700;
+  width: 10px;
+  color: var(--ink-soft);
 }
-
 .setup[open] > summary::before {
   content: "⌄";
 }
-
-.setup-label {
-  font-weight: 700;
-}
-
-.setup-current {
-  min-width: 0;
+.setting-value {
   margin-left: auto;
+  font-size: 12px;
+  font-weight: 400;
   color: var(--ink-soft);
-  font-size: 11px;
-  text-align: right;
   overflow-wrap: anywhere;
 }
-
 .setup-body {
   display: flex;
   flex-direction: column;
   gap: 10px;
-  margin-top: 10px;
-  padding-top: 8px;
+  padding: 12px 0 4px;
+  margin-top: 4px;
   border-top: 1px solid var(--line);
 }
-
-.setup-body .seed {
+.seed {
   display: flex;
-  gap: 6px;
+  gap: 8px;
 }
-
-.seed .input {
+.seed input {
+  flex: 1;
   min-width: 0;
 }
-
-.setup-body .segmented,
-.setup-body .speeds {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  margin: 0;
+.seed button {
+  flex: none;
 }
-
-.setup-body .speeds {
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-}
-
-.setup-body legend {
-  padding: 0 4px;
-  font-size: 11px;
-  font-weight: 700;
-  color: var(--ink-soft);
-}
-
 .setup-body .hint {
-  margin-top: 2px;
+  margin-top: 0;
 }
-
-.panel .btn,
-.panel .select,
-.panel .input {
-  min-height: 32px;
-  padding: 5px 8px;
+@media (max-height: 560px) {
+  .panel-top {
+    padding: 12px;
+    gap: 10px;
+  }
+  .panel-body {
+    padding: 12px;
+  }
 }
-
-.panel .segmented button,
-.panel .speeds button {
-  min-height: 28px;
-}
-
-.panel .chip {
-  width: auto;
-  height: 18px;
-  min-width: 0;
-  border-radius: 4px;
-  font-size: 12px;
+@media (max-height: 440px) {
+  .panel-body {
+    flex: none;
+    overflow: visible;
+  }
 }
 
 /* ---------- local Cloudflare configuration ---------- */
@@ -1162,11 +1040,11 @@ canvas.game:focus-visible {
   max-height: calc(100dvh - 24px);
   overflow-y: auto;
   padding: 18px;
-  border: 3px solid var(--ink);
-  border-radius: 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
   background: var(--card);
   color: var(--ink);
-  box-shadow: 0 6px 0 rgba(29, 43, 69, 0.25);
+  box-shadow: 0 12px 40px #21304724;
   font-size: 13px;
   line-height: 1.45;
 }
@@ -1233,11 +1111,6 @@ canvas.game:focus-visible {
 
 .px-edge {
   fill: var(--px-edge, transparent);
-}
-
-.chosen-arrow,
-.movepill b {
-  --px-edge: rgba(255, 255, 255, 0.55);
 }
 
 /* ---------- the compass on the chicken ---------- */
@@ -1557,52 +1430,11 @@ canvas.game:focus-visible {
   color: var(--bad);
 }
 .inspector-head,
-.inspector-tabs,
 .inspector-actions {
   flex-wrap: wrap;
 }
 .inspector .bar-row {
   grid-template-columns: 22px minmax(45px, 90px) minmax(0, 1fr) 45px;
-}
-.panel .setup summary {
-  font-size: 15px;
-  font-weight: 700;
-}
-.panel .setup-body {
-  padding-top: 12px;
-  gap: 12px;
-}
-.panel .seed {
-  display: flex;
-  gap: 8px;
-}
-.panel .seed input {
-  min-width: 0;
-  flex: 1;
-}
-.panel .seed button,
-.panel .connection-setting button {
-  flex: none;
-  width: auto;
-  white-space: nowrap;
-  overflow-wrap: normal;
-}
-.panel .connection-setting {
-  flex-wrap: wrap;
-}
-.panel .account-settings .budget {
-  padding: 0;
-  border: 0;
-  box-shadow: none;
-  background: transparent;
-}
-.panel .controls .btn {
-  overflow-wrap: normal;
-  white-space: normal;
-  font-size: 14px;
-}
-.panel .player-label {
-  flex-wrap: wrap;
 }
 .game-error {
   position: absolute;

@@ -50,7 +50,7 @@ it("keeps a model failure actionable in the game when both auxiliary windows are
   expect(view.container.querySelector(".panel, .theater")).toBeNull();
   expect(view.queryByText("Offline during lookup")).toBeNull();
   fireEvent.click(view.getByRole("button", { name: "Configure", exact: true }));
-  fireEvent.click(view.getByRole("button", { name: "Details", exact: true }));
+  fireEvent.click(view.getByRole("button", { name: "Technical details", exact: true }));
   expect(openSettings).toHaveBeenCalledOnce();
   expect(openDecisions).toHaveBeenCalledOnce();
 });

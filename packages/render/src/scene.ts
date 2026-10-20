@@ -11,6 +11,7 @@ import {
   WebGLRenderer,
 } from "three";
 import { type Assets, loadAssets } from "./assets.ts";
+import { type ChickenArtwork, captureChickenArtwork } from "./chicken-artwork.ts";
 import { type DecisionOverlay, DecisionOverlayView } from "./decision-overlay.ts";
 import {
   cameraTargetX,
@@ -59,6 +60,7 @@ export class GameView {
   private readonly heroBody: Group;
   private readonly rows = new Map<number, RowView>();
   private readonly assets: Assets;
+  private artwork: ChickenArtwork | null = null;
   private readonly heroScale: number;
   private readonly viewWidth: number;
   private readonly heroBelow: number;
@@ -155,6 +157,11 @@ export class GameView {
 
   render(): void {
     this.renderer.render(this.scene, this.camera);
+  }
+
+  captureChickenArtwork(): ChickenArtwork {
+    this.artwork ??= captureChickenArtwork(this.renderer, this.assets.chicken);
+    return this.artwork;
   }
 
   /**

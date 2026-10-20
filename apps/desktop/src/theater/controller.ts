@@ -1,7 +1,7 @@
 import { type Decision, HOLD_WHYS, type HoldWhy, type WaitWhy } from "@ccr/agent";
 import { noticeText } from "../i18n/presentation.ts";
 import { type Translator, translator } from "../i18n/translate.ts";
-import type { Turn } from "../session.ts";
+import type { DecisionLog, Turn } from "../session.ts";
 import { spoken } from "./labels.ts";
 
 /** A `RouteStep` as read back from `Decision.extra`, which is untyped: the screen never reads the note's sentence. */
@@ -140,6 +140,41 @@ export function foldWaits<E, T extends { count: number }>(
     }
     items.push(make(entry));
     inRun = waits;
+  }
+  return items;
+}
+
+/** Fold waits only when their recorded reason and source match; counters may advance. */
+export function recordedSteps(
+  entries: readonly DecisionLog[],
+): Array<{ log: DecisionLog; count: number }> {
+  const items: Array<{ log: DecisionLog; count: number }> = [];
+  const identity = (log: DecisionLog) => {
+    const step = controllerStep(log.decision);
+    const notice = log.decision.notice;
+    return JSON.stringify({
+      source: log.decision.source,
+      step:
+        step?.kind === "wait"
+          ? { kind: step.kind, cell: step.cell, why: step.why, of: step.of }
+          : step,
+      notice:
+        step?.kind === "wait" && notice?.kind === "waiting"
+          ? { ...notice, waited: undefined }
+          : notice,
+      note: step ? undefined : log.decision.note,
+    });
+  };
+  for (const log of entries) {
+    const last = items.at(-1);
+    if (
+      last &&
+      last.log.action === "stay" &&
+      log.action === "stay" &&
+      identity(last.log) === identity(log)
+    ) {
+      items[items.length - 1] = { log, count: last.count + 1 };
+    } else items.push({ log, count: 1 });
   }
   return items;
 }
