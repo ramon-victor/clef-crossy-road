@@ -55,6 +55,8 @@ A model is always an `ObservationPolicy`: **the type keeps the simulator out of 
 
 `Decision` carries `action` plus optional `probabilities`, `confidence`, `latencyMs`, `inputTokens`, `neurons`, `cached`, `extra`, `source` (`model` or `executor`), `note` and `sent` (the exact request, for the inspector).
 
+`Decision.preview` is optional presentation telemetry: the controller's route origin column and per-step action, column and relative row. The search exposes its existing node positions, including platform drift, without another planning pass. The app anchors these coordinates to the observation's original row and tick in `DecisionLog.observed`; the actual action comes from the live snapshot and `SessionState.playback` (the result of `Game.act`). The preview never enters model requests, memory, response cache keys or benchmark episode records. `GameView.setDecisionOverlay` receives only world coordinates and visual states, preserving the renderer's dependency boundary. The compass DOM updates on execution transitions; overlay progress follows simulation ticks in the existing frame loop.
+
 ## Life of one decision
 
 1. `observe(game)` produces an `Observation`: measured physical facts only ([observation-and-prompts.md](observation-and-prompts.md)). The runner or the app's `Session` adds the `Memory`.

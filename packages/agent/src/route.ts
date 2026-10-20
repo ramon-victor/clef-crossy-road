@@ -20,7 +20,7 @@ import {
   secondsToEdge,
   secondsToLimit,
 } from "./platform.ts";
-import type { Decision, ObservationPolicy, PolicyFactory } from "./policy.ts";
+import type { Decision, ObservationPolicy, PolicyFactory, RoutePreview } from "./policy.ts";
 import { type SceneState, type SideName, sceneState } from "./scene.ts";
 
 /**
@@ -78,6 +78,7 @@ export interface Route {
   /** The first hop, which is the one to make now. */
   first: Action;
   path: Action[];
+  preview: RoutePreview;
 }
 
 /**
@@ -119,9 +120,13 @@ function walk(
   } = {},
 ): Route | null {
   // `v` is the speed (columns per second) of the platform the chicken stands on, which carries it while it waits.
-  let level: Array<{ dz: number; c: number; v: number; path: Action[] }> = [
-    { dz: 0, c: obs.player.col, v: ridingSpeed(obs), path: [] },
-  ];
+  let level: Array<{
+    dz: number;
+    c: number;
+    v: number;
+    path: Action[];
+    points: RoutePreview["steps"];
+  }> = [{ dz: 0, c: obs.player.col, v: ridingSpeed(obs), path: [], points: [] }];
   const seen = new Set<string>();
   for (let d = 1; d <= depth; d++) {
     const next: typeof level = [];
@@ -145,10 +150,16 @@ function walk(
         if (seen.has(key)) continue;
         seen.add(key);
         const path = [...node.path, move];
+        const points = [...node.points, { action: move, col: c, dz }];
         const landed = { dz, c, v: platformSpeed(row, c, d * T) };
         const reached = { ...landed, d };
-        if (isGoal(reached)) return { first: path[0] as Action, path };
-        if (!isDead(reached)) next.push({ ...landed, path });
+        if (isGoal(reached))
+          return {
+            first: path[0] as Action,
+            path,
+            preview: { col: obs.player.col, steps: points },
+          };
+        if (!isDead(reached)) next.push({ ...landed, path, points });
       }
     }
     level = next;
@@ -199,6 +210,7 @@ export type RouteStep =
 /** One step the controller takes: the move to make now, what it is doing in a sentence, and what kind of step it is. */
 export interface RouteAct {
   action: Action;
+  preview?: RoutePreview;
   note: string;
   notice: DecisionNotice;
   step: RouteStep;
@@ -234,6 +246,7 @@ function legAct(
 ): RouteAct {
   return {
     action: route.first,
+    preview: route.preview,
     note: `${name}: hop ${n}, ${legOf(route)}`,
     notice: {
       kind: "detour",
@@ -263,6 +276,8 @@ function safeHold(obs: Observation, memory: Memory): RouteAct & { exit?: Route }
   if (away) {
     return {
       action: away.first,
+      // The executor retains a platform exit; other escapes authorize only this one step.
+      preview: exit ? exit.preview : { ...away.preview, steps: away.preview.steps.slice(0, 1) },
       note: `stepping off a cell it cannot stay on: ${legOf(away)}`,
       notice: { kind: "escape", action: away.first, remaining: away.path.length },
       step: { kind: "hold", why },
@@ -406,6 +421,10 @@ export class RouteExecutor {
       this.plan = null;
       return {
         action: "hop_forward",
+        preview: {
+          col: obs.player.col,
+          steps: [{ action: "hop_forward", col: Math.round(obs.player.col), dz: 1 }],
+        },
         note: "cross_ahead: the cell is clear, hopping",
         notice: { kind: "clear", maneuver: "cross_ahead" },
         step: { kind: "hop" },
@@ -449,6 +468,14 @@ export class RouteExecutor {
     return {
       action: "stay",
       note: `cross_ahead: waiting for the cell (${cell}) to clear, ${plan.waited}/${MAX_CROSS_WAIT}`,
+      preview: {
+        col: obs.player.col,
+        conditional: true,
+        steps: [
+          { action: "stay", col: obs.player.col + ridingSpeed(obs) * T, dz: 0 },
+          { action: "hop_forward", col: Math.round(obs.player.col + ridingSpeed(obs) * T), dz: 1 },
+        ],
+      },
       notice: {
         kind: "waiting",
         maneuver: "cross_ahead",
@@ -573,17 +600,21 @@ export const execRoute: PolicyFactory = (() => {
           if (step)
             return {
               action: step.action,
+              ...(step.preview ? { preview: step.preview } : {}),
               source: "executor",
               note: step.note,
               notice: step.notice,
+              extra: { controller: step.step },
             };
           const scene = sceneState(obs, memory, { failed: executor.failedSides(memory) });
           const first = executor.start(routeChoice(scene), obs, memory);
           return {
             action: first.action,
+            ...(first.preview ? { preview: first.preview } : {}),
             source: "executor",
             note: first.note,
             notice: first.notice,
+            extra: { controller: first.step },
           };
         },
       };

@@ -13,6 +13,7 @@ import { CLEF_CACHED_SEEDS, CLEF_ID, type PolicyChoice } from "./policies.ts";
 const CACHED_SEED = Number(CLEF_CACHED_SEEDS.split("-")[0]);
 
 import type { Session } from "./session.ts";
+import { buildExecution } from "./theater/execution.ts";
 import { type Pace, PREFERENCE_KEYS } from "./theater/preference.ts";
 
 interface Context {
@@ -430,8 +431,8 @@ function restorePreferences(saved: ReadonlyArray<readonly [string, string | null
 }
 
 /**
- * What shows the model deciding, in the real window: the compass around the chicken (five moves, one lit, a
- * caption) and the visual decision panel. C and T hide
+ * What shows live execution in the real window: five compass moves, one active,
+ * a caption and the visual decision panel. C and T hide
  * and bring them back.
  */
 async function checkTheater(ctx: Context): Promise<Report> {
@@ -468,12 +469,17 @@ async function checkTheater(ctx: Context): Promise<Report> {
   // The cached game keeps going: wait for a moment when an answer, not a question, is on screen.
   while (
     performance.now() - started < 20_000 &&
-    count(".compass.answered .cb.win") === 0 &&
+    count(".compass .cb.actual") === 0 &&
     ctx.session.state().phase !== "error"
   )
     await sleep(50);
+  ctx.session.setPaused(true);
+  await sleep(80);
   const buttons = count(".compass .cb");
-  const lit = count(".compass .cb.win");
+  const lit = count(".compass .cb.actual");
+  const actual = buildExecution(ctx.session.state(), ctx.session.game.snapshot()).action;
+  const activeMatches = document.querySelector(".cb.actual")?.getAttribute("data-move") === actual;
+  const pathMarkers = ctx.view.stats().decisionMarkers;
   const caption = document.querySelector(".cap-main")?.textContent ?? "";
   await controlsReport("now", "decisions");
   const { diagram, action, intent, tabs } = await conversation();
@@ -484,6 +490,7 @@ async function checkTheater(ctx: Context): Promise<Report> {
   await sleep(250);
   await press("c");
   const compassHiddenWithC = count(".compass-anchor") === 0;
+  const pathHiddenWithC = ctx.view.stats().decisionMarkers === 0;
   await press("c");
   const compassShownAgain = count(".compass-anchor") === 1;
   await press("t");
@@ -494,6 +501,7 @@ async function checkTheater(ctx: Context): Promise<Report> {
   if (!compassByDefault) await press("c");
   if (!conversationByDefault) await press("t");
   restorePreferences(saved);
+  ctx.session.setPaused(false);
   return {
     theater: {
       compassByDefault,
@@ -501,6 +509,9 @@ async function checkTheater(ctx: Context): Promise<Report> {
       compass: {
         buttons,
         lit,
+        activeMatches,
+        pathMarkers,
+        pathHiddenWithC,
         caption,
         hiddenWithC: compassHiddenWithC,
         shownAgain: compassShownAgain,

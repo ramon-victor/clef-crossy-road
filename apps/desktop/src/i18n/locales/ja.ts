@@ -1,6 +1,11 @@
 import type { Catalog } from "./en.ts";
 
 export const ja = {
+  "compass.now": "現在：{{step}}",
+  "compass.chosen": "Clefの選択：{{move}}",
+  "compass.path": "予測経路",
+  "compass.blocked": "移動できません",
+  "compass.idle": "次のアクションを待機中",
   "decisions.title": "判断のしくみ",
   "settings.game": "ゲーム",
   "settings.appearance": "表示とサウンド",

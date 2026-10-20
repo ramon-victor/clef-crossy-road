@@ -20,8 +20,18 @@ export interface QuestionAnswer {
   probabilities: Record<string, number>;
 }
 
+/** Controller forecast for people to see; never input, memory or an episode record. */
+export interface RoutePreview {
+  /** Column at the observation's row; rows in steps are relative to that row. */
+  col: number;
+  steps: readonly { action: Action; col: number; dz: number }[];
+  /** The continuation depends on a crossing clearing, at an unknown time. */
+  conditional?: boolean;
+}
+
 export interface Decision {
   action: Action;
+  preview?: RoutePreview;
   /** Per-action probabilities as returned by the model, when the strategy has them. */
   probabilities?: Partial<Record<Action, number>>;
   /** Cloudflare's undocumented `confidence`. Reported separately; it is not the top probability. */

@@ -1,6 +1,11 @@
 import type { Catalog } from "./en.ts";
 
 export const ptBR = {
+  "compass.now": "Agora: {{step}}",
+  "compass.chosen": "Clef escolheu: {{move}}",
+  "compass.path": "Caminho previsto",
+  "compass.blocked": "Movimento bloqueado",
+  "compass.idle": "Aguardando a próxima ação",
   "decisions.title": "Decisões",
   "settings.game": "Partida",
   "settings.appearance": "Aparência e som",
