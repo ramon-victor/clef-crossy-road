@@ -3,7 +3,7 @@
 import { act, cleanup, fireEvent, render, waitFor } from "@testing-library/preact";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { App } from "./App.tsx";
-import { setDecisionsVisible, showControls } from "./bridge/windows.ts";
+import { setDecisionsVisible, showControls, toggleControls } from "./bridge/windows.ts";
 import type { ControlsData } from "./controls.ts";
 import type { GameCanvasProps } from "./GameCanvas.tsx";
 import { LanguageProvider } from "./i18n/provider.tsx";
@@ -12,6 +12,7 @@ import type { TheaterProps } from "./theater/Theater.tsx";
 const runtime = vi.hoisted(() => ({
   listeners: new Map<string, (event: { payload: unknown }) => void>(),
   snapshot: null as (() => ControlsData) | null,
+  controlsVisible: false,
   bridge: {
     kind: "tauri" as const,
     run: vi.fn(async () => {
@@ -30,7 +31,14 @@ vi.mock("./bridge/clef.ts", async (original) => ({
   createBridge: () => runtime.bridge,
 }));
 vi.mock("./bridge/windows.ts", () => ({
-  showControls: vi.fn(async () => {}),
+  showControls: vi.fn(async () => {
+    runtime.controlsVisible = true;
+    runtime.listeners.get("controls:visible")?.({ payload: true });
+  }),
+  toggleControls: vi.fn(async () => {
+    runtime.controlsVisible = !runtime.controlsVisible;
+    runtime.listeners.get("controls:visible")?.({ payload: runtime.controlsVisible });
+  }),
   setDecisionsVisible: vi.fn(async (visible: boolean) => {
     runtime.listeners.get("decisions:visible")?.({ payload: visible });
   }),
@@ -42,9 +50,16 @@ vi.mock("./bridge/windows.ts", () => ({
     minimized: "game:minimized",
     decisionsClosed: "decisions:closed",
     decisionsVisible: "decisions:visible",
+    controlsVisible: "controls:visible",
   },
 }));
 vi.mock("@tauri-apps/api/window", () => ({
+  Window: {
+    getByLabel: async () => ({
+      isVisible: async () => runtime.controlsVisible,
+      isMinimized: async () => false,
+    }),
+  },
   getCurrentWindow: () => ({
     listen: async (event: string, listener: (event: { payload: unknown }) => void) => {
       runtime.listeners.set(event, listener);
@@ -60,11 +75,23 @@ vi.mock("./theater/Theater.tsx", () => ({
   ),
 }));
 vi.mock("./GameCanvas.tsx", () => ({
-  GameCanvas: ({ state, onShowControls, onToggleDecisions, decisionsVisible }: GameCanvasProps) => (
+  GameCanvas: ({
+    state,
+    onShowControls,
+    onToggleControls,
+    controlsVisible,
+    onToggleDecisions,
+    decisionsVisible,
+  }: GameCanvasProps) => (
     <>
       <button type="button" onClick={onShowControls} data-paused={state.paused}>
         game control
       </button>
+      {onToggleControls && (
+        <button type="button" onClick={onToggleControls} aria-pressed={controlsVisible}>
+          settings
+        </button>
+      )}
       {onToggleDecisions && (
         <button type="button" onClick={onToggleDecisions} aria-pressed={decisionsVisible}>
           decisions
@@ -80,10 +107,58 @@ afterEach(async () => {
   vi.clearAllMocks();
   runtime.listeners.clear();
   runtime.snapshot = null;
+  runtime.controlsVisible = false;
   localStorage.removeItem("ccr.theater");
 });
 
 describe("game window shortcuts", () => {
+  it("toggles settings, follows native close events and keeps F2 as an explicit open", async () => {
+    const view = render(
+      <LanguageProvider initial={{ preference: "en", detected: "en" }}>
+        <App desktop />
+      </LanguageProvider>,
+    );
+    await waitFor(() => expect(runtime.listeners.has("controls:visible")).toBe(true));
+    const settings = view.getByRole("button", { name: "settings" });
+    const game = view.getByRole("button", { name: "game control" });
+    expect(settings.getAttribute("aria-pressed")).toBe("false");
+    fireEvent.click(settings);
+    await waitFor(() => expect(settings.getAttribute("aria-pressed")).toBe("true"));
+    fireEvent.click(settings);
+    await waitFor(() => expect(settings.getAttribute("aria-pressed")).toBe("false"));
+    fireEvent.keyDown(game, { key: "F2" });
+    await waitFor(() => expect(settings.getAttribute("aria-pressed")).toBe("true"));
+    fireEvent.keyDown(game, { key: "F2" });
+    await waitFor(() => expect(showControls).toHaveBeenCalledTimes(2));
+    expect(settings.getAttribute("aria-pressed")).toBe("true");
+    act(() => {
+      runtime.controlsVisible = false;
+      runtime.listeners.get("controls:visible")?.({ payload: false });
+    });
+    await waitFor(() => expect(settings.getAttribute("aria-pressed")).toBe("false"));
+    fireEvent.click(settings);
+    fireEvent.click(settings);
+    await waitFor(() => expect(toggleControls).toHaveBeenCalledTimes(4));
+    expect(settings.getAttribute("aria-pressed")).toBe("false");
+    expect(game.getAttribute("data-paused")).toBe("false");
+    expect(runtime.bridge.run).not.toHaveBeenCalled();
+  });
+
+  it("recovers settings visibility when the game webview reloads", async () => {
+    runtime.controlsVisible = true;
+    const view = render(
+      <LanguageProvider initial={{ preference: "en", detected: "en" }}>
+        <App desktop />
+      </LanguageProvider>,
+    );
+    await waitFor(() =>
+      expect(view.getByRole("button", { name: "settings" }).getAttribute("aria-pressed")).toBe(
+        "true",
+      ),
+    );
+    expect(showControls).not.toHaveBeenCalled();
+  });
+
   it.each([
     ["F2", showControls],
     ["i", setDecisionsVisible],

@@ -1,6 +1,7 @@
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { render } from "preact";
 import { isTauri } from "./bridge/tauri.ts";
+import { showGame } from "./bridge/windows.ts";
 import { initialLanguage } from "./i18n/environment.ts";
 import { LanguageProvider } from "./i18n/provider.tsx";
 import "./styles.css";
@@ -8,6 +9,7 @@ import "./styles.css";
 const root = document.getElementById("app");
 if (!root) throw new Error("#app is missing");
 const desktop = isTauri();
+if (desktop && getCurrentWindow().label === "main") await showGame(window.devicePixelRatio || 1);
 const initial = await initialLanguage();
 if (desktop && getCurrentWindow().label === "decisions") {
   const { DecisionsApp } = await import("./DecisionsApp.tsx");

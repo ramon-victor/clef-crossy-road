@@ -19,12 +19,13 @@ export async function runDecisionsSelfTest(): Promise<() => void> {
           const focused = document.querySelector('[data-action="close-inspector"]');
           const focusBounds = focused?.getBoundingClientRect();
           const viewport = document.querySelector(".decision-content")?.getBoundingClientRect();
-          const focusVisible =
-            focused === document.activeElement &&
+          const tolerance = 1 / window.devicePixelRatio;
+          const focusTargetVisible =
             !!focusBounds &&
             !!viewport &&
-            focusBounds.top >= viewport.top &&
-            focusBounds.bottom <= viewport.bottom;
+            focusBounds.top >= viewport.top - tolerance &&
+            focusBounds.bottom <= viewport.bottom + tolerance;
+          const focusVisible = focused === document.activeElement && focusTargetVisible;
           const state = text(".inspector-pre");
           const click = (tab: string) =>
             document.querySelector<HTMLButtonElement>(`[data-tab="${tab}"]`)?.click();
@@ -127,6 +128,7 @@ export async function runDecisionsSelfTest(): Promise<() => void> {
             },
           };
         }
+        report.viewport = [window.innerWidth, window.innerHeight];
         await emitTo("main", "selftest:decisions-result", { id: payload.id, report });
       })().catch(() => {});
     },

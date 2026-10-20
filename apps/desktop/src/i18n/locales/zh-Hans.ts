@@ -60,6 +60,7 @@ export const zhHans = {
 
   "windows.openControls": "打开控制窗口",
   "windows.openControlsHelp": "打开控制面板（F2）",
+  "windows.hideControls": "隐藏控制窗口",
   "windows.paused": "已暂停 · 按空格键继续",
   "windows.minimized": "游戏已最小化。请还原窗口后再继续。",
   "windows.pausing": "正在暂停…",

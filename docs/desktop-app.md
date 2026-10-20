@@ -13,11 +13,21 @@ How to run Clef Crossy Road in the browser or its three Tauri windows, who can p
 
 **Platform.** The desktop app needs Node 24+, pnpm 12.14.0 and Rust with the [Tauri prerequisites](https://v2.tauri.app/start/prerequisites/) for the platform (MSVC C++ build tools and WebView2 on Windows). Desktop launch has been verified on Windows, and backend tests have also run on Linux. CI checks TypeScript and the web build on Windows, Linux and macOS; this does not establish native UI support on every platform. The launchers are Windows scripts.
 
-Desktop starts with only the game visible. Settings and decisions are created hidden and open from the two matching game buttons: **F2** for settings, **T** for decisions, and **I** for the latest exact model request. An earlier visibility preference never opens an auxiliary window at native startup. Browser development keeps an integrated layout.
+Desktop starts with only the game visible. Settings and decisions are created hidden; each matching game button toggles its window. **F2** always opens and focuses settings, **T** toggles decisions, and **I** opens the latest exact model request. A minimized settings window is restored by its game button. The settings button follows native visibility, including title-bar closure. An earlier visibility preference never opens an auxiliary window at native startup. Browser development keeps an integrated layout.
 
-Initial client widths are compact: game 640, settings 320, decisions 360 logical pixels. Height is at most 720 logical pixels. Placement uses the monitor work area, scale factor and window decorations; effective minimum sizes shrink if the available work area is smaller. The game is centered, settings sits to its left and decisions to its right when possible. Windows overlap within the work area when necessary. Hiding and reopening preserves manual positioning and resizing within a run.
+The game opens in a phone-like portrait window, up to 440 × 800 CSS pixels. Settings opens at 320 pixels wide on its left and decisions at 360 pixels wide on its right, with the same height and aligned tops. On shorter displays the game narrows proportionally, down to 360 pixels. Normal resize minimums are game 360 × 640, settings 320 × 640 and decisions 360 × 640; these shrink only when the work area cannot fit them. Placement includes the monitor work area, margins and window decorations. Windows overlap within the work area when necessary.
 
-Closing an auxiliary window hides it. Closing settings also discards dialogs and unsaved credential input. Closing the game exits all windows. Minimizing the game pauses it until explicit resume; changing focus and reading pinned decisions do not pause the game. Model errors remain visible in the game even with both auxiliaries hidden. Only the game owns a session and model client.
+The main webview reports its device pixel ratio before the first show, and Rust converts the layout to physical pixels. This preserves the intended content sizes under fractional scaling, including XWayland where GTK and WebKit can report different scales. Initialization happens once per app run: hiding, reopening or reloading a webview preserves manual position and size.
+
+Closing an auxiliary window hides it. Hiding settings from either its game button or title bar discards dialogs and unsaved credential input. Closing the game exits all windows. Minimizing the game pauses it until explicit resume; changing focus and reading pinned decisions do not pause the game. Model errors remain visible in the game even with both auxiliaries hidden. Only the game owns a session and model client.
+
+### Linux display compatibility
+
+On Fedora 44 KDE/Wayland with WebKitGTK 2.54.1, opening decisions caused the game and native title bars to flicker during movement. Disabling DMA-BUF alone improved the game but left title-bar flicker; using XWayland with DMA-BUF disabled also stabilized the title bars in the visual comparison. This identifies a working compatibility configuration, not when the underlying issue was introduced.
+
+Before GTK or worker threads start, Linux builds detect Wayland through `XDG_SESSION_TYPE=wayland` or a nonempty `WAYLAND_DISPLAY`. When `DISPLAY` is also available and `GDK_BACKEND` is unset, the app defaults to `GDK_BACKEND=x11,wayland` and, if unset, `WEBKIT_DISABLE_DMABUF_RENDERER=1`. GTK tries X11 first and can fall back to Wayland if X11 cannot connect ([GTK backend selection](https://docs.gtk.org/gtk3/running.html)). This applies to development and release builds and keeps WebGL available.
+
+Explicit environment settings take precedence: an existing `GDK_BACKEND` skips the automatic configuration, and an existing DMA-BUF setting is never replaced. To diagnose native Wayland, run `GDK_BACKEND=wayland pnpm dev:desktop`; to reproduce the tested compatibility settings explicitly, run `GDK_BACKEND=x11 WEBKIT_DISABLE_DMABUF_RENDERER=1 pnpm dev:desktop`. X11-only sessions, Wayland sessions without `DISPLAY`, browser development, Windows and macOS retain their existing defaults. Check scale and window placement when using multiple monitors.
 
 ## pnpm setup
 
@@ -118,6 +128,6 @@ The panels share light surfaces, system typography, restrained borders, yellow p
 1. The NSIS installer and code signing are not built or verified; only `tauri build --no-bundle` is used.
 2. A packaged app should keep credentials in the OS keychain instead of `.env` ([SECURITY.md](../SECURITY.md)).
 3. The self-test drives the keyboard with synthetic key events; physical keyboard input has not been checked separately.
-4. On the tested Linux desktop session, minimize/pause checks returned false for both the original three-tab UI and this refactor. The new compact layout, artwork, history, inspector, language synchronization and window reopening passed native checks; minimization still needs platform investigation.
+4. Native Wayland previously failed minimize/pause checks for both the original three-tab UI and the compact refactor. The Fedora XWayland compatibility configuration passes these checks; native Wayland still needs separate platform investigation.
 
 Implementation notes for contributors live in [../apps/desktop/AGENTS.md](../apps/desktop/AGENTS.md).

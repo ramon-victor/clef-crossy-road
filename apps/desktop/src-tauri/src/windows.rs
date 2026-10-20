@@ -1,8 +1,21 @@
 //! The game owns the lifetime of the app; controls can be hidden and shown without a new webview.
 
-use tauri::{AppHandle, Emitter, LogicalPosition, LogicalSize, Manager, WindowEvent};
+use std::sync::OnceLock;
+
+use tauri::{AppHandle, Emitter, Manager, PhysicalPosition, PhysicalSize, State, WindowEvent};
 
 use crate::error::{CommandError, CommandResult};
+
+#[derive(Default)]
+pub struct WindowLayout {
+    pixel_ratio: OnceLock<f64>,
+}
+
+impl WindowLayout {
+    pub fn pixel_ratio(&self) -> f64 {
+        *self.pixel_ratio.get().unwrap_or(&1.0)
+    }
+}
 
 #[tauri::command]
 pub fn show_controls(app: AppHandle) -> CommandResult<()> {
@@ -13,7 +26,30 @@ pub fn show_controls(app: AppHandle) -> CommandResult<()> {
     controls.show()?;
     controls.set_focus()?;
     app.emit_to("controls", "controls:shown", ())?;
+    app.emit_to("main", "controls:visible", true)?;
     Ok(())
+}
+
+fn hide_controls(app: &AppHandle) -> CommandResult<()> {
+    let controls = app
+        .get_webview_window("controls")
+        .ok_or_else(|| CommandError::new("Controls window is unavailable"))?;
+    app.emit_to("controls", "controls:hidden", ())?;
+    controls.hide()?;
+    app.emit_to("main", "controls:visible", false)?;
+    Ok(())
+}
+
+#[tauri::command]
+pub fn toggle_controls(app: AppHandle) -> CommandResult<()> {
+    let controls = app
+        .get_webview_window("controls")
+        .ok_or_else(|| CommandError::new("Controls window is unavailable"))?;
+    if controls.is_visible()? && !controls.is_minimized()? {
+        hide_controls(&app)
+    } else {
+        show_controls(app)
+    }
 }
 
 #[tauri::command]
@@ -42,10 +78,7 @@ pub fn on_event(window: &tauri::Window, event: &WindowEvent) {
         }
         ("controls", WindowEvent::CloseRequested { api, .. }) => {
             api.prevent_close();
-            let _ = window
-                .app_handle()
-                .emit_to("controls", "controls:hidden", ());
-            let _ = window.hide();
+            let _ = hide_controls(window.app_handle());
         }
         ("decisions", WindowEvent::CloseRequested { api, .. }) => {
             api.prevent_close();
@@ -55,12 +88,13 @@ pub fn on_event(window: &tauri::Window, event: &WindowEvent) {
                 .app_handle()
                 .emit_to("main", "decisions:visible", false);
         }
-        ("decisions", WindowEvent::Resized(_) | WindowEvent::Focused(_)) => {
+        ("controls" | "decisions", WindowEvent::Resized(_) | WindowEvent::Focused(_)) => {
             if let (Ok(visible), Ok(minimized)) = (window.is_visible(), window.is_minimized()) {
-                let _ =
-                    window
-                        .app_handle()
-                        .emit_to("main", "decisions:visible", visible && !minimized);
+                let _ = window.app_handle().emit_to(
+                    "main",
+                    &format!("{}:visible", window.label()),
+                    visible && !minimized,
+                );
             }
         }
         ("main", WindowEvent::Resized(_) | WindowEvent::Focused(_)) => {
@@ -86,12 +120,13 @@ struct Layout {
     y: f64,
 }
 
-/// All sizes are logical, including window decorations and monitor work area offsets.
+/// All dimensions are CSS pixels; the webview's pixel ratio supplies physical window sizes.
 fn layout(width: f64, height: f64, frame_width: f64, frame_height: f64) -> Layout {
     let margin = 16.0;
     let gap = 12.0;
     let available = (width - margin * 2.0 - frame_width).max(1.0);
-    let game_width = 640.0_f64.min(available);
+    let height = (height - margin * 2.0 - frame_height).max(1.0).min(800.0);
+    let game_width = (height * 440.0 / 800.0).clamp(360.0, 440.0).min(available);
     let controls_width = 320.0_f64.min(available);
     let decisions_width = 360.0_f64.min(available);
     let game_x = ((width - game_width - frame_width) / 2.0).max(0.0);
@@ -100,7 +135,6 @@ fn layout(width: f64, height: f64, frame_width: f64, frame_height: f64) -> Layou
         .min((width - controls_width - frame_width).max(0.0));
     let decisions_x = (game_x + game_width + frame_width + gap)
         .min((width - decisions_width - frame_width - margin).max(0.0));
-    let height = (height - margin * 2.0 - frame_height).max(1.0).min(720.0);
     Layout {
         decisions_width,
         decisions_x,
@@ -113,16 +147,31 @@ fn layout(width: f64, height: f64, frame_width: f64, frame_height: f64) -> Layou
     }
 }
 
-pub fn setup(app: &tauri::App) -> tauri::Result<()> {
-    let game = app.get_webview_window("main").expect("main window missing");
+/// The main webview reports its CSS scale before the first show. XWayland's GTK monitor
+/// scale can differ from WebKit's fractional scale; using only the former shrinks the UI.
+#[tauri::command]
+pub fn show_game(
+    app: AppHandle,
+    state: State<'_, WindowLayout>,
+    pixel_ratio: f64,
+) -> CommandResult<()> {
+    if !pixel_ratio.is_finite() || pixel_ratio <= 0.0 {
+        return Err(CommandError::new("Invalid window pixel ratio"));
+    }
+    if state.pixel_ratio.get().is_some() {
+        return Ok(());
+    }
+    let game = app
+        .get_webview_window("main")
+        .ok_or_else(|| CommandError::new("Game window is unavailable"))?;
     let controls = app
         .get_webview_window("controls")
-        .expect("controls window missing");
+        .ok_or_else(|| CommandError::new("Controls window is unavailable"))?;
     let decisions = app
         .get_webview_window("decisions")
-        .expect("decisions window missing");
+        .ok_or_else(|| CommandError::new("Decisions window is unavailable"))?;
     if let Some(monitor) = game.current_monitor()?.or(game.primary_monitor()?) {
-        let scale = monitor.scale_factor();
+        let scale = pixel_ratio;
         let area = monitor.work_area();
         let inner = game.inner_size()?;
         let outer = game.outer_size()?;
@@ -136,34 +185,25 @@ pub fn setup(app: &tauri::App) -> tauri::Result<()> {
         );
         let x = f64::from(area.position.x) / scale;
         let y = f64::from(area.position.y) / scale;
-        for (window, width) in [
-            (&game, placement.game_width),
-            (&controls, placement.controls_width),
-            (&decisions, placement.decisions_width),
+        for (window, width, minimum_width, offset_x) in [
+            (&game, placement.game_width, 360.0_f64, placement.game_x),
+            (&controls, placement.controls_width, 320.0, placement.controls_x),
+            (&decisions, placement.decisions_width, 360.0, placement.decisions_x),
         ] {
-            window.set_min_size(Some(LogicalSize::new(
-                width,
-                480.0_f64.min(placement.height),
+            window.set_min_size(Some(PhysicalSize::new(
+                minimum_width.min(width) * scale,
+                640.0_f64.min(placement.height) * scale,
             )))?;
+            window.set_size(PhysicalSize::new(width * scale, placement.height * scale))?;
+            window.set_position(PhysicalPosition::new(
+                (x + offset_x) * scale,
+                (y + placement.y) * scale,
+            ))?;
         }
-        game.set_size(LogicalSize::new(placement.game_width, placement.height))?;
-        controls.set_size(LogicalSize::new(placement.controls_width, placement.height))?;
-        game.set_position(LogicalPosition::new(x + placement.game_x, y + placement.y))?;
-        controls.set_position(LogicalPosition::new(
-            x + placement.controls_x,
-            y + placement.y,
-        ))?;
-        decisions.set_size(LogicalSize::new(
-            placement.decisions_width,
-            placement.height,
-        ))?;
-        decisions.set_position(LogicalPosition::new(
-            x + placement.decisions_x,
-            y + placement.y,
-        ))?;
     }
     game.show()?;
     game.set_focus()?;
+    let _ = state.pixel_ratio.set(pixel_ratio);
     Ok(())
 }
 
@@ -174,18 +214,20 @@ mod tests {
     #[test]
     fn opens_compact_windows_on_each_side_of_the_centered_game() {
         let p = layout(1440.0, 900.0, 8.0, 32.0);
-        assert_eq!(p.game_width, 640.0);
+        assert_eq!(p.game_width, 440.0);
         assert_eq!(p.controls_width, 320.0);
         assert_eq!(p.decisions_width, 360.0);
-        assert_eq!(p.height, 720.0);
+        assert_eq!(p.height, 800.0);
+        assert!(p.height > p.game_width * 1.7);
         assert!(p.controls_x + p.controls_width + 8.0 <= p.game_x);
         assert!(p.controls_x + p.controls_width + 8.0 <= 1440.0);
+        assert!(p.game_x + p.game_width + 8.0 < p.decisions_x);
     }
 
     #[test]
     fn shrinks_the_game_to_the_monitor_work_area() {
         let p = layout(1180.0, 728.0, 8.0, 32.0);
-        assert_eq!(p.game_width, 640.0);
+        assert_eq!(p.game_width, 365.2);
         assert_eq!(p.height, 664.0);
         assert!(p.controls_x + p.controls_width + 8.0 <= 1180.0);
     }
@@ -193,7 +235,7 @@ mod tests {
     #[test]
     fn overlaps_on_narrow_displays_instead_of_hiding_the_controls_offscreen() {
         let p = layout(800.0, 600.0, 8.0, 32.0);
-        assert_eq!(p.game_width, 640.0);
+        assert_eq!(p.game_width, 360.0);
         assert_eq!(p.controls_width, 320.0);
         assert!(p.controls_x + p.controls_width + 8.0 <= 800.0);
         assert!(p.controls_x < p.game_x + p.game_width);

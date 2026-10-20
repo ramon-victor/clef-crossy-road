@@ -1,12 +1,16 @@
 // @vitest-environment jsdom
-import { cleanup, render } from "@testing-library/preact";
+import { act, cleanup, render } from "@testing-library/preact";
 import { afterEach, describe, expect, it } from "vitest";
 import { LanguageProvider } from "../i18n/provider.tsx";
 import { Compass } from "./Compass.tsx";
 import type { ExecutionView } from "./execution.ts";
 import { answeredSession, routeAnswers } from "./test-support.ts";
 
-afterEach(cleanup);
+afterEach(async () => {
+  cleanup();
+  // Flush deferred provider effects before jsdom removes window at the end of the file.
+  await act(async () => {});
+});
 
 describe("compass execution hierarchy", () => {
   it("lights only pause while Clef's forward choice stays secondary, without percentages", async () => {
