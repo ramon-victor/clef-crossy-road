@@ -10,9 +10,11 @@
 [![Tauri](https://img.shields.io/badge/Tauri-v2-FFC131?logo=tauri&logoColor=black)](https://v2.tauri.app/)
 [![Workers AI](https://img.shields.io/badge/Cloudflare-Workers%20AI-F38020?logo=cloudflare&logoColor=white)](https://developers.cloudflare.com/workers-ai/)
 
-<img src="docs/images/panel.png" alt="The AI panel: who plays, the last decision, rows crossed, decisions, latency and tokens" width="300">
+<img src="docs/images/panel.png" alt="Compact controls: player, daily Neurons, commands and settings" width="280">
+<img src="docs/images/decisions.png" alt="Current action, model choice and the game's chicken in the maneuver sketch" width="315">
+<img src="docs/images/history.png" alt="Recent consultations expand in place to show the actions sent to the game" width="315">
 
-<sub>The AI panel with the free look-ahead reference (it reports no probabilities).<br>The default Clef player also shows action probabilities derived from its lookup answers, latency and tokens.</sub>
+<sub>Controls, current decision and expandable history.<br>The decision screenshots replay real cached Clef-flash answers on seed 7, with no API calls.</sub>
 
 </div>
 
@@ -23,8 +25,8 @@ TypeScript port of the rules of Evan Bacon's [Expo-Crossy-Road](https://github.c
 player asks the model three lookups about the scene, plus a fourth while riding a platform, then a route controller executes the hops, waits and detours. Other
 conditions ask the model to choose each move directly.
 
-A [Tauri v2](https://v2.tauri.app/) desktop app renders the game with Three.js in one window and its controls in another. Browser development keeps an integrated layout. The panel shows
-actions, probabilities, controller steps, latency, tokens and rows crossed. A Node benchmark CLI compares players on
+A [Tauri v2](https://v2.tauri.app/) desktop app renders the game with Three.js in one window and its controls in another. Browser development keeps an integrated layout. Controls groups the player, commands and daily Neurons. Decisions shows
+actions and expandable consultation history, with probabilities, latency, tokens and episode statistics in contextual technical details. A Node benchmark CLI compares players on
 identical seeds with paired confidence intervals.
 
 Nothing is deployed to Cloudflare. The project only calls the Workers AI REST API and checks a daily free-tier ceiling
@@ -123,7 +125,7 @@ If an older pnpm fails to load the pinned version, see [pnpm setup](docs/desktop
 ## Using a model
 
 1. Create a Cloudflare API token with **only** the *Workers AI* permission and an expiry date.
-2. In the app, open **Setup → Cloudflare → Configure**, enter your **Account ID** and the **API token**, and save. They are
+2. In the app, open **Controls → Cloudflare → Configure**, enter your **Account ID** and the **API token**, and save. They are
    written to the local `.env` and applied without a restart; saving never calls the API. Alternatively copy `.env.example`
    to `.env` and fill in `CF_ACCOUNT_ID` and `CF_API_TOKEN` (the benchmark reads that file too).
 3. Choose **Clef-flash** or **Clef (27B)** in **Who plays**.

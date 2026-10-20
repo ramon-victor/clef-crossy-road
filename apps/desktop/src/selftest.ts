@@ -483,6 +483,7 @@ async function checkTheater(ctx: Context): Promise<Report> {
   const caption = document.querySelector(".cap-main")?.textContent ?? "";
   await controlsReport("now", "decisions");
   const { diagram, action, intent, tabs } = await conversation();
+  const history = await controlsReport("history", "decisions");
   await invoke("selftest_window_action", { action: "small-decisions" });
   await sleep(250);
   const smallWindow = await controlsReport("status", "decisions");
@@ -517,6 +518,7 @@ async function checkTheater(ctx: Context): Promise<Report> {
         shownAgain: compassShownAgain,
       },
       conversation: {
+        history,
         smallWindow,
         diagram,
         action,

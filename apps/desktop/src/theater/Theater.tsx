@@ -1,3 +1,4 @@
+import type { ChickenArtwork } from "@ccr/render";
 import { useEffect, useId, useLayoutEffect, useRef, useState } from "preact/hooks";
 import { ACTION_GLYPH } from "../format.ts";
 import { useI18n } from "../i18n/provider.tsx";
@@ -6,6 +7,7 @@ import type { ChoiceKind } from "../policies.ts";
 import type { SessionState } from "../session.ts";
 import { DecisionDetails } from "./DecisionDetails.tsx";
 import { DecisionScene } from "./DecisionScene.tsx";
+import { ExecutionList } from "./ExecutionList.tsx";
 import { Glyph } from "./Glyph.tsx";
 import { PACES, type Pace } from "./preference.ts";
 import { buildDecisionPresentation, intentLabel } from "./presentation.ts";
@@ -23,12 +25,14 @@ export interface TheaterProps {
   pace?: Pace | null;
   onPace?(pace: Pace): void;
   fps?: number;
+  /** Undefined while loading; null if the game could not prepare the artwork. */
+  artwork?: ChickenArtwork | null | undefined;
 }
 
-const TABS = ["now", "history", "details"] as const;
+const TABS = ["now", "history"] as const;
 type Tab = (typeof TABS)[number];
 
-/** One current action, with history and exact input one level away. No game or model ownership. */
+/** Live presentation and a bounded, explicitly refreshed history. Never owns game or model state. */
 export function Theater({
   state,
   kind,
@@ -41,41 +45,78 @@ export function Theater({
   pace,
   onPace,
   fps,
+  artwork,
 }: TheaterProps) {
   const translation = useI18n();
   const { t } = translation;
   const id = useId();
   const [tab, setTab] = useState<Tab>("now");
+  const [expanded, setExpanded] = useState<number | null>(null);
+  const [technicalOpen, setTechnicalOpen] = useState(false);
   const [inputOpen, setInputOpen] = useState(false);
+  const [expired, setExpired] = useState(false);
   const [frozen, setFrozen] = useState<{ state: SessionState; index: number | null } | null>(null);
   const previous = useRef({ state, inspectVersion });
   const handledInspect = useRef(0);
   const content = useRef<HTMLDivElement>(null);
   const source = frozen?.state ?? state;
-  const view = buildDecisionPresentation(source, kind, translation, frozen?.index ?? undefined);
+  const view = buildDecisionPresentation(
+    source,
+    kind,
+    translation,
+    (tab === "history" ? expanded : frozen?.index) ?? undefined,
+  );
   const answered = view.rounds.filter((round) => round.log);
+  const latestIndex = state.turns.at(-1)?.model.index ?? -1;
+  const savedIndex = source.turns.at(-1)?.model.index ?? -1;
+  const hasNew = frozen !== null && latestIndex > savedIndex;
   const live = () => {
     setFrozen(null);
     setTab("now");
+    setExpanded(null);
+    setTechnicalOpen(false);
     setInputOpen(false);
+    setExpired(false);
+    if (content.current) content.current.scrollTop = 0;
   };
   const pin = () => {
-    if (view.current) setFrozen((saved) => saved ?? { state, index: view.round?.index ?? null });
+    if (view.round?.log || view.current)
+      setFrozen((saved) => saved ?? { state, index: view.round?.index ?? null });
   };
   const selectTab = (next: Tab) => {
-    if (next !== "now") pin();
+    if (next === "now") {
+      live();
+      return;
+    }
+    if (state.turns.length) setFrozen((saved) => saved ?? { state, index: null });
     setTab(next);
+    setTechnicalOpen(false);
+    setInputOpen(false);
+  };
+  const refresh = () => {
+    const retained = expanded !== null && state.turns.some((turn) => turn.model.index === expanded);
+    setFrozen({ state, index: retained ? expanded : null });
+    setExpired(expanded !== null && !retained);
+    if (!retained) {
+      setExpanded(null);
+      setTechnicalOpen(false);
+      setInputOpen(false);
+    }
   };
 
   useLayoutEffect(() => {
-    // Opening the exact input keeps its own focus/scroll target; other navigation starts at the top.
-    if (content.current && !(tab === "details" && inputOpen)) content.current.scrollTop = 0;
-  }, [tab, frozen?.index, inputOpen]);
+    // The inspector focuses and scrolls its own target when I also changes the active tab.
+    if (content.current && !inputOpen) content.current.scrollTop = 0;
+  }, [tab]);
 
   useEffect(() => {
-    if (tab !== "now" && !frozen && view.current)
-      setFrozen({ state, index: view.round?.index ?? null });
-  }, [tab, frozen, state, view.current, view.round?.index]);
+    if (
+      !frozen &&
+      ((tab === "history" && state.turns.length) ||
+        (technicalOpen && (view.round?.log || view.current)))
+    )
+      setFrozen({ state, index: tab === "now" ? (view.round?.index ?? null) : null });
+  }, [tab, frozen, state, technicalOpen, view.round, view.current]);
 
   useEffect(() => {
     const old = previous.current;
@@ -85,9 +126,7 @@ export function Theater({
       old.state.seed !== state.seed ||
       old.state.policyId !== state.policyId
     ) {
-      setFrozen(null);
-      setTab("now");
-      setInputOpen(false);
+      live();
       if (old.inspectVersion === inspectVersion) handledInspect.current = inspectVersion;
     }
     if (inspectVersion === handledInspect.current) return;
@@ -95,11 +134,47 @@ export function Theater({
     if (latest) {
       handledInspect.current = inspectVersion;
       setFrozen({ state, index: latest.model.index });
-      setTab("details");
+      setExpanded(latest.model.index);
+      setTab("history");
+      setTechnicalOpen(true);
       setInputOpen(true);
     }
   }, [state, inspectVersion]);
 
+  const technical = () => (
+    <section class="technical-disclosure">
+      <h3>
+        <button
+          type="button"
+          class="disclosure-button"
+          data-action="technical-details"
+          aria-expanded={technicalOpen}
+          aria-controls={`${id}-technical`}
+          onClick={() => {
+            if (!technicalOpen) pin();
+            setTechnicalOpen(!technicalOpen);
+            setInputOpen(false);
+          }}
+        >
+          {t("decisions.details")}
+          <span aria-hidden="true">{technicalOpen ? "−" : "+"}</span>
+        </button>
+      </h3>
+      <div id={`${id}-technical`} hidden={!technicalOpen}>
+        {technicalOpen && (
+          <DecisionDetails
+            view={view}
+            state={source}
+            fps={fps}
+            inputOpen={inputOpen}
+            onInput={setInputOpen}
+            compassOn={compassOn}
+            onCompass={onCompass}
+          />
+        )}
+      </div>
+    </section>
+  );
   const model = view.round?.facts.model ?? state.policyId?.split(":")[1] ?? "Clef";
   return (
     <aside class="theater decision-surface" aria-label={t("theater.title")}>
@@ -143,7 +218,7 @@ export function Theater({
                     : event.key === "Home"
                       ? TABS[0]
                       : event.key === "End"
-                        ? TABS[2]
+                        ? TABS[TABS.length - 1]
                         : null;
               if (next) {
                 event.preventDefault();
@@ -166,7 +241,12 @@ export function Theater({
             {t("theater.backToLive")} →
           </button>
         ) : (
-          <button type="button" class="decision-link" disabled={!view.current} onClick={pin}>
+          <button
+            type="button"
+            class="decision-link"
+            disabled={!view.current && !view.round?.log}
+            onClick={pin}
+          >
             {t("decisions.pin")}
           </button>
         )}
@@ -184,50 +264,72 @@ export function Theater({
           </div>
         )}
         {tab === "now" && (
-          <div class="decision-now" data-stage={view.stage}>
-            <div class="decision-context">
-              <span>
-                {view.round
-                  ? t("theater.round", { index: view.round.index + 1, row: view.round.row })
-                  : t("decisions.now")}
-              </span>
-              <span>{t(`decisions.stage.${view.stage}`)}</span>
-            </div>
-            <DecisionScene view={view} />
-            <div class="decision-action">
-              <h3>{view.title}</h3>
-              <p>{view.explanation}</p>
-            </div>
-            {view.intent && (
-              <div class="decision-intent">
-                <Glyph glyph={ACTION_GLYPH[view.intent]} size={22} />
-                <div>
-                  <span>{t("decisions.modelChoice")}</span>
-                  <strong>{intentLabel(view, translation)}</strong>
-                </div>
+          <>
+            <div class="decision-now" data-stage={view.stage}>
+              <div class="decision-context">
+                <span>
+                  {view.round
+                    ? t("theater.round", { index: view.round.index + 1, row: view.round.row })
+                    : t("decisions.now")}
+                </span>
+                <span class="surface-status">{t(`decisions.stage.${view.stage}`)}</span>
               </div>
-            )}
-            {view.controller && <p class="decision-source">{t("decisions.controller")}</p>}
-            {view.answers.length > 0 && (
-              <>
-                <h4 class="decision-answer-caption">{t("decisions.usedAnswers")}</h4>
-                <ul class="decision-observations" aria-label={t("decisions.usedAnswers")}>
-                  {view.answers.map((answer) => (
-                    <li key={answer.id}>
-                      <Glyph glyph={answer.glyph} size={14} />
-                      {answer.label}
-                    </li>
-                  ))}
-                </ul>
-              </>
-            )}
-          </div>
+              <div class="decision-action">
+                <h3>{view.title}</h3>
+                <p>{view.explanation}</p>
+              </div>
+              {view.intent && (
+                <div class="decision-intent">
+                  <Glyph glyph={ACTION_GLYPH[view.intent]} size={22} />
+                  <div>
+                    <span>{t("decisions.modelChoice")}</span>
+                    <strong>{intentLabel(view, translation)}</strong>
+                  </div>
+                </div>
+              )}
+              {view.controller && <p class="decision-source">{t("decisions.controller")}</p>}
+              <DecisionScene view={view} artwork={artwork} />
+              {view.answers.length > 0 && (
+                <section class="decision-used">
+                  <h4>{t("decisions.usedAnswers")}</h4>
+                  <ul class="decision-observations" aria-label={t("decisions.usedAnswers")}>
+                    {view.answers.map((answer) => (
+                      <li key={answer.id}>
+                        <Glyph glyph={answer.glyph} size={14} />
+                        {answer.label}
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+              )}
+            </div>
+            {technical()}
+          </>
         )}
         {tab === "history" && (
           <div class="decision-history">
-            {kind === "model" && <p class="hint">{t("decisions.historyHelp")}</p>}
+            <div class="history-heading">
+              <h3>{t("decisions.historyCount", { value: answered.length })}</h3>
+              {frozen && (
+                <button
+                  type="button"
+                  class="decision-link history-refresh"
+                  disabled={!hasNew}
+                  onClick={refresh}
+                >
+                  {t("decisions.refresh")}
+                </button>
+              )}
+            </div>
+            <p class="history-status" role="status">
+              {expired
+                ? t("decisions.expired")
+                : hasNew
+                  ? t("decisions.newHistory")
+                  : t("decisions.historyHelp")}
+            </p>
             {answered.length === 0 ? (
-              <p>
+              <p class="decision-empty">
                 {t(
                   kind === "model"
                     ? "theater.waiting"
@@ -238,40 +340,67 @@ export function Theater({
               </p>
             ) : (
               [...answered].reverse().map((round) => (
-                <button
-                  type="button"
+                <article
+                  class={`history-entry ${expanded === round.index ? "expanded" : ""}`}
                   key={round.index}
-                  class="decision-history-item"
-                  data-decision={round.index}
-                  onClick={() => {
-                    setFrozen({ state: source, index: round.index });
-                    setTab("now");
-                    setInputOpen(false);
-                  }}
                 >
-                  <span class="history-direction">
-                    <Glyph glyph={round.move?.glyph ?? "•"} size={22} />
-                  </span>
-                  <span>
-                    <strong>{round.move?.label}</strong>
-                    <small>{t("theater.round", { index: round.index + 1, row: round.row })}</small>
-                  </span>
-                  <span aria-hidden="true">→</span>
-                </button>
+                  <h3>
+                    <button
+                      type="button"
+                      class="decision-history-item"
+                      data-decision={round.index}
+                      id={`${id}-round-${round.index}`}
+                      aria-expanded={expanded === round.index}
+                      aria-controls={`${id}-record-${round.index}`}
+                      onClick={() => {
+                        setExpanded(expanded === round.index ? null : round.index);
+                        setTechnicalOpen(false);
+                        setInputOpen(false);
+                      }}
+                    >
+                      <span class="history-direction">
+                        <Glyph glyph={round.move?.glyph ?? "•"} size={22} />
+                      </span>
+                      <span class="history-item-copy">
+                        <small>
+                          {t("theater.round", { index: round.index + 1, row: round.row })}
+                        </small>
+                        <strong>{round.move?.label}</strong>
+                        <small>
+                          {round.pending
+                            ? t("decisions.ready")
+                            : t("decisions.stepCount", {
+                                value: round.history.filter(
+                                  (log) => log.decision.source === "executor",
+                                ).length,
+                              })}
+                          {round.facts.cached && (
+                            <span class="cache-badge">{t("decisions.cached")}</span>
+                          )}
+                        </small>
+                      </span>
+                      <span class="disclosure-mark" aria-hidden="true">
+                        {expanded === round.index ? "−" : "+"}
+                      </span>
+                    </button>
+                  </h3>
+                  <section
+                    class="history-expanded"
+                    id={`${id}-record-${round.index}`}
+                    aria-labelledby={`${id}-round-${round.index}`}
+                    hidden={expanded !== round.index}
+                  >
+                    {expanded === round.index && (
+                      <>
+                        <ExecutionList round={round} />
+                        {technical()}
+                      </>
+                    )}
+                  </section>
+                </article>
               ))
             )}
           </div>
-        )}
-        {tab === "details" && (
-          <DecisionDetails
-            view={view}
-            state={source}
-            fps={fps}
-            inputOpen={inputOpen}
-            onInput={setInputOpen}
-            compassOn={compassOn}
-            onCompass={onCompass}
-          />
         )}
       </div>
       <footer class="decision-footer">

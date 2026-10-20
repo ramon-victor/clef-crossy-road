@@ -1,3 +1,4 @@
+import type { ChickenArtwork } from "@ccr/render";
 import { invoke } from "@tauri-apps/api/core";
 import { emitTo } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
@@ -18,6 +19,7 @@ export const WINDOW_EVENTS = {
   decisionsShown: "decisions:shown",
   decisionsClosed: "decisions:closed",
   decisionsVisible: "decisions:visible",
+  artwork: "decisions:artwork",
 } as const;
 
 export type AuxiliaryWindow = "controls" | "decisions";
@@ -44,18 +46,30 @@ export const setDecisionsVisible = (visible: boolean, focus = false): Promise<vo
   invoke("set_decisions_visible", { visible, focus });
 
 /** Register before publishing; a late/reloaded panel can always request a fresh snapshot. */
-export async function hostControls(execute: SendControl, snapshot: () => ControlsData) {
-  const publish = () => {
+export async function hostControls(
+  execute: SendControl,
+  snapshot: () => ControlsData,
+  artwork?: () => ChickenArtwork | null | undefined,
+) {
+  let lastArtwork: ChickenArtwork | null | undefined;
+  const publishArtwork = async (force = false) => {
+    const next = artwork?.();
+    if (next === undefined || (!force && next === lastArtwork)) return;
+    await emitTo("decisions", WINDOW_EVENTS.artwork, next);
+    lastArtwork = next;
+  };
+  const publish = async () => {
     const payload = {
       data: snapshot(),
       timeOrigin: performance.timeOrigin,
     } satisfies RemoteSnapshot;
     // One unavailable presentation must not block replies to the other.
-    return Promise.allSettled(
-      (["controls", "decisions"] as const).map((target) =>
+    await Promise.allSettled([
+      publishArtwork(),
+      ...(["controls", "decisions"] as const).map((target) =>
         emitTo(target, WINDOW_EVENTS.state, payload),
       ),
-    );
+    ]);
   };
   const stop = await getCurrentWindow().listen<Request>(WINDOW_EVENTS.request, ({ payload }) => {
     if (payload.sender !== "controls" && payload.sender !== "decisions") return;
@@ -63,6 +77,7 @@ export async function hostControls(execute: SendControl, snapshot: () => Control
       let ok = true;
       try {
         if (payload.command.type !== "sync") await execute(payload.command);
+        else if (payload.sender === "decisions") await publishArtwork(true).catch(() => {});
       } catch {
         ok = false;
       }
@@ -74,7 +89,10 @@ export async function hostControls(execute: SendControl, snapshot: () => Control
 }
 
 /** No commands are retried: retrying a map or a single step would change the game twice. */
-export async function connectControls(onState: (data: ControlsData) => void) {
+export async function connectControls(
+  onState: (data: ControlsData) => void,
+  onArtwork?: (artwork: ChickenArtwork | null) => void,
+) {
   const label = getCurrentWindow().label;
   if (label !== "controls" && label !== "decisions") throw new Error("Unknown auxiliary window");
   const sender: AuxiliaryWindow = label;
@@ -84,6 +102,13 @@ export async function connectControls(onState: (data: ControlsData) => void) {
   let disposed = false;
   const stops: (() => void)[] = [];
   try {
+    if (sender === "decisions" && onArtwork)
+      stops.push(
+        await getCurrentWindow().listen<ChickenArtwork | null>(
+          WINDOW_EVENTS.artwork,
+          ({ payload }) => onArtwork(payload),
+        ),
+      );
     stops.push(
       await getCurrentWindow().listen<RemoteSnapshot>(WINDOW_EVENTS.state, ({ payload }) =>
         onState(controlsForWindow(payload.data, payload.timeOrigin, performance.timeOrigin)),

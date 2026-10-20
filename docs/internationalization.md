@@ -6,7 +6,7 @@ How the seven UI languages are selected, how translation stays separate from mod
 
 The UI has local catalogs for English (`en`), Brazilian Portuguese (`pt-BR`), Spanish (`es`), French (`fr`), German (`de`), Japanese (`ja`) and Simplified Chinese (`zh-Hans`). No translation service or runtime download is involved.
 
-**Settings → Appearance and sound → Language** changes presentation immediately without rebuilding the session, policies or canvas. The preference is saved under `ccr.locale`; blocked storage leaves it active only until reload. **Automatic (system)** restores detection, whose result is also displayed. Languages use their own names, without flags.
+**Controls → Preferences → Language** changes presentation immediately without rebuilding the session, policies or canvas. The preference is saved under `ccr.locale`; blocked storage leaves it active only until reload. **Automatic (system)** restores detection, whose result is also displayed. Languages use their own names, without flags.
 
 Tauri obtains the system BCP 47 locale through the OS plugin with only `os:allow-locale`. Browser development uses the first `navigator.languages` entry, falling back to `navigator.language`. Initial detection resolves before the UI mounts.
 

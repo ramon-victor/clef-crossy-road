@@ -1,4 +1,5 @@
 import type { Action } from "@ccr/core";
+import type { ChickenArtwork } from "@ccr/render";
 import { useI18n } from "../i18n/provider.tsx";
 import type { DecisionPresentation } from "./presentation.ts";
 
@@ -16,9 +17,21 @@ const TILES = Array.from({ length: 9 }, (_, i) => {
 }).sort((a, b) => a.y - b.y);
 
 /** An intentionally schematic board: the arrow is a maneuver, never an invented safe route. */
-export function DecisionScene({ view }: { view: DecisionPresentation }) {
+export function DecisionScene({
+  view,
+  artwork,
+}: {
+  view: DecisionPresentation;
+  artwork: ChickenArtwork | null | undefined;
+}) {
   const { t } = useI18n();
   const end = view.intent ? ENDS[view.intent] : null;
+  const facing =
+    view.actual && view.actual !== "stay"
+      ? view.actual
+      : view.intent && view.intent !== "stay"
+        ? view.intent
+        : "hop_forward";
   return (
     <figure
       class="decision-scene"
@@ -50,18 +63,17 @@ export function DecisionScene({ view }: { view: DecisionPresentation }) {
             />
           </g>
         )}
-        <g class="board-chicken" transform="translate(160 79)">
-          <ellipse cy="17" rx="17" ry="7" fill="#496e43" opacity=".25" />
-          <path d="m-12 12 9 5v6l-9-5Zm15 0 9 5v6l-9-5Z" fill="#e88b35" />
-          <path d="m-20-9 19-10 21 11v23L0 26l-20-11Z" fill="#e1e9ed" />
-          <path d="M-20-9 0 2l20-10v23L0 26V2l-20-11Z" fill="#c9d9df" />
-          <path d="M-13-36 3-44l17 9v29L4 3l-17-10Z" fill="#fff" />
-          <path d="m3-44 17 9v29L4 3V-26Z" fill="#e9eff2" />
-          <path d="m-3-44 0-8 7-4 8 4v10l-7 4Z" fill="#e3544f" />
-          <path d="m12-19 15 2-9 7-6-3Z" fill="#edab36" />
-          <path d="M9-30h5v6H9Z" fill="#1d2b45" />
-          <path d="m-21-3-8-9v18l9 8Z" fill="#f7fafc" />
-        </g>
+        <ellipse cx="160" cy="102" rx="19" ry="7" class="board-shadow" />
+        {artwork && (
+          <image
+            class="board-chicken"
+            href={artwork[facing]}
+            x="102"
+            y="4"
+            width="116"
+            height="116"
+          />
+        )}
         {(view.actual === "stay" || view.stage === "holding") && (
           <g class="board-wait" transform="translate(206 115)">
             <circle r="16" />
@@ -81,7 +93,15 @@ export function DecisionScene({ view }: { view: DecisionPresentation }) {
           </g>
         )}
       </svg>
-      <figcaption>{t("decisions.diagram")}</figcaption>
+      <figcaption>
+        {t(
+          artwork
+            ? "decisions.diagram"
+            : artwork === null
+              ? "decisions.artUnavailable"
+              : "decisions.artLoading",
+        )}
+      </figcaption>
     </figure>
   );
 }

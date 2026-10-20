@@ -74,8 +74,9 @@ vi.mock("./GameCanvas.tsx", () => ({
   ),
 }));
 
-afterEach(() => {
+afterEach(async () => {
   cleanup();
+  await act(async () => {});
   vi.clearAllMocks();
   runtime.listeners.clear();
   runtime.snapshot = null;
@@ -166,13 +167,14 @@ describe("game window shortcuts", () => {
     expect(runtime.bridge.run).not.toHaveBeenCalled();
   });
 
-  it("leaves F2 available to the browser", () => {
+  it("leaves F2 available to the browser", async () => {
     const view = render(
       <LanguageProvider initial={{ preference: "en", detected: "en" }}>
         <App />
       </LanguageProvider>,
     );
     const event = new KeyboardEvent("keydown", { key: "F2", bubbles: true, cancelable: true });
+    await waitFor(() => expect(runtime.bridge.budget).toHaveBeenCalled());
     view.getByRole("button", { name: "game control" }).dispatchEvent(event);
     expect(event.defaultPrevented).toBe(false);
     expect(showControls).not.toHaveBeenCalled();

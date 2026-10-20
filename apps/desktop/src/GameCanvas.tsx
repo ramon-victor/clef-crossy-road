@@ -16,6 +16,7 @@ export interface GameCanvasProps {
   state: SessionState;
   sounds: Sounds;
   onReady?: (view: GameView) => void;
+  onUnavailable?: () => void;
   onFps?: (fps: number) => void;
   onRetry: () => void;
   onNewMap: () => void;
@@ -133,6 +134,8 @@ export function GameCanvas(props: GameCanvasProps) {
         frameId = requestAnimationFrame(loop);
       })
       .catch((error: unknown) => {
+        if (disposed) return;
+        latest.current.onUnavailable?.();
         setStatus("error");
         setErrorText(error instanceof Error ? error.message : String(error));
       });

@@ -18,7 +18,7 @@ export function PlayerCard({ choices, selectedId, bridgeKind, onSelect }: Player
   const choice = choices.find((c) => c.id === selectedId);
   const text = choice ? playerText(choice, translation) : null;
   return (
-    <section class="card player-card">
+    <section class="player-card">
       <div class="player-label">
         <label class="field-label" for="player">
           {t("player.who")}

@@ -1,4 +1,4 @@
-import type { GameView } from "@ccr/render";
+import type { ChickenArtwork, GameView } from "@ccr/render";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useCallback, useEffect, useMemo, useRef, useState } from "preact/hooks";
 import { Sounds } from "./audio.ts";
@@ -88,6 +88,8 @@ export function App({ desktop = false }: { desktop?: boolean }) {
   const [compassChoice, setCompassChoice] = useState<boolean | null>(() => readFlag("compass"));
   const [pace, setPaceState] = useState<Pace>(() => readPace());
   const viewRef = useRef<GameView | null>(null);
+  const [artwork, setArtwork] = useState<ChickenArtwork | null | undefined>(undefined);
+  const artworkRef = useRef<ChickenArtwork | null | undefined>(undefined);
   const minimizedRef = useRef(false);
 
   const refreshBudget = useCallback(() => {
@@ -363,6 +365,7 @@ export function App({ desktop = false }: { desktop?: boolean }) {
           state: session.state(),
           minimized: minimizedRef.current,
         }),
+        () => artworkRef.current,
       );
       stops.push(
         await current.listen<boolean>(WINDOW_EVENTS.minimized, ({ payload }) =>
@@ -502,6 +505,12 @@ export function App({ desktop = false }: { desktop?: boolean }) {
   const onReady = useCallback(
     (view: GameView) => {
       viewRef.current = view;
+      try {
+        artworkRef.current = view.captureChickenArtwork();
+      } catch {
+        artworkRef.current = null;
+      }
+      setArtwork(artworkRef.current);
       void runSelfTest({ session, view, bridge, choices, select, setPace });
     },
     [session, bridge, choices, select, setPace],
@@ -514,6 +523,10 @@ export function App({ desktop = false }: { desktop?: boolean }) {
         state={state}
         sounds={sounds}
         onReady={onReady}
+        onUnavailable={() => {
+          artworkRef.current = null;
+          setArtwork(null);
+        }}
         onFps={setFps}
         onRetry={retry}
         onNewMap={newMap}
@@ -533,6 +546,7 @@ export function App({ desktop = false }: { desktop?: boolean }) {
       )}
       {!desktop && showTheater && (
         <Theater
+          artwork={artwork}
           state={state}
           kind={selected?.kind}
           compassOn={showCompass}
