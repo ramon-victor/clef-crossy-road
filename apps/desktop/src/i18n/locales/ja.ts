@@ -61,6 +61,7 @@ export const ja = {
 
   "windows.openControls": "操作ウィンドウを開く",
   "windows.openControlsHelp": "操作パネルを開く（F2）",
+  "windows.hideControls": "操作ウィンドウを隠す",
   "windows.paused": "一時停止中 · スペースキーで再開",
   "windows.minimized": "ゲームは最小化されています。ウィンドウを戻してから再開してください。",
   "windows.pausing": "一時停止中…",

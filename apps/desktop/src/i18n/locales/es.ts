@@ -61,6 +61,7 @@ export const es = {
 
   "windows.openControls": "Abrir ventana de controles",
   "windows.openControlsHelp": "Abrir controles (F2)",
+  "windows.hideControls": "Ocultar ventana de controles",
   "windows.paused": "En pausa · Espacio para continuar",
   "windows.minimized": "Juego minimizado. Restaura la ventana antes de continuar.",
   "windows.pausing": "Pausando…",

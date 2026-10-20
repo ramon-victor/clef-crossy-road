@@ -61,6 +61,7 @@ export const fr = {
 
   "windows.openControls": "Ouvrir la fenêtre des commandes",
   "windows.openControlsHelp": "Ouvrir les commandes (F2)",
+  "windows.hideControls": "Masquer la fenêtre des commandes",
   "windows.paused": "En pause · Espace pour reprendre",
   "windows.minimized": "Jeu réduit. Restaurez la fenêtre avant de reprendre.",
   "windows.pausing": "Mise en pause…",

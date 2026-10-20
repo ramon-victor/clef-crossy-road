@@ -15,6 +15,7 @@ export const WINDOW_EVENTS = {
   reply: "controls:reply",
   shown: "controls:shown",
   hidden: "controls:hidden",
+  controlsVisible: "controls:visible",
   minimized: "game:minimized",
   decisionsShown: "decisions:shown",
   decisionsClosed: "decisions:closed",
@@ -41,6 +42,12 @@ interface RemoteSnapshot {
 }
 
 export const showControls = (): Promise<void> => invoke("show_controls");
+
+/** Fit the initial native layout to CSS pixels, then show the game. Reloads preserve user sizing. */
+export const showGame = (pixelRatio: number): Promise<void> => invoke("show_game", { pixelRatio });
+
+/** The native window owns visibility, including consecutive clicks before UI events arrive. */
+export const toggleControls = (): Promise<void> => invoke("toggle_controls");
 
 export const setDecisionsVisible = (visible: boolean, focus = false): Promise<void> =>
   invoke("set_decisions_visible", { visible, focus });

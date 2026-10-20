@@ -61,6 +61,7 @@ export const de = {
 
   "windows.openControls": "Steuerungsfenster öffnen",
   "windows.openControlsHelp": "Steuerung öffnen (F2)",
+  "windows.hideControls": "Steuerungsfenster ausblenden",
   "windows.paused": "Pausiert · Leertaste zum Fortsetzen",
   "windows.minimized": "Spiel minimiert. Stelle das Fenster vor dem Fortsetzen wieder her.",
   "windows.pausing": "Wird pausiert…",

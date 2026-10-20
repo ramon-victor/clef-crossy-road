@@ -21,6 +21,8 @@ export interface GameCanvasProps {
   onRetry: () => void;
   onNewMap: () => void;
   onShowControls?: (() => void) | undefined;
+  onToggleControls?: (() => void) | undefined;
+  controlsVisible?: boolean;
   onToggleDecisions?: (() => void) | undefined;
   decisionsVisible?: boolean;
   /** The model's decision drawn around the chicken. It replaces the thought bubble while it is on. */
@@ -164,13 +166,14 @@ export function GameCanvas(props: GameCanvasProps) {
         <div class="hud-sub">{t("game.hud", { best: state.best, seed: String(state.seed) })}</div>
       </div>
 
-      {props.onShowControls && (
+      {props.onToggleControls && (
         <button
           type="button"
           class="game-tool open-controls"
-          onClick={props.onShowControls}
-          aria-label={t("windows.openControls")}
-          title={t("windows.openControlsHelp")}
+          onClick={props.onToggleControls}
+          aria-pressed={props.controlsVisible ?? false}
+          aria-label={t(props.controlsVisible ? "windows.hideControls" : "windows.openControls")}
+          title={t(props.controlsVisible ? "windows.hideControls" : "windows.openControlsHelp")}
         >
           <svg
             viewBox="0 0 24 24"

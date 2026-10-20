@@ -1,5 +1,5 @@
 import type { ChickenArtwork, GameView } from "@ccr/render";
-import { getCurrentWindow } from "@tauri-apps/api/window";
+import { getCurrentWindow, Window } from "@tauri-apps/api/window";
 import { useCallback, useEffect, useMemo, useRef, useState } from "preact/hooks";
 import { Sounds } from "./audio.ts";
 import { createBridge, createClefClient } from "./bridge/clef.ts";
@@ -8,6 +8,7 @@ import {
   hostControls,
   setDecisionsVisible,
   showControls,
+  toggleControls,
   WINDOW_EVENTS,
 } from "./bridge/windows.ts";
 import { ControlSurface } from "./ControlSurface.tsx";
@@ -80,6 +81,7 @@ export function App({ desktop = false }: { desktop?: boolean }) {
   const [launchReady, setLaunchReady] = useState(false);
   const [windowsReady, setWindowsReady] = useState(false);
   const [decisionsVisible, setDecisionsShown] = useState(false);
+  const [controlsVisible, setControlsShown] = useState(false);
   const [windowFailed, setWindowFailed] = useState(false);
   // What the person chose for the Theater, or null if they never did (then a model player opens it).
   const [theaterChoice, setTheaterChoice] = useState<boolean | null>(() =>
@@ -374,11 +376,19 @@ export function App({ desktop = false }: { desktop?: boolean }) {
       );
       stops.push(await current.listen(WINDOW_EVENTS.decisionsClosed, () => setTheater(false)));
       stops.push(
+        await current.listen<boolean>(WINDOW_EVENTS.controlsVisible, ({ payload }) =>
+          setControlsShown(payload),
+        ),
+      );
+      stops.push(
         await current.listen<boolean>(WINDOW_EVENTS.decisionsVisible, ({ payload }) =>
           setDecisionsShown(payload),
         ),
       );
       updateMinimized(await current.isMinimized());
+      const controls = await Window.getByLabel("controls");
+      if (controls)
+        setControlsShown((await controls.isVisible()) && !(await controls.isMinimized()));
       if (!disposed) setWindowsReady(true);
       if (disposed) {
         host.dispose();
@@ -422,6 +432,11 @@ export function App({ desktop = false }: { desktop?: boolean }) {
       .then(() => setWindowFailed(false))
       .catch(() => setWindowFailed(true));
   }, [theaterVisible, execute]);
+  const toggleSettings = useCallback(() => {
+    void toggleControls()
+      .then(() => setWindowFailed(false))
+      .catch(() => setWindowFailed(true));
+  }, []);
 
   useEffect(() => {
     const unlockSound = () => sounds.unlock();
@@ -536,6 +551,8 @@ export function App({ desktop = false }: { desktop?: boolean }) {
           onConversation: () => void openDecisions().catch(() => setWindowFailed(true)),
         }}
         onShowControls={desktop ? openControls : undefined}
+        onToggleControls={desktop ? toggleSettings : undefined}
+        controlsVisible={controlsVisible}
         onToggleDecisions={desktop ? toggleDecisions : undefined}
         decisionsVisible={theaterVisible}
       />

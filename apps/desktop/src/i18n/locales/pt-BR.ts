@@ -61,6 +61,7 @@ export const ptBR = {
 
   "windows.openControls": "Abrir janela de controles",
   "windows.openControlsHelp": "Abrir controles (F2)",
+  "windows.hideControls": "Ocultar janela de controles",
   "windows.paused": "Pausado · Espaço para retomar",
   "windows.minimized": "Jogo minimizado. Restaure a janela antes de retomar.",
   "windows.pausing": "Pausando…",

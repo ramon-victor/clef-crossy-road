@@ -30,6 +30,7 @@ afterEach(() => {
 it("keeps a model failure actionable in the game when both auxiliary windows are hidden", async () => {
   const session = new Session();
   const openSettings = vi.fn();
+  const toggleSettings = vi.fn();
   const openDecisions = vi.fn();
   const view = render(
     <LanguageProvider initial={{ preference: "en", detected: "en" }}>
@@ -40,6 +41,8 @@ it("keeps a model failure actionable in the game when both auxiliary windows are
         onRetry={vi.fn()}
         onNewMap={vi.fn()}
         onShowControls={openSettings}
+        onToggleControls={toggleSettings}
+        controlsVisible
         compass={{ on: false, conversationOpen: false, onConversation: openDecisions }}
       />
     </LanguageProvider>,
@@ -51,6 +54,10 @@ it("keeps a model failure actionable in the game when both auxiliary windows are
   expect(view.queryByText("Offline during lookup")).toBeNull();
   fireEvent.click(view.getByRole("button", { name: "Configure", exact: true }));
   fireEvent.click(view.getByRole("button", { name: "Technical details", exact: true }));
+  const toggle = view.getByRole("button", { name: "Hide controls window", exact: true });
+  expect(toggle.getAttribute("aria-pressed")).toBe("true");
+  fireEvent.click(toggle);
   expect(openSettings).toHaveBeenCalledOnce();
+  expect(toggleSettings).toHaveBeenCalledOnce();
   expect(openDecisions).toHaveBeenCalledOnce();
 });
