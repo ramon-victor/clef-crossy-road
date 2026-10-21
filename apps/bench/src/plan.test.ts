@@ -140,8 +140,10 @@ describe("estimatePolicy: the route strategy", () => {
   it("plans route-live on the 195 consultations a game measured with the ideal chooser, not the 40 of route", () => {
     const live = estimatePolicy("clef:clef-flash:scene:route-live:lookup");
     expect(live.decisionsPerEpisode).toBe(200);
-    expect(live.tokensPerDecision).toBe(
-      estimatePolicy("clef:clef-flash:scene:route:lookup").tokensPerDecision,
+    // Its game text is longer, because it also says that nothing checks the answers.
+    expect(live.tokensPerDecision ?? 0).toBeGreaterThan(
+      estimatePolicy("clef:clef-flash:scene:route:lookup").tokensPerDecision ??
+        Number.POSITIVE_INFINITY,
     );
   });
 });

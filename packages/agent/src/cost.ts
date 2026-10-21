@@ -38,9 +38,11 @@ export function decisionCost(config: {
   strategy: StrategyId;
 }): DecisionCost {
   if (config.strategy === "route" || config.strategy === "route-live") {
-    // Four lookups with examples and the scene state. Read back from the one game recorded with `here` (seed 7, 19
-    // requests, 2026-10-20), so still an estimate for the planner; the three-lookup figure had been 1650.
-    return { tokens: 2242, measured: false, neurons: neuronsForTokens(config.model, 2242) };
+    // Four lookups with examples and the scene state, read back from one game of each (seed 7 for `route`, 19 requests;
+    // seed 624140 for `route-live`, 89 paid requests, whose game text is longer). Still estimates for the planner; the
+    // three-lookup figure had been 1650.
+    const tokens = config.strategy === "route-live" ? 2316 : 2242;
+    return { tokens, measured: false, neurons: neuronsForTokens(config.model, tokens) };
   }
   if (config.strategy === "graph" || config.strategy === "graph-maneuver") {
     // Two questions with the game text: about 1.5 times a choice with the moves view.

@@ -53,13 +53,13 @@ Nothing is deployed to Cloudflare. The project only calls the Workers AI REST AP
 | Scripted controller, **no model** (`exec-route`, 2026-10-17 revision; stall limit 60) | 100 | 61.6 |
 | Scripted controller, **no model** (`exec-route`, current controller) | 100 | 65.36 [58.5, 72.2] |
 | Scripted chooser, **no model**, hops timed step by step with nothing checking them (`exec-route-live`) | 100 | 68.14 [60.9, 75.2] |
-| Clef-flash, hops timed by the model (`route-live`, the current default) | 1 (seed 624140) | 19 (drowned: it called a water row standable at 56%) |
+| Clef-flash, hops timed by the model (`route-live`, the current default) | 1 (seed 624140) | 37 (drowned: it called a water row standable at 51%) |
 | `lookahead` (reads the simulator, no model) | 100 | 44.75 |
 
 Given the game state and a plain question, Clef-flash plays like "always forward": it puts its highest probability on advancing
 even when a platform is elsewhere and the forward hop drowns the chicken. Describing the scene in words,
 turning each option into a one-field lookup with solved examples, and letting a controller do the hopping and walk detours
-moved it a long way (on a 90-state probe the current default agrees with the ideal follower of the lookups in 92% of the states, the earlier three-lookup design in 94%).
+moved it a long way (on a 90-state probe the current default agrees with the ideal follower of the lookups in 93% of the states, the earlier three-lookup design in 94%).
 
 Read the numbers with these caveats:
 
@@ -145,7 +145,7 @@ If an older pnpm fails to load the pinned version, see [pnpm setup](docs/desktop
 `.env` is gitignored; never commit it or paste its contents into an issue or pull request.
 
 **Mind the budget.** The project's rule is to stay inside the free tier: 10,000 neurons per UTC day per account. A default Clef-flash
-request reads about 2,200 tokens (roughly 7.8 neurons). Because the model is asked again at every step, a long game is on the order
+request reads about 2,300 tokens (roughly 8 neurons). Because the model is asked again at every step, a long game is on the order
 of 150 to 200 requests, around 1,100 to 1,500 neurons before the cache helps, so about four long games fit in a free day; the 27B
 model costs about 6.3 times more. Run
 `pnpm bench plan` before any benchmark that calls a model: it estimates the cost and splits a run into days that fit.
