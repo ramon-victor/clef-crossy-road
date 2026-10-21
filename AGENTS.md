@@ -23,7 +23,7 @@ An earlier `DEFAULT_CLEF` (`scene` + `route` + `lookup`, ADR-0011) made 22.4 row
 against 2.7 for always-forward on those seeds. The scripted ceiling with the same controller (`exec-route`, no model)
 makes 48.3 over 100 games; that is not a matched comparison. Current gameplay adds a platform clock and a fifth lookup on platforms, asks Clef in every request whether it can stay on its cell
 (`here`, ADR-0012: **nothing rescues a wrong answer**), lets Clef time the hop (`route-live`, ADR-0013: **nothing checks a hop Clef calls standable**), retries failed sides and uses longer detours with stall limit 60; `exec-route` made 61.6 rows before the platform-exit fix
-(warned rail transit, retained exit control), which has no full benchmark yet. Old results used 40.
+(warned rail transit), 64.58 after it and 65.36 with the dodge asked of Clef (`docs/results.md`). Old results used 40.
 Every report must distinguish controller and model help
 (`helpLabel`). **The 100-seed gate is pending**; the earlier 25,000-30,000-neuron estimate needs replanning for current gameplay.
 Numbers, method and open work: `docs/results.md`.

@@ -12,11 +12,30 @@ import { STANDABLE } from "./lanes.ts";
  */
 const STANDABLE_WORDS = STANDABLE.join(", ").replace(/, ([^,]*)$/, " or $1");
 
-export const LOOKUP_GAME = [
-  "You control a chicken in a Crossy Road style game. It crosses rows of grass, road, rail and water, and the world keeps moving while it hops.",
-  "You pick a manoeuvre and a controller does the hopping: it waits for the right moment, and for a detour it walks the way round (back one row if it must, along the row, then forward onto a row not reached yet), checking the world at every hop.",
+const GAME_ABOUT =
+  "You control a chicken in a Crossy Road style game. It crosses rows of grass, road, rail and water, and the world keeps moving while it hops.";
+
+const GAME_CELLS = [
   "A cell holds one of these words: empty, tree, water (open water, no platform), log, lily_pad, vehicle, train, train_coming (the rail warning light is on), outside_world (past the edge of the world) or unseen.",
   `The chicken can stand on ${STANDABLE_WORDS} and on nothing else: a tree stops it, water drowns it, a vehicle or a train hits it, and outside_world kills it.`,
+];
+
+/** The game text of `route`: a controller times the hop and checks it. */
+export const LOOKUP_GAME = [
+  GAME_ABOUT,
+  "You pick a manoeuvre and a controller does the hopping: it waits for the right moment, and for a detour it walks the way round (back one row if it must, along the row, then forward onto a row not reached yet), checking the world at every hop.",
+  ...GAME_CELLS,
+].join(" ");
+
+/**
+ * The game text of `route-live` (ADR-0013). It tells the model what is true there: its answers are acted on at once and
+ * nothing checks them. Telling it that a controller waits for the right moment would be false, and would let it answer
+ * "stand" more freely than it should.
+ */
+export const LOOKUP_GAME_LIVE = [
+  GAME_ABOUT,
+  "Your answers are acted on at once and nothing checks them: a cell you say the chicken can stand on is hopped on straight away, and if you say things keep passing it waits one step and you are asked again. For a detour a controller walks the way round (back one row if it must, along the row, then forward onto a row not reached yet).",
+  ...GAME_CELLS,
 ].join(" ");
 
 /** The legend of the whole state, for the question that reads all of it. */
@@ -145,13 +164,17 @@ export const RIDE_CRITERIA: Readonly<Record<(typeof RIDE_OPTIONS)[number], strin
  * while the chicken stands on a platform. `cell` and `moving` read the row straight ahead; `around` only matters when
  * the way straight ahead is closed; `here` decides whether the chicken steps off the cell it stands on.
  */
-export function routeQuestions(riding = false): Record<string, Question> {
-  const ahead = `${LOOKUP_GAME} ${AHEAD_NOTE}`;
+export function routeQuestions(
+  riding = false,
+  { live = false }: { live?: boolean } = {},
+): Record<string, Question> {
+  const game = live ? LOOKUP_GAME_LIVE : LOOKUP_GAME;
+  const ahead = `${game} ${AHEAD_NOTE}`;
   const ride: Record<string, Question> = riding
     ? {
         [RIDE_QUESTION_ID]: {
           type: "choice",
-          instructions: `${LOOKUP_GAME} ${RIDE_NOTE} Is chicken.edge_in a_moment? Read only chicken.edge_in. ${RIDE_EXAMPLES}`,
+          instructions: `${game} ${RIDE_NOTE} Is chicken.edge_in a_moment? Read only chicken.edge_in. ${RIDE_EXAMPLES}`,
           criteria: { ...RIDE_CRITERIA },
         },
       }
@@ -169,12 +192,12 @@ export function routeQuestions(riding = false): Record<string, Question> {
     },
     around: {
       type: "choice",
-      instructions: `${LOOKUP_GAME} ${SCENE_NOTE} Suppose the way straight ahead is closed. Which manoeuvre does the chicken start? Compare the two sides, nearer is better: adjacent, then two_away, then three_or_more. ${AROUND_EXAMPLES}`,
+      instructions: `${game} ${SCENE_NOTE} Suppose the way straight ahead is closed. Which manoeuvre does the chicken start? Compare the two sides, nearer is better: adjacent, then two_away, then three_or_more. ${AROUND_EXAMPLES}`,
       criteria: { ...AROUND_CRITERIA },
     },
     here: {
       type: "choice",
-      instructions: `${LOOKUP_GAME} ${HERE_NOTE} Can the chicken stay on the cell it stands on? Read only wait_here.stands_on. ${HERE_EXAMPLES}`,
+      instructions: `${game} ${HERE_NOTE} Can the chicken stay on the cell it stands on? Read only wait_here.stands_on. ${HERE_EXAMPLES}`,
       criteria: { ...HERE_CRITERIA },
     },
     ...ride,

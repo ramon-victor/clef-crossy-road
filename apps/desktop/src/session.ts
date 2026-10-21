@@ -2,6 +2,7 @@ import {
   DEFAULT_STALL_LIMIT,
   type Decision,
   emptyMemory,
+  isLiveWait,
   type Memory,
   type ModelInput,
   type Policy,
@@ -119,11 +120,6 @@ const HISTORY = 14;
 const TURNS = 6;
 /** More than the longest manoeuvre: a crossing waits up to 15 steps for a gap and a detour walks up to 12 hops. */
 const TURN_STEPS = 24;
-
-/** A step the model spent waiting for a gap (`route-live`): its own decision, asked again at every step. */
-const liveWait = (decision: Decision): boolean =>
-  decision.extra?.live === true &&
-  (decision.extra.controller as { kind?: unknown } | undefined)?.kind === "wait";
 
 export class Session {
   game: Game;
@@ -502,7 +498,7 @@ export class Session {
   private lingerFor(decision: Decision): number {
     const asked = decision.source !== "executor" && decision.sent !== undefined;
     // A model that waits for a gap is asked again every step: reading each of those answers would stop the game.
-    const again = liveWait(decision) && this.last !== null && liveWait(this.last.decision);
+    const again = isLiveWait(decision) && this.last !== null && isLiveWait(this.last.decision);
     return this.stepMode && asked && !again ? this.lingerMs / this.speed : 0;
   }
 

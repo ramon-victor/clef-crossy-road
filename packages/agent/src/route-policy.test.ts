@@ -479,7 +479,7 @@ describe("the route strategy through the Clef policy", () => {
     };
     const waterAhead = () => world([grass([], 0), water([{ col: 4, speed: -1, type: "log" }], 1)]);
 
-    it("parses and prints back like route, shares its cache entries, and labels the help as a path executor", async () => {
+    it("parses and prints back like route, asks the same state but says nothing checks the answers, and labels the help as a path executor", async () => {
       expect(clefPolicyId(parseClefPolicyId(liveId))).toBe(liveId);
       expect(() => parseClefPolicyId("clef:clef-flash:json:route-live:full")).toThrow();
       expect(helpLabel(parseClefPolicyId(liveId))).toBe(
@@ -490,7 +490,15 @@ describe("the route strategy through the Clef policy", () => {
       await liveOf(live.client).decide(world([grass([], 0), grass([], 1)]));
       const plain = clientAnswering("stand", "still", "wait_here", 0.9);
       await policyOf(plain.client).decide(world([grass([], 0), grass([], 1)]));
-      expect(live.requests[0]).toEqual(plain.requests[0]);
+      const [asked, control] = [live.requests[0], plain.requests[0]];
+      expect(asked?.state).toEqual(control?.state);
+      expect(Object.keys(asked?.questions ?? {})).toEqual(Object.keys(control?.questions ?? {}));
+      // The game text is the one thing that differs: a controller that waits and checks would be false here.
+      const text = (request: ClefRequest | undefined) =>
+        JSON.stringify(request?.questions.cell ?? {});
+      expect(text(asked)).toContain("nothing checks them");
+      expect(text(asked)).not.toContain("waits for the right moment");
+      expect(text(control)).toContain("waits for the right moment");
     });
 
     it("hops on the model's word alone: a cell it called standable is hopped on, however it turns out", async () => {
@@ -513,7 +521,7 @@ describe("the route strategy through the Clef policy", () => {
         extra: {
           maneuver: "wait_gap",
           ahead: "passing",
-          controller: { kind: "wait", n: 1, of: 0, why: "gap" },
+          controller: { kind: "wait", n: 1, of: null, why: "gap" },
         },
       });
       const second = await policy.decide(waterAhead());
@@ -522,7 +530,20 @@ describe("the route strategy through the Clef policy", () => {
       const total = Object.values(first.probabilities ?? {}).reduce((a, b) => a + b, 0);
       expect(total).toBeCloseTo(1);
       // 0.2 is the chance of a cell to stand on, so the hop gets that much and the rest is a step of waiting.
-      expect(first.probabilities?.hop_forward).toBeCloseTo(0.2 * 0.9, 5);
+      expect(first.probabilities?.hop_forward).toBeCloseTo(0.2, 5);
+      expect(first.probabilities?.stay).toBeGreaterThan(first.probabilities?.hop_forward ?? 1);
+    });
+
+    it("does not lend the hop the answer to another question: where the chicken did not step off, that mass is left out", async () => {
+      const { client } = clientAnswering("stand", "still", "wait_here", 0.9, undefined, {
+        choice: "remain",
+        pMoveOff: 0.45,
+      });
+      const decision = await liveOf(client).decide(world([grass([], 0), grass([], 1)]));
+      expect(decision.action).toBe("hop_forward");
+      expect(decision.probabilities?.hop_forward).toBeCloseTo(0.9, 5);
+      const total = Object.values(decision.probabilities ?? {}).reduce((a, b) => a + b, 0);
+      expect(total).toBeCloseTo(1, 5);
     });
 
     it("keeps the other manoeuvres: a closed way is a detour, and the cell under it is still asked", async () => {

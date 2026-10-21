@@ -680,7 +680,10 @@ describe("Session: holding a model's move for a person to read", () => {
     const wait: Decision = {
       ...MODEL_ANSWER,
       action: "stay",
-      extra: { live: true, controller: { kind: "wait", n: 1, of: 0, cell: "water", why: "gap" } },
+      extra: {
+        live: true,
+        controller: { kind: "wait", n: 1, of: null, cell: "water", why: "gap" },
+      },
     };
     const { s, at } = clocked(1000, [wait, wait, wait]);
     s.frame(FRAME);

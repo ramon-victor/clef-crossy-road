@@ -7,7 +7,7 @@ import { spoken } from "./labels.ts";
 /** A `RouteStep` as read back from `Decision.extra`, which is untyped: the screen never reads the note's sentence. */
 export type ControllerStep =
   | { kind: "hop" }
-  | { kind: "wait"; n: number; of: number; cell: string; why: WaitWhy }
+  | { kind: "wait"; n: number; of: number | null; cell: string; why: WaitWhy }
   | { kind: "walk"; n: number; left: number }
   | { kind: "leave"; n: number; left: number }
   | { kind: "dodge"; left: number }
@@ -27,7 +27,9 @@ export function controllerStep(decision: Pick<Decision, "extra">): ControllerSte
     case "hold":
       return { kind: "hold", why: HOLD_WHYS.find((why) => why === step.why) ?? null };
     case "wait":
-      return isCount(step.n) && isCount(step.of) && typeof step.cell === "string"
+      return isCount(step.n) &&
+        (step.of === null || isCount(step.of)) &&
+        typeof step.cell === "string"
         ? {
             kind: "wait",
             n: step.n,
@@ -67,14 +69,14 @@ export function waitingText(
         ? t(`controller.pass.${cell}`)
         : t("controller.pass.other", { cell: spoken(cell) });
   }
-  // A wait with no limit (`of` is 0) is the model's own, one decision at a time.
+  // A wait with no limit (`of` is null) is the model's own, one decision at a time.
   const key =
     step.why === "no_rest"
       ? "controller.waitRest"
-      : step.of === 0
+      : step.of === null
         ? "controller.waitLive"
         : "controller.waitGap";
-  return t(key, { ...step, obstacle });
+  return t(key, { n: step.n, of: step.of ?? 0, obstacle });
 }
 
 export function walkText(

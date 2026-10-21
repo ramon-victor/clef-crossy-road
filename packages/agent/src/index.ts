@@ -54,7 +54,7 @@ export {
   renderSceneImage,
   type SceneImage,
 } from "./image.ts";
-export { decidedBy, type Initiative } from "./initiative.ts";
+export { decidedBy, type Initiative, isLive, isLiveWait } from "./initiative.ts";
 export {
   inputAsJson,
   inputAsText,

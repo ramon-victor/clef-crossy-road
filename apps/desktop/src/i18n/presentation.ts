@@ -50,7 +50,8 @@ export function noticeText(notice: DecisionNotice, translation: Translator): str
         reason: noticeText(notice.reason, translation),
       });
     case "clear":
-      return t("notice.clear", { maneuver });
+    case "go":
+      return t(`notice.${notice.kind}`, { maneuver });
     case "waiting":
       return t("notice.waiting", { maneuver, cell, waited: notice.waited, limit: notice.limit });
     case "escape":
@@ -69,6 +70,7 @@ export function noticeText(notice: DecisionNotice, translation: Translator): str
       });
     case "permanent":
     case "cannot_stay":
+    case "not_exposed":
       return t(`notice.${notice.kind}`, { cell });
     case "timeout":
       return t("notice.timeout", { cell, count: notice.count });

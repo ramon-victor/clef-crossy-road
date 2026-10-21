@@ -153,7 +153,10 @@ describe("stripOf: the latest moves under the game", () => {
         decision: {
           action: "stay",
           source: "model",
-          extra: { live: true, controller: { kind: "wait", n: index + 1, of: 0, cell: "water" } },
+          extra: {
+            live: true,
+            controller: { kind: "wait", n: index + 1, of: null, cell: "water" },
+          },
         },
       }) as never;
     const chips = stripOf([

@@ -608,7 +608,7 @@ describe("RouteExecutor: live, the model times the hop", () => {
     const first = executor.start("wait_gap", waterAhead(), emptyMemory());
     expect(first).toMatchObject({
       action: "stay",
-      step: { kind: "wait", n: 1, of: 0, cell: "water", why: "gap" },
+      step: { kind: "wait", n: 1, of: null, cell: "water", why: "gap" },
       notice: { kind: "waiting_gap" },
     });
     expect(executor.next(waterAhead(), emptyMemory())).toBeNull();

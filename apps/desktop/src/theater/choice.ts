@@ -1,4 +1,4 @@
-import { AROUND_OPTIONS, MANEUVER_ACTION, ROUTE_ACTION } from "@ccr/agent";
+import { AROUND_OPTIONS, isLive, MANEUVER_ACTION, ROUTE_ACTION } from "@ccr/agent";
 import { ACTIONS, type Action } from "@ccr/core";
 import { type Translator, translator } from "../i18n/translate.ts";
 import type { DecisionLog } from "../session.ts";
@@ -70,17 +70,33 @@ export function barsOf(log: DecisionLog): Bars | null {
   const pCross = 1 - pClosed;
   const scaled = Object.entries(ways).map(([action, p]) => [action, pClosed * p]);
   const pStand = asNumber(extra?.pStand);
-  if (extra?.live === true && pStand !== undefined) {
-    // The model times the hop: only a cell it called standable is a hop, and things that pass are a step of waiting.
+  const pMoving = asNumber(extra?.pMoving);
+  if (isLive(decision) && pStand !== undefined && pMoving !== undefined) {
+    // The model times the hop, so each fork is read from the answers above it, as for a closed way: a cell it called
+    // standable is a hop, and one it did not is a step of waiting if things pass and a way round if not.
+    if (extra?.ahead === "passing") {
+      const rest = Object.entries(ways).map(([action, p]) => [action, (1 - pMoving) * p]);
+      return {
+        p: {
+          ...NONE,
+          ...Object.fromEntries(rest),
+          stay: pMoving + (1 - pMoving) * (ways.stay ?? 0),
+        },
+        blocked: new Set<Action>(["hop_forward"]),
+        branch: { kind: "passing", p: (1 - pStand) * pMoving },
+      };
+    }
+    const passing = (1 - pStand) * pMoving;
+    const closing = Object.entries(ways).map(([action, p]) => [action, pClosed * p]);
     return {
       p: {
         ...NONE,
-        ...Object.fromEntries(scaled),
+        ...Object.fromEntries(closing),
         hop_forward: pStand,
-        stay: pCross - pStand + pClosed * (ways.stay ?? 0),
+        stay: passing + pClosed * (ways.stay ?? 0),
       },
       blocked: new Set(),
-      branch: { kind: extra?.ahead === "passing" ? "passing" : "open", p: pCross },
+      branch: { kind: "open", p: pStand },
     };
   }
   return {

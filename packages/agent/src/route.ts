@@ -214,7 +214,8 @@ export type WaitWhy = "gap" | "no_rest";
 /** What a step of the controller is, so that whoever shows it never reads the note. */
 export type RouteStep =
   | { kind: "hop" }
-  | { kind: "wait"; n: number; of: number; cell: string; why: WaitWhy }
+  /** `of` is the limit of the wait; it is `null` when the model waits step by step and nothing but the stall limit ends it. */
+  | { kind: "wait"; n: number; of: number | null; cell: string; why: WaitWhy }
   | { kind: "walk"; n: number; left: number }
   | { kind: "leave"; n: number; left: number }
   | { kind: "dodge"; left: number }
@@ -314,10 +315,6 @@ function crossingCell(obs: Observation): { cell: Cell; noRest: boolean } {
   return { cell: rowAt(obs, 1)?.kind === "rail" ? "train" : "vehicle", noRest };
 }
 
-/**
- * Holds the manoeuvre in progress between decisions. One per episode (a policy is created per episode).
- * Crossing waits for the cell ahead to clear and hops; a detour walks the route above; waiting is one step.
- */
 export interface RouteExecutorOptions {
   /**
    * The model times the hop (ADR-0013). `cross_ahead` hops now, with no look at the cell it lands on and no waiting for a gap, and
@@ -326,6 +323,26 @@ export interface RouteExecutorOptions {
   live?: boolean;
 }
 
+/** The hop the controller shows for a crossing: straight ahead, from the column the chicken is on. */
+const hopPreview = (obs: Observation): RoutePreview => ({
+  col: obs.player.col,
+  steps: [{ action: "hop_forward", col: Math.round(obs.player.col), dz: 1 }],
+});
+
+/** A wait for a gap, and the hop it hopes to make after it, whose time is unknown. */
+const waitPreview = (obs: Observation): RoutePreview => ({
+  col: obs.player.col,
+  conditional: true,
+  steps: [
+    { action: "stay", col: obs.player.col + ridingSpeed(obs) * T, dz: 0 },
+    { action: "hop_forward", col: Math.round(obs.player.col + ridingSpeed(obs) * T), dz: 1 },
+  ],
+});
+
+/**
+ * Holds the manoeuvre in progress between decisions. One per episode (a policy is created per episode).
+ * Crossing waits for the cell ahead to clear and hops; a detour walks the route above; waiting is one step.
+ */
 export class RouteExecutor {
   private plan: CrossPlan | DetourPlan | LeavePlan | null = null;
   private liveWaits = 0;
@@ -405,10 +422,7 @@ export class RouteExecutor {
     this.lastNotice = { kind: "go", maneuver: "cross_ahead" };
     return {
       action: "hop_forward",
-      preview: {
-        col: obs.player.col,
-        steps: [{ action: "hop_forward", col: Math.round(obs.player.col), dz: 1 }],
-      },
+      preview: hopPreview(obs),
       note: "cross_ahead: hopping, as the model said the cell can be stood on",
       notice: { kind: "go", maneuver: "cross_ahead" },
       step: { kind: "hop" },
@@ -426,20 +440,13 @@ export class RouteExecutor {
     if (held.step.kind === "hold" && held.step.why !== "refused") return held;
     return {
       action: "stay",
-      preview: {
-        col: obs.player.col,
-        conditional: true,
-        steps: [
-          { action: "stay", col: obs.player.col + ridingSpeed(obs) * T, dz: 0 },
-          { action: "hop_forward", col: Math.round(obs.player.col + ridingSpeed(obs) * T), dz: 1 },
-        ],
-      },
+      preview: waitPreview(obs),
       note: "wait_gap: waiting for the gap",
       notice: { kind: "waiting_gap" },
       step: {
         kind: "wait",
         n: ++this.liveWaits,
-        of: 0,
+        of: null,
         cell: crossingCell(obs).cell,
         why: "gap",
       },
@@ -490,10 +497,7 @@ export class RouteExecutor {
       this.plan = null;
       return {
         action: "hop_forward",
-        preview: {
-          col: obs.player.col,
-          steps: [{ action: "hop_forward", col: Math.round(obs.player.col), dz: 1 }],
-        },
+        preview: hopPreview(obs),
         note: "cross_ahead: the cell is clear, hopping",
         notice: { kind: "clear", maneuver: "cross_ahead" },
         step: { kind: "hop" },
@@ -537,14 +541,7 @@ export class RouteExecutor {
     return {
       action: "stay",
       note: `cross_ahead: waiting for the cell (${cell}) to clear, ${plan.waited}/${MAX_CROSS_WAIT}`,
-      preview: {
-        col: obs.player.col,
-        conditional: true,
-        steps: [
-          { action: "stay", col: obs.player.col + ridingSpeed(obs) * T, dz: 0 },
-          { action: "hop_forward", col: Math.round(obs.player.col + ridingSpeed(obs) * T), dz: 1 },
-        ],
-      },
+      preview: waitPreview(obs),
       notice: {
         kind: "waiting",
         maneuver: "cross_ahead",

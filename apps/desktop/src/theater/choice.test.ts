@@ -39,14 +39,28 @@ describe("barsOf: the model times the hop", () => {
     );
   };
 
-  it("gives the hop the chance of a cell to stand on and the step of waiting the rest of what passes", () => {
-    const bars = barsOf(live("passing", 0.2, 0.5));
-    expect(bars?.p.hop_forward).toBeCloseTo(0.2, 5);
-    // 0.4 of the answers say things pass, 0.4 close the way and 0.2 of those wait where they are.
-    expect(bars?.p.stay).toBeCloseTo(0.4 + 0.4 * 0.2, 5);
-    expect(bars?.p.hop_right).toBeCloseTo(0.4 * 0.6, 5);
+  it("reads a wait from the answers above it: no hop, and the wait is the biggest bar", () => {
+    // A cell it will not stand on (0.45 only) with things moving (0.55) is a wait, not a gamble on the hop.
+    const bars = barsOf(live("passing", 0.45, 0.55));
+    expect(bars?.blocked.has("hop_forward")).toBe(true);
+    expect(bars?.p.hop_forward).toBe(0);
+    // 0.55 of the answers say things pass; of the other 0.45, 0.2 wait where they are and 0.6 go right.
+    expect(bars?.p.stay).toBeCloseTo(0.55 + 0.45 * 0.2, 5);
+    expect(bars?.p.hop_right).toBeCloseTo(0.45 * 0.6, 5);
+    expect(winnerOf(live("passing", 0.45, 0.55))).toBe("stay");
+    const biggest = Object.entries(bars?.p ?? {}).sort((a, b) => b[1] - a[1])[0]?.[0];
+    expect(biggest).toBe("stay");
     expect(bars?.branch?.kind).toBe("passing");
-    expect(bars?.branch?.p).toBeCloseTo(0.6, 5);
+    expect(bars?.branch?.p).toBeCloseTo(0.55 * 0.55, 5);
+  });
+
+  it("gives an open way the chance of a cell to stand on, and the rest of the fork the other moves", () => {
+    const bars = barsOf(live("open", 0.9, 0.5));
+    expect(bars?.p.hop_forward).toBeCloseTo(0.9, 5);
+    expect(bars?.p.stay).toBeCloseTo(0.1 * 0.5 + 0.05 * 0.2, 5);
+    expect(bars?.blocked.size).toBe(0);
+    const total = Object.values(bars?.p ?? {}).reduce((a, b) => a + b, 0);
+    expect(total).toBeCloseTo(1, 5);
   });
 
   it("names a cell to stand on an open way and the move it makes the hop", () => {

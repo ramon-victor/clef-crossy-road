@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { decidedBy } from "./initiative.ts";
+import { decidedBy, isLive, isLiveWait } from "./initiative.ts";
 
 const model = (extra: Record<string, unknown>) => ({ source: "model" as const, extra });
 
@@ -32,6 +32,26 @@ describe("decidedBy: who made the move", () => {
     expect(
       decidedBy(model({ maneuver: "wait_here", controller: { kind: "hold", why: "refused" } })),
     ).toBe("model");
+  });
+
+  it("credits the model's own wait for a gap to the model, even when nobody could help the chicken", () => {
+    for (const why of ["refused", "exposed", "edge"]) {
+      expect(decidedBy(model({ maneuver: "wait_gap", controller: { kind: "hold", why } }))).toBe(
+        "model",
+      );
+    }
+  });
+
+  it("knows a decision made by route-live, and a wait the model spent step by step", () => {
+    const wait = { live: true, controller: { kind: "wait", n: 2, of: null, cell: "water" } };
+    expect(isLive({ extra: wait })).toBe(true);
+    expect(isLiveWait({ extra: wait })).toBe(true);
+    expect(isLiveWait({ extra: { live: true, controller: { kind: "hop" } } })).toBe(false);
+    // The scripted references and the assisted route never mark a decision as live.
+    expect(
+      isLiveWait({ extra: { controller: { kind: "wait", n: 2, of: 15, cell: "water" } } }),
+    ).toBe(false);
+    expect(isLive({})).toBe(false);
   });
 
   it("credits a manoeuvre begun in place of the one the model chose to the controller", () => {

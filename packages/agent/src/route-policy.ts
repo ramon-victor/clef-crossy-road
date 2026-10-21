@@ -41,10 +41,9 @@ export function routePolicy(
   id: string,
 ): PolicyFactory {
   const live = config.strategy === "route-live";
-  const questions = routeQuestions();
-  const questionsOnAPlatform = routeQuestions(true);
-  // `route-live` sends the same questions as `route`, so a request both can make is one cache entry.
-  const cacheTag = `${PROMPT_VERSION}|${config.encoder}|route|${config.manual}`;
+  const questions = routeQuestions(false, { live });
+  const questionsOnAPlatform = routeQuestions(true, { live });
+  const cacheTag = `${PROMPT_VERSION}|${config.encoder}|${config.strategy}|${config.manual}`;
 
   /** The one place a request is put together, so what is shown is what is sent. */
   const requestFor = (obs: Observation, memory: Memory, executor: RouteExecutor): ClefRequest => ({
@@ -86,7 +85,9 @@ export function routePolicy(
         const { act, started, note, notice } = begin(executor, chosen, obs, memory);
         return {
           ...chosen.decision,
-          probabilities: withExits(chosen.decision.probabilities, chosen.pExit, act.action),
+          probabilities: exits(chosen.maneuver)
+            ? withExits(chosen.decision.probabilities, chosen.pExit, act.action)
+            : withoutExits(chosen.decision.probabilities, chosen.pExit),
           action: act.action,
           ...(act.preview ? { preview: act.preview } : {}),
           source: "model",
@@ -250,11 +251,32 @@ export function fromRoute(
   };
 }
 
-/** What the model gave to leaving the platform (`ride`) or stepping off its cell (`here`) goes on the hop made. */
+const exits = (maneuver: RouteManeuver): boolean =>
+  maneuver === "leave_platform" || maneuver === "step_off";
+
+/**
+ * What the model gave to leaving the platform (`ride`) or stepping off its cell (`here`) goes on the hop made, so the
+ * bars add up to one where the chicken did leave.
+ */
 function withExits(
   probabilities: Partial<Record<Action, number>> | undefined,
   share: number,
   exit: Action,
 ): Partial<Record<Action, number>> {
   return { ...probabilities, [exit]: (probabilities?.[exit] ?? 0) + share };
+}
+
+/**
+ * Where the chicken did not leave, the exit masses belong to no move that was made: they are left out and the rest is
+ * scaled up to one, instead of inflating the hop that was made with the answer to another question.
+ */
+function withoutExits(
+  probabilities: Partial<Record<Action, number>> = {},
+  share: number,
+): Partial<Record<Action, number>> {
+  const rest = 1 - share;
+  if (rest <= 0) return probabilities;
+  return Object.fromEntries(
+    Object.entries(probabilities).map(([action, p]) => [action, p / rest]),
+  ) as Partial<Record<Action, number>>;
 }

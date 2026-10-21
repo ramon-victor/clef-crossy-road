@@ -86,6 +86,30 @@ describe("the lookup questions", () => {
     expect(text).not.toMatch(/\d/);
   });
 
+  it("tell route-live the truth about its answers: acted on at once and checked by nothing", () => {
+    const live = routeQuestions(false, { live: true });
+    const text = (set: ReturnType<typeof routeQuestions>) =>
+      Object.values(set)
+        .map((q) =>
+          q.type === "choice"
+            ? `${q.instructions} ${Object.values(q.criteria).join(" ")}`
+            : q.instructions,
+        )
+        .join(" ");
+    expect(text(live)).toContain("acted on at once and nothing checks them");
+    expect(text(live)).not.toMatch(/waits for the right moment|checking the world at every hop/);
+    expect(text(questions)).toMatch(/waits for the right moment/);
+    // Same questions and options; only the game text differs, and the fairness rule holds for it.
+    expect(Object.keys(live).sort()).toEqual(Object.keys(questions).sort());
+    expect(live.cell?.type === "choice" && live.cell.criteria).toEqual(
+      questions.cell?.type === "choice" ? questions.cell.criteria : undefined,
+    );
+    expect(text(routeQuestions(true, { live: true }))).not.toMatch(
+      /\bsafe\b|\bunsafe\b|danger|you should|best move|\d/i,
+    );
+    expect(routeQuestions(true, { live: true }).here).toEqual(live.here);
+  });
+
   it("carry solved examples for each question", () => {
     expect(questions.cell?.instructions).toContain("lands_on lily_pad -> stand");
     expect(questions.cell?.instructions).toContain("lands_on water -> no_stand");

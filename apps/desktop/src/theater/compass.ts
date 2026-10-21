@@ -1,4 +1,4 @@
-import { decidedBy } from "@ccr/agent";
+import { decidedBy, isLive } from "@ccr/agent";
 import { ACTIONS, type Action } from "@ccr/core";
 import { ACTION_GLYPH } from "../format.ts";
 import { type Translator, translator } from "../i18n/translate.ts";
@@ -70,7 +70,7 @@ export function stripOf(history: SessionState["history"]): StripChip[] {
   const chips = foldWaits(
     history,
     (entry) =>
-      (entry.decision.source === "executor" || entry.decision.extra?.live === true) &&
+      (entry.decision.source === "executor" || isLive(entry.decision)) &&
       controllerStep(entry.decision)?.kind === "wait",
     (entry): StripChip => ({
       index: entry.index,
