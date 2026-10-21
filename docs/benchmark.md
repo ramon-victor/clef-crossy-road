@@ -32,13 +32,13 @@ Only `run` and `probe-run` can call the API. A probe makes one policy decision p
 
 ## Policy ids
 
-Fixed ids: `always-forward`, `random`, `lookahead`, `lookahead-<depth>`, `lookahead-comp:<ms>`, `rule-view`, `rule-view-fx`, `rule-lanes`, `rule-moves`, `exec-cross`, `exec-rules`, `exec-route`.
+Fixed ids: `always-forward`, `random`, `lookahead`, `lookahead-<depth>`, `lookahead-comp:<ms>`, `rule-view`, `rule-view-fx`, `rule-lanes`, `rule-moves`, `exec-cross`, `exec-rules`, `exec-route`, `exec-route-live`.
 
-Model policies: `clef:<model>:<encoder>:<strategy>[:<manual>]`, with the manual defaulting to `full`. `clef` alone is `clef:clef-flash:scene:route:lookup`, the default gameplay of the app and the bench. Reports print the full id and a "Sees" label: the encoder's level plus the help added, for example `words + rules + graph + route executor`. `model` is `clef-flash` (hosted default), `clef` (the 27B, 6.3x the cost per token) or `clef-omni` (adds audio and video).
+Model policies: `clef:<model>:<encoder>:<strategy>[:<manual>]`, with the manual defaulting to `full`. `clef` alone is `clef:clef-flash:scene:route-live:lookup`, the default gameplay of the app and the bench ([ADR-0013](adr/0013-model-times-the-hop.md)); `route` is the control in which the controller checks and times every hop. Reports print the full id and a "Sees" label: the encoder's level plus the help added, for example `words + rules + graph + route executor`. `model` is `clef-flash` (hosted default), `clef` (the 27B, 6.3x the cost per token) or `clef-omni` (adds audio and video).
 
 The [policy-id reference](observation-and-prompts.md#policy-ids) lists every encoder, strategy, manual and supported combination. See also [encoders](observation-and-prompts.md#encoders), [decision strategies](observation-and-prompts.md#decision-strategies) and [prompts](observation-and-prompts.md#prompts) for what each condition adds.
 
-The parser rejects unsupported combinations before a run starts. In particular, `route` requires both `scene` and the explicit `lookup` manual; use `clef` for that default, or `clef:clef:scene:route:lookup` for the 27B.
+The parser rejects unsupported combinations before a run starts. In particular, `route` and `route-live` require both `scene` and the explicit `lookup` manual; use `clef` for the default, or `clef:clef:scene:route-live:lookup` for the 27B.
 
 ## Benchmark rules
 
@@ -66,6 +66,7 @@ Historical results recorded before 2026-10-17 used stall limit 40. Pass `--stall
 | `exec-cross` | words | Always `cross_ahead`, with the manoeuvre executor: **what the executor does alone**, the floor of any executor condition. |
 | `exec-rules` | words | A scripted manoeuvre chooser (the written rules) plus the executor. |
 | `exec-route` | scene words | A scripted chooser plus the route controller: **the ceiling of the `route` condition** without a model. |
+| `exec-route-live` | scene words | The same chooser answering at every step with nothing checking its hops: **the ceiling of `route-live`** without a model (68.14 rows over seeds 1 to 100, against 65.36 for `exec-route`). |
 
 The scripted references are never models. Compare a scaffolded model condition with its matching references on the same seeds to distinguish controller performance from the model's contribution.
 
@@ -94,7 +95,7 @@ The hard rule is to stay inside the Workers AI free tier, **10,000 neurons per a
 - **One path.** All calls go through `ClefClient`; the desktop app enforces the same ceiling in its Rust process ([ADR-0007](adr/0007-tauri-desktop-token-in-rust.md)). A script that calls the API directly bypasses the ledger and is not allowed. Details: [ADR-0008](adr/0008-daily-budget-free-tier.md).
 - **`--max-calls`** (default 1500 for `run`, 400 for `probe-run`) only stops *starting* games or questions. Games in flight (up to `--concurrency`) run to the end and can overshoot the plan; the daily ceiling is the real stop. Exit code 3 means the call cap was reached, 2 a fatal error such as the quota.
 - **Plan first.** `plan` estimates decisions per game times neurons per decision, reserves 10% of each day and splits the seeds over as many days as needed, printing `--seeds` ranges ready to paste. It assumes no cache hits, uses built-in token estimates (marked `(est.)` when not measured) and accepts `--assume-decisions n`.
-- **Cache validity.** The key is the model, state, questions, images and a tag of prompt version, encoder, strategy and manual, so any prompt or encoder change misses. With a controller (`maneuver`, `graph-maneuver`, `route`) a cached game also replays only if the controller makes the same moves it made when cached: after changing `route.ts` or a prompt, re-run the seeds and check each with `--daily-neurons 0`.
+- **Cache validity.** The key is the model, state, questions, images and a tag of prompt version, encoder, strategy and manual, so any prompt or encoder change misses. With a controller (`maneuver`, `graph-maneuver`, `route`, `route-live`; the last two share a cache tag, because they send the same questions) a cached game also replays only if the controller makes the same moves it made when cached: after changing `route.ts` or a prompt, re-run the seeds and check each with `--daily-neurons 0`.
 - **Worktrees.** Share the canonical checkout's ledger and cache with `--root <checkout>` and `node --env-file=<checkout>/.env apps/bench/src/cli.ts ...`. Do not copy the ledger to another worktree. Restart a running dev server after recording new answers because it caches them in memory.
 
 Per-model rates and measured request sizes are in [Clef API: price, limits and cost](clef-api.md#price-limits-and-cost). Cost depends on the condition and the number of model requests, not the number of controller hops. The estimate for the default condition's pending 100-seed evaluation is in [Results: open work](results.md#open-work); use `plan` to split it before spending.
