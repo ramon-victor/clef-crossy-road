@@ -9,7 +9,7 @@ describe("compass model context, separate from live execution", () => {
     const view = buildCompass(s.state());
     expect(view.mode).toBe("reading");
     expect(view.moves).toHaveLength(5);
-    expect(view.moves.every((m) => !m.blocked)).toBe(true);
+    expect(view.moves.every((m) => !m.blocked && m.p === null && !m.chosen)).toBe(true);
     expect(view.since).toEqual(expect.any(Number));
   });
 
@@ -25,28 +25,18 @@ describe("compass model context, separate from live execution", () => {
     expect(moves.filter((m) => m.chosen).map((m) => m.action)).toEqual(["hop_forward"]);
   });
 
-  it("has no share for a closed move, nor while the model reads, nor for a strategy without probabilities", async () => {
-    const reading = buildCompass(
-      readingSession(routeAnswers("no_stand", "still", "detour_right", 0.1)).state(),
-    );
-    expect(reading.moves.every((m) => m.p === null && !m.chosen)).toBe(true);
-
-    const s = await answeredSession(routeAnswers("no_stand", "still", "detour_right", 0.1));
-    const state = s.state();
-    const { moves } = buildCompass(state);
-    expect(moves.find((m) => m.action === "hop_forward")).toMatchObject({ blocked: true, p: null });
-    expect(moves.find((m) => m.action === "hop_right")?.p).toBeCloseTo(0.6, 3);
-    expect(moves.filter((m) => m.chosen).map((m) => m.action)).toEqual(["hop_right"]);
-
+  it("has no share when the strategy gives no probabilities", async () => {
+    const state = (
+      await answeredSession(routeAnswers("stand", "still", "wait_here", 0.9), 1)
+    ).state();
     if (!state.lastModel) throw new Error("missing answer");
     const bare = {
       ...state.lastModel,
-      action: "hop_forward" as const,
-      decision: { action: "hop_forward" as const, source: "model" as const },
+      decision: { action: state.lastModel.action, source: "model" as const },
     };
-    const none = buildCompass({ ...state, lastModel: bare, last: bare });
-    expect(none.moves).toHaveLength(5);
-    expect(none.moves.every((m) => m.p === null)).toBe(true);
+    const { moves } = buildCompass({ ...state, lastModel: bare, last: bare });
+    expect(moves).toHaveLength(5);
+    expect(moves.every((m) => m.p === null)).toBe(true);
   });
 
   it("keeps the chosen manoeuvre as context when its first step is backwards", async () => {
@@ -61,7 +51,9 @@ describe("compass model context, separate from live execution", () => {
     };
     const view = buildCompass({ ...state, lastModel: back, last: back });
     expect(view.verdict).toBe("Detour right");
-    expect(view.moves.find((m) => m.blocked)?.action).toBe("hop_forward");
+    expect(view.moves.find((m) => m.blocked)).toMatchObject({ action: "hop_forward", p: null });
+    expect(view.moves.find((m) => m.chosen)?.action).toBe("hop_right");
+    expect(view.moves.find((m) => m.action === "hop_right")?.p).toBeCloseTo(0.6, 3);
     expect(view.doing).toContain("walking the detour");
   });
 

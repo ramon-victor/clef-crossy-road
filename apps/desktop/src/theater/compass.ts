@@ -16,9 +16,9 @@ export interface CompassMove {
   glyph: string;
   /** Drawn as a block, not as a bar: the way ahead is closed. */
   blocked: boolean;
-  /** How much the model wanted this move within its routing fork; null while it reads, when closed, or when the strategy has no probabilities. */
+  /** The model's share of this move within its routing fork; null while it reads, when closed, or with no probabilities. */
   p: number | null;
-  /** The move the model chose, which the controller may start with another move. */
+  /** The model's own pick, which the controller may not start with. */
   chosen: boolean;
 }
 
@@ -71,7 +71,7 @@ export function stripOf(history: SessionState["history"]): StripChip[] {
   return chips.slice(-STRIP_MOVES);
 }
 
-const moveOf = (action: Action, shown: Partial<CompassMove> = {}): CompassMove => ({
+export const moveOf = (action: Action, shown: Partial<CompassMove> = {}): CompassMove => ({
   action,
   glyph: ACTION_GLYPH[action],
   blocked: false,

@@ -1309,10 +1309,7 @@ canvas.game:focus-visible {
   border-style: dashed;
 }
 
-/*
- * What the model wanted for each move: a number and a bar on the button's outer face.
- * A sibling of .cb, not a child, so the button's dimmed opacity does not reach it, and white, never the gold of the move being made.
- */
+/* The model's share of each move, on the arrow's outer face: a sibling of .cb (its dimmed opacity must not reach it) and never gold. */
 .cp {
   position: absolute;
   left: 0;
@@ -1343,7 +1340,7 @@ canvas.game:focus-visible {
   background: linear-gradient(90deg, #fff calc(var(--p) * 100%), rgba(255, 255, 255, 0.2) 0);
 }
 
-/* The model's own pick: the controller may start with another move, and this is what tells the two apart. */
+/* The model's own pick, which the controller may not start with. */
 .cp.chosen {
   opacity: 1;
   border-color: #fff;

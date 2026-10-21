@@ -1,11 +1,10 @@
 import { ACTIONS, type Action } from "@ccr/core";
 import type { Ref } from "preact";
-import { ACTION_GLYPH } from "../format.ts";
 import { actionLabel } from "../i18n/presentation.ts";
 import { useI18n } from "../i18n/provider.tsx";
 import type { Session, SessionState } from "../session.ts";
 import { Clock } from "./Clock.tsx";
-import { buildCompass } from "./compass.ts";
+import { buildCompass, moveOf } from "./compass.ts";
 import { controllerStep } from "./controller.ts";
 import { EdgeClock } from "./EdgeClock.tsx";
 import type { ExecutionView } from "./execution.ts";
@@ -23,7 +22,7 @@ const AT: Readonly<Record<Action, { x: number; y: number }>> = {
   stay: { x: 0.74, y: 0.84 },
 };
 
-/** Where the centre of each move's percentage sits, in CSS pixels from the chicken: on the button's outer face, clear of the edge clock and the caption. */
+/** Centre of each move's percentage, in CSS pixels from the chicken: the arrow's outer face, clear of the edge clock and the caption. */
 const LABEL_AT: Readonly<Record<Action, { x: number; y: number }>> = {
   hop_forward: { x: 0, y: -132 },
   hop_back: { x: 0, y: 132 },
@@ -32,7 +31,7 @@ const LABEL_AT: Readonly<Record<Action, { x: number; y: number }>> = {
   stay: { x: 112, y: 71 },
 };
 
-/** A move that rounds to 0% gets no label: the decisions window lists every one. */
+/** A move that rounds to 0% has no chip; the decisions window lists them all. */
 const labelled = (p: number | null): p is number => p !== null && Math.round(p * 100) >= 1;
 
 export interface CompassProps {
@@ -69,15 +68,7 @@ export function Compass({
       execution.action !== null ||
       execution.next !== null ||
       execution.blocked);
-  const moves = view.moves.length
-    ? view.moves
-    : ACTIONS.map((action) => ({
-        action,
-        glyph: ACTION_GLYPH[action],
-        blocked: false,
-        p: null,
-        chosen: false,
-      }));
+  const moves = view.moves.length ? view.moves : ACTIONS.map((action) => moveOf(action));
   const step = state.last ? controllerStep(state.last.decision) : null;
   const waitingForGap = execution.action === "stay" && step?.kind === "wait";
   const current =
@@ -122,7 +113,7 @@ export function Compass({
               const at = LABEL_AT[move.action];
               return (
                 <div
-                  key={`${move.action}-${view.index}`}
+                  key={move.action}
                   class={`cp ${move.chosen ? "chosen" : ""}`}
                   data-label={move.action}
                   style={`--lx:${at.x}px;--ly:${at.y}px;--p:${move.p.toFixed(3)}`}
