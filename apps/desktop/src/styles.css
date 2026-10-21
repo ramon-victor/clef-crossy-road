@@ -1149,7 +1149,7 @@ canvas.game:focus-visible {
   color: #fff;
   opacity: 0.28;
   transform: translate(var(--dx), var(--dy)) scale(0.78);
-  /* Slow out, fast in (see .actual): a wait lasts 0.2 s and the highlight drops for a frame or two between two of them. */
+  /* Slow out, fast in (see .actual): a wait lasts 0.2 s and the highlight drops for a frame or two between two of them. A fade is not motion, so it holds under reduced motion, where snapping at this rate would flash. */
   transition-property: opacity, background-color, border-color, box-shadow, color;
   transition-duration: 0.28s;
   transition-timing-function: ease-in;

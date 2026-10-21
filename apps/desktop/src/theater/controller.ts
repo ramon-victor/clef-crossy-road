@@ -116,7 +116,7 @@ export function controllerSays(
   return null;
 }
 
-/** The wait the session has played and not yet followed: true through the idle frames between two waits, which the live execution is not. */
+/** The wait the session has played and not yet followed. Unlike the live execution, it holds through the idle frames between two waits. */
 export function waitingStep(
   state: Pick<SessionState, "last" | "playback" | "phase">,
 ): Extract<ControllerStep, { kind: "wait" }> | null {

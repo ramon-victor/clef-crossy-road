@@ -47,7 +47,7 @@ export interface CompassView {
   doing: string | null;
   /** What the answers come to ("Go straight · when clear"). */
   verdict: string | null;
-  /** The move the controller is waiting to make, while it waits for a gap; null when it waits for nothing or the model chose to wait. */
+  /** The model's pick while the controller waits for a gap to make it: a wait is always a crossing, so only a forward pick; else null. */
   waiting: Action | null;
   /** When the question went out, in the session's clock; set while the model reads. */
   since: number | null;
@@ -136,7 +136,7 @@ export function buildCompass(
       turn && waitsForGap(turn)
         ? translation.t("theater.whenClear", { move: decision.label })
         : decision.label,
-    waiting: waitingStep(state) && chosen !== "stay" ? chosen : null,
+    waiting: waitingStep(state) && chosen === "hop_forward" ? chosen : null,
     strip,
   };
 }

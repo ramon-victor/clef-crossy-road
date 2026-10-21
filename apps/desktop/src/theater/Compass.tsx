@@ -57,6 +57,7 @@ export function Compass({ session, state, execution, anchorRef }: CompassProps) 
       execution.blocked);
   const moves = view.moves.length ? view.moves : ACTIONS.map((action) => moveOf(action));
   const pick = moves.find((move) => move.action === view.waiting);
+  const waitsFor = pick && labelled(pick.p) ? pick : undefined;
   return (
     <div ref={anchorRef} class="compass-anchor" aria-hidden="true">
       <EdgeClock session={session} />
@@ -87,8 +88,8 @@ export function Compass({ session, state, execution, anchorRef }: CompassProps) 
             );
           })}
           {moves.map((move) => {
-            const waitsFor = move.action === "stay" && labelled(pick?.p ?? null) ? pick : undefined;
-            const shown = waitsFor ?? move;
+            const awaited = move.action === "stay" ? waitsFor : undefined;
+            const shown = awaited ?? move;
             if (!labelled(shown.p)) return null;
             const at = LABEL_AT[move.action];
             return (
@@ -98,7 +99,7 @@ export function Compass({ session, state, execution, anchorRef }: CompassProps) 
                 data-label={move.action}
                 style={`--lx:${at.x}px;--ly:${at.y}px;--p:${shown.p.toFixed(3)}`}
               >
-                {waitsFor && <Glyph glyph={waitsFor.glyph} size={11} class="cp-arrow" />}
+                {awaited && <Glyph glyph={awaited.glyph} size={11} class="cp-arrow" />}
                 {percent(shown.p)}
               </div>
             );

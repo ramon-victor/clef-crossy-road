@@ -69,7 +69,7 @@ describe("compass model context, separate from live execution", () => {
     );
   });
 
-  it("names the move the controller waits to make, and nothing when the model chose to wait", async () => {
+  it("names the forward pick the controller waits for, and nothing when the pick is another move", async () => {
     const crossing = (
       await answeredSession(routeAnswers("stand", "still", "wait_here", 0.9), 1)
     ).state();
@@ -77,10 +77,10 @@ describe("compass model context, separate from live execution", () => {
     expect(buildCompass(waitingState(crossing)).waiting).toBe("hop_forward");
     expect(buildCompass({ ...waitingState(crossing), phase: "reading" }).waiting).toBeNull();
 
-    const staying = (
-      await answeredSession(routeAnswers("no_stand", "still", "wait_here", 0.1))
-    ).state();
-    expect(buildCompass(waitingState(staying)).waiting).toBeNull();
+    for (const around of ["wait_here", "detour_right"]) {
+      const other = (await answeredSession(routeAnswers("no_stand", "still", around, 0.1))).state();
+      expect(buildCompass(waitingState(other)).waiting).toBeNull();
+    }
   });
 
   it("retains the move history across controller steps and hides context on reset, error or game over", async () => {
