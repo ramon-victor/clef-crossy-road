@@ -35,6 +35,7 @@ jobs:
           cache: true
       - run: pnpm install --frozen-lockfile
       - run: pnpm check
+      - run: node scripts/gen-flow-figure.mjs --check
       - run: node scripts/fetch-assets.mjs
       - run: pnpm --filter @ccr/desktop build
       - name: Test Rust backend
