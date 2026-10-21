@@ -86,6 +86,10 @@ export function App({ desktop = false }: { desktop?: boolean }) {
     desktop ? false : readFlag("theater"),
   );
   const [compassChoice, setCompassChoice] = useState<boolean | null>(() => readFlag("compass"));
+  // Only the browser sidebar can be hidden; desktop settings live in their own window.
+  const [settingsVisible, setSettingsVisible] = useState(
+    () => desktop || (readFlag("settings") ?? true),
+  );
   const [pace, setPaceState] = useState<Pace>(() => readPace());
   const viewRef = useRef<GameView | null>(null);
   const minimizedRef = useRef(false);
@@ -217,6 +221,13 @@ export function App({ desktop = false }: { desktop?: boolean }) {
     void setDecisionsVisible(showTheater).catch(() => setWindowFailed(true));
   }, [desktop, launchReady, windowsReady, showTheater]);
   const theaterVisible = desktop ? decisionsVisible : showTheater;
+  const setSettings = useCallback(
+    (on: boolean) => {
+      setSettingsVisible(on);
+      if (!desktop) writeFlag("settings", on);
+    },
+    [desktop],
+  );
   const showCompass = openByDefault(compassChoice, selected?.kind);
   const setCompass = useCallback((on: boolean) => {
     setCompassChoice(on);
@@ -522,8 +533,13 @@ export function App({ desktop = false }: { desktop?: boolean }) {
           conversationOpen: theaterVisible,
           onConversation: () => void openDecisions().catch(() => setWindowFailed(true)),
         }}
-        onShowControls={desktop ? openControls : undefined}
-        onToggleDecisions={desktop ? toggleDecisions : undefined}
+        // The browser error card offers "Configure" only while the sidebar is hidden.
+        onShowControls={
+          desktop ? openControls : settingsVisible ? undefined : () => setSettings(true)
+        }
+        onToggleControls={desktop ? undefined : () => setSettings(!settingsVisible)}
+        controlsVisible={settingsVisible}
+        onToggleDecisions={toggleDecisions}
         decisionsVisible={theaterVisible}
       />
       {windowFailed && (
@@ -546,7 +562,9 @@ export function App({ desktop = false }: { desktop?: boolean }) {
           fps={fps}
         />
       )}
-      {!desktop && <ControlSurface data={controls} bridge={bridge} send={execute} />}
+      {!desktop && settingsVisible && (
+        <ControlSurface data={controls} bridge={bridge} send={execute} />
+      )}
     </div>
   );
 }

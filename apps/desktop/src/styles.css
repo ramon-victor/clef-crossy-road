@@ -1544,7 +1544,8 @@ canvas.game:focus-visible {
 .toggle-decisions {
   top: 60px;
 }
-.toggle-decisions[aria-pressed="true"] {
+.toggle-decisions[aria-pressed="true"],
+.toggle-controls[aria-pressed="true"] {
   background: var(--accent);
 }
 .window-error {

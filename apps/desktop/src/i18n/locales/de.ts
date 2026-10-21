@@ -97,6 +97,8 @@ export const de = {
   "death.train": "Von einem Zug erfasst",
   "death.out_of_bounds": "Kartengrenze überschritten",
   "panel.label": "Spielsteuerung und Entscheidungen",
+  "panel.show": "Einstellungen anzeigen",
+  "panel.hide": "Einstellungen ausblenden",
   "player.who": "Wer spielt",
   "player.modelController": "Modell + Steuerung",
   "player.model": "KI-Spieler",

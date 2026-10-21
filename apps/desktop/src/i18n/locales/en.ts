@@ -94,6 +94,8 @@ export const en = {
   "death.train": "Hit by a train",
   "death.out_of_bounds": "Went beyond the edge of the map",
   "panel.label": "Game controls and decisions",
+  "panel.show": "Show settings",
+  "panel.hide": "Hide settings",
   "player.who": "Who plays",
   "player.modelController": "Model + controller",
   "player.model": "Model player",

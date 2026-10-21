@@ -22,8 +22,11 @@ beforeEach(() => {
   vi.stubGlobal("requestAnimationFrame", () => 1);
   vi.stubGlobal("cancelAnimationFrame", () => {});
 });
-afterEach(() => {
+afterEach(async () => {
   cleanup();
+  // The stubbed frame never fires, so Preact flushes effects from its 35 ms fallback timer. Let it run
+  // before the stubs and the jsdom window go away, or it throws in `cancelAnimationFrame` afterwards.
+  await new Promise((resolve) => setTimeout(resolve, 80));
   vi.unstubAllGlobals();
 });
 
@@ -53,4 +56,53 @@ it("keeps a model failure actionable in the game when both auxiliary windows are
   fireEvent.click(view.getByRole("button", { name: "Details", exact: true }));
   expect(openSettings).toHaveBeenCalledOnce();
   expect(openDecisions).toHaveBeenCalledOnce();
+});
+
+function gameWith(extra: Partial<Parameters<typeof GameCanvas>[0]>) {
+  const session = new Session();
+  return (
+    <LanguageProvider initial={{ preference: "en", detected: "en" }}>
+      <GameCanvas
+        session={session}
+        state={session.state()}
+        sounds={{} as Sounds}
+        onRetry={vi.fn()}
+        onNewMap={vi.fn()}
+        compass={{ on: false, conversationOpen: false, onConversation: vi.fn() }}
+        {...extra}
+      />
+    </LanguageProvider>
+  );
+}
+
+it("hides and shows the browser settings from a button beside the game", () => {
+  const toggleSettings = vi.fn();
+  const toggleDecisions = vi.fn();
+  const props = {
+    onToggleControls: toggleSettings,
+    onToggleDecisions: toggleDecisions,
+    decisionsVisible: true,
+  };
+  const view = render(gameWith({ ...props, controlsVisible: true }));
+  const hide = view.getByRole("button", { name: "Hide settings" });
+  expect(hide.getAttribute("aria-pressed")).toBe("true");
+  fireEvent.click(hide);
+  expect(toggleSettings).toHaveBeenCalledOnce();
+  fireEvent.click(view.getByRole("button", { name: "Hide decisions (T)" }));
+  expect(toggleDecisions).toHaveBeenCalledOnce();
+
+  view.rerender(gameWith({ ...props, controlsVisible: false }));
+  expect(view.getByRole("button", { name: "Show settings" }).getAttribute("aria-pressed")).toBe(
+    "false",
+  );
+});
+
+it("keeps the desktop settings button a plain opener", () => {
+  const openSettings = vi.fn();
+  const view = render(gameWith({ onShowControls: openSettings }));
+  const open = view.getByRole("button", { name: "Open controls window" });
+  expect(open.hasAttribute("aria-pressed")).toBe(false);
+  fireEvent.click(open);
+  expect(openSettings).toHaveBeenCalledOnce();
+  expect(view.queryByRole("button", { name: /decisions/i })).toBeNull();
 });

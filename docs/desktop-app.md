@@ -13,7 +13,7 @@ How to run Clef Crossy Road in the browser or its three Tauri windows, who can p
 
 **Platform.** The desktop app needs Node 24+, pnpm 12.14.0 and Rust with the [Tauri prerequisites](https://v2.tauri.app/start/prerequisites/) for the platform (MSVC C++ build tools and WebView2 on Windows). Desktop launch has been verified on Windows, and backend tests have also run on Linux. CI checks TypeScript and the web build on Windows, Linux and macOS; this does not establish native UI support on every platform. The launchers are Windows scripts.
 
-Desktop starts with only the game visible. Settings and decisions are created hidden and open from the two matching game buttons: **F2** for settings, **T** for decisions, and **I** for the latest exact model request. An earlier visibility preference never opens an auxiliary window at native startup. Browser development keeps an integrated layout.
+Desktop starts with only the game visible. Settings and decisions are created hidden and open from the two matching game buttons: **F2** for settings, **T** for decisions, and **I** for the latest exact model request. An earlier visibility preference never opens an auxiliary window at native startup. Browser development keeps an integrated layout: settings and decisions are side columns next to the game, and the same two buttons over the game hide or show them (**T** also toggles decisions; **F2** stays with the browser). The choice is kept in `ccr.settings` and `ccr.theater`.
 
 Initial client widths are compact: game 640, settings 320, decisions 360 logical pixels. Height is at most 720 logical pixels. Placement uses the monitor work area, scale factor and window decorations; effective minimum sizes shrink if the available work area is smaller. The game is centered, settings sits to its left and decisions to its right when possible. Windows overlap within the work area when necessary. Hiding and reopening preserves manual positioning and resizing within a run.
 
@@ -65,7 +65,7 @@ Movement and timing keys are ignored while a field, button, expander or dialog h
 | F2 | Show and focus native controls |
 | I | Show the latest answered request in the conversation’s inline technical details |
 | C | Toggle the compass around the chicken |
-| T | Show or hide the independent decisions window (conversation column in browser development) |
+| T | Show or hide the independent decisions window (conversation column in browser development, also from the button over the game) |
 | Esc | Close the inspector, the info popover or the Cloudflare dialog |
 
 ## Settings and decisions

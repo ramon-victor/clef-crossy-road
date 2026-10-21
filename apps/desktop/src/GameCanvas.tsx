@@ -20,6 +20,9 @@ export interface GameCanvasProps {
   onRetry: () => void;
   onNewMap: () => void;
   onShowControls?: (() => void) | undefined;
+  /** Browser sidebar: when set, the settings button hides and shows it instead of only opening. */
+  onToggleControls?: (() => void) | undefined;
+  controlsVisible?: boolean;
   onToggleDecisions?: (() => void) | undefined;
   decisionsVisible?: boolean;
   /** The model's decision drawn around the chicken. It replaces the thought bubble while it is on. */
@@ -151,6 +154,11 @@ export function GameCanvas(props: GameCanvasProps) {
   const chosen = last ? modelChoice(last) : null;
   const shownMove = chosen?.move ?? last?.action;
   const chosenP = chosen?.bars?.p[chosen.move];
+  const controlsAction = props.onToggleControls ?? props.onShowControls;
+  const controlsLabel = props.onToggleControls
+    ? t(props.controlsVisible ? "panel.hide" : "panel.show")
+    : t("windows.openControls");
+  const controlsTitle = props.onToggleControls ? controlsLabel : t("windows.openControlsHelp");
 
   return (
     <div class="stage">
@@ -161,13 +169,14 @@ export function GameCanvas(props: GameCanvasProps) {
         <div class="hud-sub">{t("game.hud", { best: state.best, seed: String(state.seed) })}</div>
       </div>
 
-      {props.onShowControls && (
+      {controlsAction && (
         <button
           type="button"
-          class="game-tool open-controls"
-          onClick={props.onShowControls}
-          aria-label={t("windows.openControls")}
-          title={t("windows.openControlsHelp")}
+          class={`game-tool ${props.onToggleControls ? "toggle-controls" : "open-controls"}`}
+          onClick={controlsAction}
+          aria-pressed={props.onToggleControls ? (props.controlsVisible ?? false) : undefined}
+          aria-label={controlsLabel}
+          title={controlsTitle}
         >
           <svg
             viewBox="0 0 24 24"

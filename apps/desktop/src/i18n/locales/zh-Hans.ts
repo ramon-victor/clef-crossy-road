@@ -96,6 +96,8 @@ export const zhHans = {
   "death.train": "被列车撞倒",
   "death.out_of_bounds": "超出地图边界",
   "panel.label": "游戏控制与决策",
+  "panel.show": "显示设置",
+  "panel.hide": "隐藏设置",
   "player.who": "玩家",
   "player.modelController": "模型 + 自动控制",
   "player.model": "AI 玩家",

@@ -23,7 +23,7 @@ TypeScript port of the rules of Evan Bacon's [Expo-Crossy-Road](https://github.c
 player asks the model three lookups about the scene, plus a fourth while riding a platform, then a route controller executes the hops, waits and detours. Other
 conditions ask the model to choose each move directly.
 
-A [Tauri v2](https://v2.tauri.app/) desktop app renders the game with Three.js in one window and its controls in another. Browser development keeps an integrated layout. The panel shows
+A [Tauri v2](https://v2.tauri.app/) desktop app renders the game with Three.js in one window and its controls in another. Browser development keeps an integrated layout, with the same two buttons over the game to hide or show its side panels. The panel shows
 actions, probabilities, controller steps, latency, tokens and rows crossed. A Node benchmark CLI compares players on
 identical seeds with paired confidence intervals.
 

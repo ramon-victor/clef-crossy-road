@@ -6,8 +6,12 @@ import type { ChoiceKind } from "../policies.ts";
 
 export const PACE_KEY = "ccr.theater.pace";
 
-/** The two things the person can switch on or off, and where the choice is kept. */
-export const FLAGS = { theater: "ccr.theater", compass: "ccr.compass" } as const;
+/** The things the person can switch on or off, and where the choice is kept. */
+export const FLAGS = {
+  theater: "ccr.theater",
+  compass: "ccr.compass",
+  settings: "ccr.settings",
+} as const;
 export type Flag = keyof typeof FLAGS;
 
 /** What the person chose last time for `flag`, or null if they never did (then the player decides). */
@@ -48,4 +52,9 @@ export function writePace(pace: Pace, store: KeyValueStore | null = browserStore
 }
 
 /** Every key this module keeps, for whoever must put them back as they were. */
-export const PREFERENCE_KEYS: readonly string[] = [FLAGS.theater, FLAGS.compass, PACE_KEY];
+export const PREFERENCE_KEYS: readonly string[] = [
+  FLAGS.theater,
+  FLAGS.compass,
+  FLAGS.settings,
+  PACE_KEY,
+];

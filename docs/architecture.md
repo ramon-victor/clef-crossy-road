@@ -87,7 +87,7 @@ Credentials are entered once in **Setup → Cloudflare**. The native side valida
 
 Desktop has three webviews. `main` alone owns `Session`, policies, `ClefClient`, scene, audio and logs. `controls` and `decisions` receive serializable snapshots and send acknowledged commands through targeted Tauri events; neither creates a model client or game. Replies are targeted to the requesting window. Closing controls hides its webview and clears credential input; closing decisions hides its webview. Reopening synchronizes presentation state. Inspection requests travel with snapshots so a late webview can still open the right details. Native startup shows only the compact game window. The visual decisions panel uses a pure `DecisionPresentation` projection, with Now, History and Details tabs. Explicit pinning and secondary tabs keep a bounded reading snapshot; scrolling does not freeze it. Its original model inputs are retranslated only for presentation, never rewritten. Display timestamps are converted between the webviews' clock origins. Language preferences are synchronized without changing model inputs ([internationalization.md](internationalization.md)).
 
-Run data is plain text, with no database; the files below are generated and ignored by git. Browser storage holds only non-sensitive UI preferences (locale, conversation, compass and reading pace), never credentials.
+Run data is plain text, with no database; the files below are generated and ignored by git. Browser storage holds only non-sensitive UI preferences (locale, conversation, settings sidebar, compass and reading pace), never credentials.
 
 | File | Content |
 |---|---|

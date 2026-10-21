@@ -60,11 +60,23 @@ vi.mock("./theater/Theater.tsx", () => ({
   ),
 }));
 vi.mock("./GameCanvas.tsx", () => ({
-  GameCanvas: ({ state, onShowControls, onToggleDecisions, decisionsVisible }: GameCanvasProps) => (
+  GameCanvas: ({
+    state,
+    onShowControls,
+    onToggleControls,
+    controlsVisible,
+    onToggleDecisions,
+    decisionsVisible,
+  }: GameCanvasProps) => (
     <>
       <button type="button" onClick={onShowControls} data-paused={state.paused}>
         game control
       </button>
+      {onToggleControls && (
+        <button type="button" onClick={onToggleControls} aria-pressed={controlsVisible}>
+          settings
+        </button>
+      )}
       {onToggleDecisions && (
         <button type="button" onClick={onToggleDecisions} aria-pressed={decisionsVisible}>
           decisions
@@ -80,6 +92,7 @@ afterEach(() => {
   runtime.listeners.clear();
   runtime.snapshot = null;
   localStorage.removeItem("ccr.theater");
+  localStorage.removeItem("ccr.settings");
 });
 
 describe("game window shortcuts", () => {
@@ -177,5 +190,64 @@ describe("game window shortcuts", () => {
     expect(event.defaultPrevented).toBe(false);
     expect(showControls).not.toHaveBeenCalled();
     expect(runtime.bridge.run).not.toHaveBeenCalled();
+  });
+});
+
+describe("browser side panels", () => {
+  const mount = (desktop = false) =>
+    render(
+      <LanguageProvider initial={{ preference: "en", detected: "en" }}>
+        <App desktop={desktop} />
+      </LanguageProvider>,
+    );
+  const settingsPanel = (view: ReturnType<typeof mount>) =>
+    view.container.querySelector("aside.panel");
+
+  it("hides and shows the settings from the game, and remembers the choice", async () => {
+    const view = mount();
+    expect(settingsPanel(view)).not.toBeNull();
+    fireEvent.click(view.getByRole("button", { name: "settings" }));
+    await waitFor(() => expect(settingsPanel(view)).toBeNull());
+    expect(localStorage.getItem("ccr.settings")).toBe("off");
+    view.unmount();
+
+    const reopened = mount();
+    expect(settingsPanel(reopened)).toBeNull();
+    fireEvent.click(reopened.getByRole("button", { name: "settings" }));
+    await waitFor(() => expect(settingsPanel(reopened)).not.toBeNull());
+    expect(localStorage.getItem("ccr.settings")).toBe("on");
+  });
+
+  it("offers the game's own Configure action only while the settings are hidden", async () => {
+    const view = mount();
+    const game = view.getByRole("button", { name: "game control" });
+    fireEvent.click(game);
+    expect(settingsPanel(view)).not.toBeNull();
+    fireEvent.click(view.getByRole("button", { name: "settings" }));
+    await waitFor(() => expect(settingsPanel(view)).toBeNull());
+    fireEvent.click(game);
+    await waitFor(() => expect(settingsPanel(view)).not.toBeNull());
+  });
+
+  it("brings the conversation back from the game after it was closed", async () => {
+    const view = mount();
+    const toggle = view.getByRole("button", { name: "decisions" });
+    // The app opens on a model player until the launch options pick the human one, which starts closed.
+    await waitFor(() => expect(toggle.getAttribute("aria-pressed")).toBe("false"));
+    fireEvent.click(toggle);
+    await waitFor(() => expect(view.getByTestId("conversation")).toBeTruthy());
+    expect(toggle.getAttribute("aria-pressed")).toBe("true");
+    fireEvent.click(toggle);
+    await waitFor(() => expect(view.queryByTestId("conversation")).toBeNull());
+    expect(toggle.getAttribute("aria-pressed")).toBe("false");
+    fireEvent.click(toggle);
+    await waitFor(() => expect(view.getByTestId("conversation")).toBeTruthy());
+  });
+
+  it("leaves the native game window without a settings toggle or a stored choice", async () => {
+    const view = mount(true);
+    await waitFor(() => expect(setDecisionsVisible).toHaveBeenCalledWith(false));
+    expect(view.queryByRole("button", { name: "settings" })).toBeNull();
+    expect(localStorage.getItem("ccr.settings")).toBeNull();
   });
 });

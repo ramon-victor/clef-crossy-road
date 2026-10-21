@@ -96,6 +96,8 @@ export const fr = {
   "death.train": "Heurté par un train",
   "death.out_of_bounds": "Sortie des limites de la carte",
   "panel.label": "Commandes du jeu et décisions",
+  "panel.show": "Afficher les paramètres",
+  "panel.hide": "Masquer les paramètres",
   "player.who": "Qui joue",
   "player.modelController": "Modèle + contrôleur",
   "player.model": "Joueur IA",
