@@ -1,6 +1,6 @@
 # ADR-0012 · Clef decides to step off its cell; nothing steps in when it is wrong
 
-- **Status:** accepted · **Date:** 2026-10-20 · **Amends** [ADR-0011](0011-route-controller-three-lookups.md)
+- **Status:** accepted · **Date:** 2026-10-20 · **Amends** [ADR-0011](0011-route-controller-three-lookups.md) · **Extended by** [ADR-0013](0013-model-times-the-hop.md) (the model also times the hop)
 
 ## Context and problem statement
 

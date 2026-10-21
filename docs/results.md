@@ -139,6 +139,21 @@ Both runs were made here, on the same seeds. The intervals overlap almost entire
 
 **Model: one game.** Clef-flash on seed 7, recorded once (19 requests, 2,242 input tokens each, 147 neurons, cache replay with zero calls): 8 rows, killed by a car at decision 72. In its last six decisions Clef answered `here: move_off` correctly (0.91 to 0.94) every time its cell could not hold the chicken, and hopped right three times; on the last one `step_off` found no cell within 4 hops and the chicken waited on the road. This is a single game: it says the new path works end to end, not how well Clef plays it. The 22.43-row mean and every earlier Clef number belong to the previous controller and prompts, and no new full evaluation has been run.
 
+### 2026-10-20: the model times the hop (`route-live`)
+
+[ADR-0013](adr/0013-model-times-the-hop.md). The controller used to check every hop and wait for the gap alone; now Clef answers at every step and a hop it calls standable is made at once. Measured before paying, with the free scripted chooser on seeds 1 to 100 (stall limit 60, cap 300 decisions):
+
+| Free chooser | Rows | Ended: car / train / edge / stalled / capped | Consultations / distinct requests per game |
+|---|---|---|---|
+| `exec-route` (checks the hop, waits alone) | 65.36 | 22 / 3 / 10 / 24 / 41 | - |
+| live, `cell` reads `lands_on` as Clef does | 68.14 | 19 / 3 / 7 / 30 / 41 | 195 / 145 |
+| live, `cell` reads a longer dwell window | 55.26 | 23 / 0 / 13 / 21 / 43 | 207 / 145 |
+| live, the old check's lookahead folded into one word | 65.32 | 23 / 3 / 9 / 24 / 41 | 197 / 146 |
+
+One run each, no paired intervals. They say the old check was not needed for the ideal chooser's ceiling with the information Clef already reads, and that a more cautious window costs about ten rows. Across the 100 trajectories 8,583 of about 19,500 consultations were distinct requests, so a cache filled by many games would answer about 56% of them for free (a first game sees only the 26% saved by repeats inside it).
+
+**Model.** Probe of 114 labelled states (882 neurons, run `live-probe`): agreement with the ideal follower 92% on 90 states (the three-lookup design had 94%), platform states 12/12 `leaving` near the edge and 12/12 `staying` far from it, `here` right in all 114 (it said `move_off` in the 3 states with a warned train under the chicken and `remain` in the other 111), AUC of P(hop forward) 0.92 on water and on road. One game, seed 624140: 19 rows, drowned at decision 62 after answering `cell: stand` with P(stand) 0.56 on a moving water row (51 requests, 32 paid, 246 neurons). The same map reached row 100 or more under `route` in the owner's session, with the controller checking each hop; the two are not a matched comparison. No 100-seed result exists for either strategy, and at about 195 consultations a game the gate would need roughly 150,000 neurons.
+
 ## Latency finding
 
 These runs cover scripted references only, on 100 seeds; no model condition was run under injected latency. The serial and pipelined methods are defined in [benchmark.md](benchmark.md#latency-injection). Scores are mean rows crossed:

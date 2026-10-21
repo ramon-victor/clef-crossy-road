@@ -44,6 +44,7 @@ trying to do.
 | [0010](adr/0010-words-rules-maneuver-executor.md) | Words, rules in the options and a maneuver executor, with labelled help levels |
 | [0011](adr/0011-route-controller-three-lookups.md) | Route controller and three one-field lookups |
 | [0012](adr/0012-clef-decides-to-step-off-no-rescue.md) | Clef decides to step off its cell; the controller no longer rescues it |
+| [0013](adr/0013-model-times-the-hop.md) | The model times the hop (`route-live`); nothing checks a hop Clef calls standable |
 
 ## Conventions
 

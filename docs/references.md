@@ -62,11 +62,22 @@ Design patterns that recur across them, and that shaped the gameplay in [ADR-001
 
 1. **Small state, in words or ready-made fields.** The code subtracts, sorts and classifies; the model receives the relation, not arithmetic.
 2. **The option text carries the rule.** Options that state their boundary behave differently from options that only state a purpose.
-3. **The model picks the maneuver; code executes and times it.** "What to do" is separated from "when and how".
+3. **The model picks the maneuver; code executes and times it.** "What to do" is separated from "when and how". Not all of them: see the next section.
 4. **Stale answers are worth little.** Discard or replan on arrival, put the measured delay in the state, or use a forecast instead of the current position.
 5. **Several small questions per call are cheap.** They add little latency compared with one large question.
 6. **Abstention and honest labels.** Low confidence becomes a visible fallback, and whatever is not the model says so.
 7. **Memory in the state**, because every call starts from zero.
+
+### Who times the action (read 2026-10-20; READMEs and key files, not every file)
+
+| Project | What the model decides | What the code keeps |
+|---|---|---|
+| [shantanugoel/mario-jev](https://github.com/shantanugoel/mario-jev) | Every decision, four questions in one call: `movement`, and three yes/no (`start_jump`, `ceiling_hop`, `sustain_jump`). **The moment of the jump is the model's.** The emulator pauses while it answers, then advances up to four frames, stopping early on landing | Mapping answers to buttons, a ceiling-hop routing, the "A held" mechanics. README: "It adds no scripted hazard override." Single runs, no completion rate |
+| [fhshaik/typesafe-mario](https://github.com/fhshaik/typesafe-mario) | `next_action` among macros, `jump_needed`; async mode feeds the response delay back to the model | Exact timing arithmetic and the jump-release edge. "There is no scripted recovery-action override" |
+| [RomanSlack/jev-drone](https://github.com/RomanSlack/jev-drone) | A manoeuvre every ~1 s, only when `decision_needed` | A reflex layer that caps speed near obstacles, hard limits, and a stale-answer timeout. The README counts the reflex share of the flight and says "the model is 13% of the loop". The model never chose `climb` until the state carried the fact it needed (then p=0.93); a 3-seed matched run on an earlier arena showed no advantage |
+| [FBddcz/embodied-jev](https://github.com/FBddcz/embodied-jev) | Subgoal and direction of each axis | Magnitudes ("scale magnitudes, never replace a model-selected direction"); never falls back to a rule policy, and logs intercepts and substitutions (0 and 0) |
+
+Taken into [ADR-0013](adr/0013-model-times-the-hop.md): the model decides the moment of the hop at every step with no check, the world waits while it answers, and the controller keeps the *how* (the path of a detour, the hop off a cell, the way off a platform). Where we are stricter than these projects: [ADR-0009](adr/0009-perception-memory-judgement.md) keeps computed judgements (time to contact, "jump must start now") out of the state, so Clef decides from words about where things will be. Their lesson on missing behaviour is kept as a rule of thumb: if the model never does something, first check that the state carries the fact it needs. Claims about the 50-game Subway Surfers demo and the rocket landing come from press roundups and have no repository to read.
 
 Another pattern in these projects, listing only legal moves together with their consequences, is not used here: [ADR-0009](adr/0009-perception-memory-judgement.md) keeps judgement out of the model's input.
 

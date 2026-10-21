@@ -22,13 +22,13 @@ Research prototype. **Plain-prompt conditions do not beat "always forward"** (~3
 An earlier `DEFAULT_CLEF` (`scene` + `route` + `lookup`, ADR-0011) made 22.4 rows over 7 games spanning two controller revisions,
 against 2.7 for always-forward on those seeds. The scripted ceiling with the same controller (`exec-route`, no model)
 makes 48.3 over 100 games; that is not a matched comparison. Current gameplay adds a platform clock and a fifth lookup on platforms, asks Clef in every request whether it can stay on its cell
-(`here`, ADR-0012: **nothing rescues a wrong answer**), retries failed sides and uses longer detours with stall limit 60; `exec-route` made 61.6 rows before the platform-exit fix
+(`here`, ADR-0012: **nothing rescues a wrong answer**), lets Clef time the hop (`route-live`, ADR-0013: **nothing checks a hop Clef calls standable**), retries failed sides and uses longer detours with stall limit 60; `exec-route` made 61.6 rows before the platform-exit fix
 (warned rail transit, retained exit control), which has no full benchmark yet. Old results used 40.
 Every report must distinguish controller and model help
 (`helpLabel`). **The 100-seed gate is pending**; the earlier 25,000-30,000-neuron estimate needs replanning for current gameplay.
 Numbers, method and open work: `docs/results.md`.
 The app's "Who plays" lists You, **Clef-flash**, **Clef (27B)** and the three references; both Clef play the gameplay above
-(`DEFAULT_CLEF`, `CLEF_27B_CONFIG`), the app opens on Clef-flash at seed 624140 (`CLEF_CACHED_SEEDS` remains 7-7), and every
+(`DEFAULT_CLEF`, `CLEF_27B_CONFIG`), the app opens on Clef-flash at seed 624140 (`CLEF_CACHED_SEEDS`, now 624140-624140), and every
 other condition (including the old `json-fx`) opens only as a `Custom` player from
 `CCR_PLAYER=clef:<model>:<encoder>:<strategy>[:<manual>]`.
 **A cached map only replays if the controller makes the same moves it made when it was cached.** After changing the prompts or `route.ts`, re-run the seeds and check each one with `pnpm bench run ... --seeds N --daily-neurons 0` (any cache miss is refused: nothing is spent) before listing it in the app. `--max-calls` only stops *starting* games; a game in progress runs on.
@@ -153,4 +153,4 @@ Typecheck, lint and tests pass; determinism test passes if `core` changed; docs 
 ## Docs index
 
 `docs/README.md` (index) · `architecture` · `game-rules` · `clef-api` · `observation-and-prompts` · `benchmark` ·
-`results` (what worked, open work) · `desktop-app` · `internationalization` · `references` · `adr/` (0001-0012). Security notes: `SECURITY.md`.
+`results` (what worked, open work) · `desktop-app` · `internationalization` · `references` · `adr/` (0001-0013). Security notes: `SECURITY.md`.
