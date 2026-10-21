@@ -6,7 +6,7 @@ a bug in the simulation, a mis-ported rule, a flaw in the benchmark statistics, 
 ## Setup
 
 ```bash
-pnpm install --frozen-lockfile
+./init.sh                       # init.cmd on Windows; by hand: pnpm install --frozen-lockfile
 pnpm run dev                    # browser app at http://localhost:5173, free look-ahead player
 pnpm check
 cd apps/desktop/src-tauri && cargo test --lib     # only if you touch the Rust side

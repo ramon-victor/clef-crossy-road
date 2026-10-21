@@ -38,6 +38,7 @@ the owner's say-so. `.env` holds the real `CF_API_TOKEN` and `CF_ACCOUNT_ID`: ne
 
 ## Commands
 
+- `./init.sh` or `init.cmd` (`scripts/init.mjs`, `--desktop` also checks Rust) checks Node/Git, makes the pinned pnpm runnable (asks before the official installer), installs and fetches the assets; never reads `.env`.
 - `pnpm install`; `node scripts/fetch-assets.mjs` once, to download Evan's models/audio locally (gitignored)
 - `pnpm run dev` at the root prepares assets and serves `http://localhost:5173`, starting with the free look-ahead player.
 - `pnpm run dev:desktop` prepares assets and launches Tauri development (Rust/C++ tools/WebView2 required); stop browser dev first (same port).
