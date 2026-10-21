@@ -41,6 +41,7 @@ import {
 import { Theater } from "./theater/Theater.tsx";
 
 const DEFAULT_PLAYER = "clef-flash";
+const DEFAULT_SEED = 624140;
 /** Pause before an attract-mode game starts the next map, long enough to read the result card. */
 const RESTART_DELAY_MS = 2200;
 
@@ -63,7 +64,7 @@ export function App({ desktop = false }: { desktop?: boolean }) {
   const sounds = useMemo(() => new Sounds(), []);
   const session = useMemo(() => {
     const s = new Session();
-    s.start(randomSeed());
+    s.start(DEFAULT_SEED);
     return s;
   }, []);
 
@@ -143,8 +144,7 @@ export function App({ desktop = false }: { desktop?: boolean }) {
     [standardById],
   );
 
-  // Native starts on Clef-flash's first cached map; browser development defaults to a free reference.
-  // A cached replay is only free if that worktree actually contains all of its cached decisions.
+  // Both modes start on the default map; browser development defaults to a free reference.
   useEffect(() => {
     let cancelled = false;
     let stopLogging = () => {};
@@ -162,9 +162,8 @@ export function App({ desktop = false }: { desktop?: boolean }) {
       if (!wanted) return;
       if (!standardById.has(wanted.id)) setCustom(wanted);
       setSelectedId(wanted.id);
-      // Without a seed from a shortcut, a player with cached maps starts on the first of them.
-      const seed = options.seed ?? freeSeedRange(wanted)?.min;
-      if (seed !== undefined) noteSeed(wanted.id, seed);
+      const seed = options.seed ?? DEFAULT_SEED;
+      noteSeed(wanted.id, seed);
       session.setPolicy(wanted.factory, seed);
       setLaunchReady(true);
     });
