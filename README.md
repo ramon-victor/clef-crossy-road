@@ -83,7 +83,8 @@ pnpm run dev
 - Release build: `pnpm --filter @ccr/desktop build`, then `pnpm tauri build --no-bundle` inside `apps/desktop`. On Windows,
   `play.cmd` opens it and prints what the model is sent.
 
-The desktop app is verified on Windows. CI checks the TypeScript code and the web build on Windows, Linux and macOS.
+The desktop app is verified on Windows. CI runs the init script, the TypeScript checks and the web build on Windows and Linux at
+every push (macOS joins the weekly run), and the Rust tests on Windows and Linux when the Rust side changes.
 </details>
 
 ## How Clef plays

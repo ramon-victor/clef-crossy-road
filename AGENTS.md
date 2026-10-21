@@ -43,7 +43,7 @@ the owner's say-so. `.env` holds the real `CF_API_TOKEN` and `CF_ACCOUNT_ID`: ne
 - `pnpm run dev` at the root prepares assets and serves `http://localhost:5173`, starting with the free look-ahead player.
 - `pnpm run dev:desktop` prepares assets and launches Tauri development (Rust/C++ tools/WebView2 required); stop browser dev first (same port).
 - `pnpm typecheck` / `pnpm lint` / `pnpm test`: run all three before declaring work done
-- `pnpm check` runs all three. Keep pnpm pinned in `packageManager` (12.14.0), validate upgrades with a frozen install and use the official installer if an older global binary cannot load the pinned version. CI checks Windows, Linux and macOS without credentials or API calls.
+- `pnpm check` runs all three. Keep pnpm pinned in `packageManager` (12.14.0), validate upgrades with a frozen install and use the official installer if an older global binary cannot load the pinned version. CI checks Windows and Linux on every push (macOS weekly; Rust tests when `src-tauri` changes) without credentials or API calls.
 - `pnpm --filter @ccr/core test`: core only, no network, ~3 s
 - `node scripts/gen-flow-figure.mjs` regenerates the README's animated figure (`docs/images/clef-flow-{light,dark}.svg`, three real decisions of the 624140 replay); never edit the SVGs by hand. CI runs it with `--check`.
 - `pnpm bench plan --policies <ids> --seeds 1..100`: estimates neurons and splits a run over days. **Run it before any `run` or `probe-run` that uses a model.**
