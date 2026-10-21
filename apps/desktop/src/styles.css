@@ -1149,12 +1149,34 @@ canvas.game:focus-visible {
   color: #fff;
   opacity: 0.28;
   transform: translate(var(--dx), var(--dy)) scale(0.78);
+  /* Slow out, fast in (see .actual): a wait lasts 0.2 s and the highlight drops for a frame or two between two of them. */
+  transition-property: opacity, background-color, border-color, box-shadow, color;
+  transition-duration: 0.28s;
+  transition-timing-function: ease-in;
 }
 
 .cb[data-move="stay"] {
   width: 38px;
   height: 38px;
   margin: -19px 0 0 -19px;
+}
+
+/* The pause while it waits for a gap: a ring that is always there and only shown, so its pulse never restarts between two waits. */
+.cb[data-move="stay"]::after {
+  content: "";
+  position: absolute;
+  inset: -8px;
+  border: 3px solid rgba(255, 214, 64, 0.6);
+  border-radius: 12px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.28s ease-in;
+}
+
+.compass .cb.actual.waiting::after {
+  opacity: 1;
+  transition-duration: 0.1s;
+  transition-timing-function: ease-out;
 }
 
 /* Only the action actually in progress receives the gold execution highlight. */
@@ -1168,6 +1190,8 @@ canvas.game:focus-visible {
   box-shadow:
     0 0 0 4px rgba(255, 214, 64, 0.3),
     0 0 20px rgba(255, 214, 64, 0.6);
+  transition-duration: 0.1s;
+  transition-timing-function: ease-out;
 }
 
 /* Held or queued: a quiet outline, never a second execution highlight. */
@@ -1378,9 +1402,7 @@ canvas.game:focus-visible {
 
 @keyframes cb-wait {
   50% {
-    box-shadow:
-      0 0 0 10px rgba(255, 214, 64, 0.15),
-      0 0 26px rgba(255, 214, 64, 0.35);
+    transform: scale(1.14);
   }
 }
 
@@ -1394,20 +1416,18 @@ canvas.game:focus-visible {
 /* Motion only for people who have not asked for less of it. Each element's own style is its end state. */
 @media (prefers-reduced-motion: no-preference) {
   .cb {
-    transition:
-      transform 80ms ease-out,
-      background-color 80ms;
+    transition-property: transform, opacity, background-color, border-color, box-shadow, color;
   }
 
-  .compass .cb.actual.waiting {
-    animation: cb-wait 1s ease-in-out infinite;
+  .cb[data-move="stay"]::after {
+    animation: cb-wait 1.2s ease-in-out infinite;
   }
 
   .cp {
     animation: cp-in 0.2s ease-out;
   }
 
-  .compass.paused .cb,
+  .compass.paused .cb[data-move="stay"]::after,
   .compass.paused .cp {
     animation-play-state: paused;
   }
