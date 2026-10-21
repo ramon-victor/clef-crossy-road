@@ -9,8 +9,34 @@ describe("compass model context, separate from live execution", () => {
     const view = buildCompass(s.state());
     expect(view.mode).toBe("reading");
     expect(view.moves).toHaveLength(5);
-    expect(view.moves.every((m) => !m.blocked)).toBe(true);
+    expect(view.moves.every((m) => !m.blocked && m.p === null && !m.chosen)).toBe(true);
     expect(view.since).toEqual(expect.any(Number));
+  });
+
+  it("carries how much the model wanted each move, and which one it chose", async () => {
+    const s = await answeredSession(routeAnswers("stand", "still", "wait_here", 0.9), 1);
+    const { moves } = buildCompass(s.state());
+    const p = Object.fromEntries(moves.map((m) => [m.action, m.p]));
+    expect(p.hop_forward).toBeCloseTo(0.95, 3);
+    expect(p.hop_left).toBeCloseTo(0.01, 3);
+    expect(p.hop_right).toBeCloseTo(0.03, 3);
+    expect(p.stay).toBeCloseTo(0.01, 3);
+    expect(p.hop_back).toBe(0);
+    expect(moves.filter((m) => m.chosen).map((m) => m.action)).toEqual(["hop_forward"]);
+  });
+
+  it("has no share when the strategy gives no probabilities", async () => {
+    const state = (
+      await answeredSession(routeAnswers("stand", "still", "wait_here", 0.9), 1)
+    ).state();
+    if (!state.lastModel) throw new Error("missing answer");
+    const bare = {
+      ...state.lastModel,
+      decision: { action: state.lastModel.action, source: "model" as const },
+    };
+    const { moves } = buildCompass({ ...state, lastModel: bare, last: bare });
+    expect(moves).toHaveLength(5);
+    expect(moves.every((m) => m.p === null)).toBe(true);
   });
 
   it("keeps the chosen manoeuvre as context when its first step is backwards", async () => {
@@ -25,7 +51,9 @@ describe("compass model context, separate from live execution", () => {
     };
     const view = buildCompass({ ...state, lastModel: back, last: back });
     expect(view.verdict).toBe("Detour right");
-    expect(view.moves.find((m) => m.blocked)?.action).toBe("hop_forward");
+    expect(view.moves.find((m) => m.blocked)).toMatchObject({ action: "hop_forward", p: null });
+    expect(view.moves.find((m) => m.chosen)?.action).toBe("hop_right");
+    expect(view.moves.find((m) => m.action === "hop_right")?.p).toBeCloseTo(0.6, 3);
     expect(view.doing).toContain("walking the detour");
   });
 

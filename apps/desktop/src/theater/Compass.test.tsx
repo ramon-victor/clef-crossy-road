@@ -13,7 +13,7 @@ afterEach(async () => {
 });
 
 describe("compass execution hierarchy", () => {
-  it("lights only pause while Clef's forward choice stays secondary, without percentages", async () => {
+  it("lights only pause while Clef's forward choice keeps its share on a chip", async () => {
     const session = await answeredSession(routeAnswers("stand", "still", "wait_here", 0.9), 1);
     const execution: ExecutionView = { action: "stay", next: null, blocked: false, overlay: null };
     const screen = render(
@@ -28,7 +28,14 @@ describe("compass execution hierarchy", () => {
     );
     expect(screen.container.querySelectorAll(".cb.actual")).toHaveLength(1);
     expect(screen.container.querySelector(".cb.actual")?.getAttribute("data-move")).toBe("stay");
-    expect(screen.container.querySelector(".compass")?.textContent).not.toContain("%");
+    const chips = [...screen.container.querySelectorAll(".cp")];
+    expect(
+      Object.fromEntries(chips.map((c) => [c.getAttribute("data-label"), c.textContent])),
+    ).toEqual({ hop_forward: "95%", hop_left: "1%", hop_right: "3%", stay: "1%" });
+    expect(
+      chips.filter((c) => c.classList.contains("chosen")).map((c) => c.getAttribute("data-label")),
+    ).toEqual(["hop_forward"]);
+    expect(screen.container.querySelector(".cb .cp")).toBeNull();
     expect(screen.container.querySelector(".cb-badge")).toBeNull();
 
     screen.rerender(
