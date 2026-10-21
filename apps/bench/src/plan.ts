@@ -26,7 +26,8 @@ function observedDecisionsPerEpisode({ encoder, strategy }: ClefPolicyConfig): n
   // Not measured yet: a model that reads the words well lives much longer than one that always hops
   // forward, so the plan assumes long games (model calls per game) rather than short ones.
   // The route strategy plays long games and asks the model only when a manoeuvre ends (40 is an estimate).
-  if (encoder === "scene") return 40;
+  // `route-live` asks again at every tick: 195 consultations per game measured with the ideal chooser (seeds 1 to 100, free).
+  if (encoder === "scene") return strategy === "route-live" ? 200 : 40;
   if (encoder === "lanes" || encoder === "moves")
     return strategy === "maneuver" || strategy === "graph-maneuver" ? 30 : 45;
   if (encoder === "image") return 5;

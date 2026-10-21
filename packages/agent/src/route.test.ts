@@ -15,6 +15,7 @@ import {
 } from "./route.testing.ts";
 import {
   execRoute,
+  execRouteLive,
   MAX_CROSS_WAIT,
   MAX_DETOUR_STEPS,
   MAX_LEAVE_STEPS,
@@ -570,6 +571,86 @@ describe("RouteExecutor: step_off, the model said the cell cannot hold the chick
   });
 });
 
+describe("RouteExecutor: live, the model times the hop", () => {
+  // A vehicle reaches the row ahead half a second after the landing, and water follows.
+  const roadAhead = (): Observation =>
+    world([grass([], 0), road([{ col: 2.6, speed: -3 }], 1), water([], 2)]);
+  const waterAhead = (): Observation =>
+    world([grass([], 0), water([{ col: 4, speed: -1, type: "log" }], 1)]);
+
+  it("hops at once when the model says the cell can be stood on, whatever is coming: nothing is checked", () => {
+    for (const obs of [roadAhead(), waterAhead()]) {
+      const checked = new RouteExecutor().start("cross_ahead", obs, emptyMemory());
+      expect(checked.action).toBe("stay");
+      const live = new RouteExecutor({ live: true });
+      const act = live.start("cross_ahead", obs, emptyMemory());
+      expect(act).toMatchObject({
+        action: "hop_forward",
+        step: { kind: "hop" },
+        notice: { kind: "go", maneuver: "cross_ahead" },
+      });
+      expect(act.refused).toBeUndefined();
+      expect(live.next(obs, emptyMemory())).toBeNull();
+    }
+  });
+
+  it("does not refuse a cell that never goes away either: a tree or still water is the model's to have misread", () => {
+    const act = new RouteExecutor({ live: true }).start(
+      "cross_ahead",
+      world([grass([], 0), grass([0], 1)]),
+      emptyMemory(),
+    );
+    expect(act).toMatchObject({ action: "hop_forward", step: { kind: "hop" } });
+  });
+
+  it("waits one step when the model says things keep passing, counts the steps, and asks again each time", () => {
+    const executor = new RouteExecutor({ live: true });
+    const first = executor.start("wait_gap", waterAhead(), emptyMemory());
+    expect(first).toMatchObject({
+      action: "stay",
+      step: { kind: "wait", n: 1, of: 0, cell: "water", why: "gap" },
+      notice: { kind: "waiting_gap" },
+    });
+    expect(executor.next(waterAhead(), emptyMemory())).toBeNull();
+    expect(executor.start("wait_gap", waterAhead(), emptyMemory()).step).toMatchObject({ n: 2 });
+    executor.start("cross_ahead", waterAhead(), emptyMemory());
+    expect(executor.start("wait_gap", waterAhead(), emptyMemory()).step).toMatchObject({ n: 1 });
+  });
+
+  it("does not make a wait look safe: on a cell that cannot hold the chicken, or a platform carrying it off, it is a hold nobody helped", () => {
+    const vehicleOnRow = world([grass([], -1), road([{ col: 2.5, speed: -6 }], 0), grass([0], 1)]);
+    expect(
+      new RouteExecutor({ live: true }).start("wait_gap", vehicleOnRow, emptyMemory()).step,
+    ).toEqual({
+      kind: "hold",
+      why: "exposed",
+    });
+    const log = world(
+      [grass([], -1), water([{ col: 3, speed: 3, type: "log", half: 1.6 }], 0), water([], 1)],
+      3,
+      true,
+    );
+    expect(new RouteExecutor({ live: true }).start("wait_gap", log, emptyMemory()).step).toEqual({
+      kind: "hold",
+      why: "edge",
+    });
+  });
+
+  it("leaves everything else to the controller as before: a detour still walks its route, and leaving a cell still takes a hop", () => {
+    const executor = new RouteExecutor({ live: true });
+    expect(executor.start("detour_right", boxedIn(), emptyMemory()).step).toMatchObject({
+      kind: "walk",
+    });
+    expect(executor.next(boxedIn(), emptyMemory())).not.toBeNull();
+    const vehicle = world([grass([], -1), road([{ col: 2.5, speed: -6 }], 0), grass([0], 1)]);
+    expect(
+      new RouteExecutor({ live: true }).start("step_off", vehicle, emptyMemory()).step,
+    ).toMatchObject({
+      kind: "dodge",
+    });
+  });
+});
+
 describe("routeChoice: the lookups the options describe", () => {
   const base = (): SceneState => scene(boxedIn());
   const with_ = (patch: Partial<SceneState>): SceneState => ({ ...base(), ...patch });
@@ -596,6 +677,16 @@ describe("routeChoice: the lookups the options describe", () => {
       }),
     ).toBe("leave_platform");
     expect(routeChoice(with_({ wait_here: { stands_on: "log" } }))).not.toBe("step_off");
+  });
+
+  it("waits a step instead of crossing when things pass and the cell cannot be stood on yet, but only for a live chooser", () => {
+    const passing = with_({ cross_ahead: { lands_on: "water", things_move: "left" } });
+    expect(routeChoice(passing)).toBe("cross_ahead");
+    expect(routeChoice(passing, { live: true })).toBe("wait_gap");
+    const open = with_({ cross_ahead: { lands_on: "log", things_move: "left" } });
+    expect(routeChoice(open, { live: true })).toBe("cross_ahead");
+    const closed = with_({ cross_ahead: { lands_on: "tree", things_move: "still" } });
+    expect(routeChoice(closed, { live: true })).toBe(routeChoice(closed));
   });
 
   it("goes round by the nearer side, and by the one away from the nearer edge when they are as near", () => {
@@ -667,12 +758,24 @@ describe("exec-route: the controller with an ideal chooser, a free reference", (
     expect(drowned).toBeLessThanOrEqual(2);
   });
 
+  it("exec-route-live asks nobody either, and plays far better than always forward", async () => {
+    let live = 0;
+    let forward = 0;
+    const seeds = Array.from({ length: 16 }, (_, i) => i + 1);
+    for (const seed of seeds) {
+      live += (await playEpisode(execRouteLive, seed)).score;
+      forward += (await playEpisode(alwaysForward, seed)).score;
+    }
+    expect(live / seeds.length).toBeGreaterThan(3 * (forward / seeds.length));
+  });
+
   it("knows every manoeuvre of the strategy", () => {
     expect(ROUTE_IDS).toEqual([
       "cross_ahead",
       "detour_left",
       "detour_right",
       "wait_here",
+      "wait_gap",
       "leave_platform",
       "step_off",
     ]);

@@ -37,7 +37,7 @@ export function decisionCost(config: {
   encoder: EncoderId;
   strategy: StrategyId;
 }): DecisionCost {
-  if (config.strategy === "route") {
+  if (config.strategy === "route" || config.strategy === "route-live") {
     // Four lookups with examples and the scene state. Read back from the one game recorded with `here` (seed 7, 19
     // requests, 2026-10-20), so still an estimate for the planner; the three-lookup figure had been 1650.
     return { tokens: 2242, measured: false, neurons: neuronsForTokens(config.model, 2242) };

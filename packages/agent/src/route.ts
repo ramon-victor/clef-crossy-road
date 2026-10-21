@@ -34,6 +34,7 @@ export const ROUTE_IDS = [
   "detour_left",
   "detour_right",
   "wait_here",
+  "wait_gap",
   "leave_platform",
   "step_off",
 ] as const;
@@ -47,6 +48,7 @@ export const ROUTE_ACTION: Readonly<
   detour_left: "hop_left",
   detour_right: "hop_right",
   wait_here: "stay",
+  wait_gap: "stay",
 };
 
 /** Hops a detour may take before it gives the decision back. */
@@ -316,12 +318,27 @@ function crossingCell(obs: Observation): { cell: Cell; noRest: boolean } {
  * Holds the manoeuvre in progress between decisions. One per episode (a policy is created per episode).
  * Crossing waits for the cell ahead to clear and hops; a detour walks the route above; waiting is one step.
  */
+export interface RouteExecutorOptions {
+  /**
+   * The model times the hop (ADR-0013). `cross_ahead` hops now, with no look at the cell it lands on and no waiting for a gap, and
+   * `wait_gap` stays one step; the next decision asks again. Nothing here takes a hop back or holds one the model chose.
+   */
+  live?: boolean;
+}
+
 export class RouteExecutor {
   private plan: CrossPlan | DetourPlan | LeavePlan | null = null;
+  private liveWaits = 0;
   private last: string | undefined;
   private lastNotice: DecisionNotice | undefined;
   private readonly failedAt: Record<SideName, number | null> = { left: null, right: null };
   private failedAtScore = 0;
+
+  private readonly options: RouteExecutorOptions;
+
+  constructor(options: RouteExecutorOptions = {}) {
+    this.options = options;
+  }
 
   /** How the last manoeuvre went, in a sentence, for the model's memory. */
   get lastResult(): string | undefined {
@@ -352,6 +369,9 @@ export class RouteExecutor {
   /** Starts the manoeuvre the model chose. One that cannot begin makes the chicken hold a step and the model hears why. */
   start(maneuver: RouteManeuver, obs: Observation, memory: Memory): RouteAct {
     this.plan = null;
+    if (maneuver !== "wait_gap") this.liveWaits = 0;
+    if (maneuver === "wait_gap") return this.liveWait(obs, memory);
+    if (maneuver === "cross_ahead" && this.options.live) return this.liveHop(obs);
     if (maneuver === "wait_here") {
       this.last = "wait_here: waited";
       this.lastNotice = { kind: "waited" };
@@ -377,6 +397,53 @@ export class RouteExecutor {
     };
     this.plan = plan;
     return this.detourStep(plan, obs, memory, true) ?? this.refusal(obs, memory);
+  }
+
+  /** The model said the cell ahead can be stood on: hop now, however the cell turns out to be. */
+  private liveHop(obs: Observation): RouteAct {
+    this.last = "cross_ahead: hopped";
+    this.lastNotice = { kind: "go", maneuver: "cross_ahead" };
+    return {
+      action: "hop_forward",
+      preview: {
+        col: obs.player.col,
+        steps: [{ action: "hop_forward", col: Math.round(obs.player.col), dz: 1 }],
+      },
+      note: "cross_ahead: hopping, as the model said the cell can be stood on",
+      notice: { kind: "go", maneuver: "cross_ahead" },
+      step: { kind: "hop" },
+    };
+  }
+
+  /**
+   * The model said things keep passing on the row ahead: stay one step and ask again. Where the chicken stays is not the
+   * controller's business; a cell that cannot hold it, or a platform that carries it off, is marked as such.
+   */
+  private liveWait(obs: Observation, memory: Memory): RouteAct {
+    const held = holdAct(obs, memory);
+    this.last = "wait_gap: waited for the gap";
+    this.lastNotice = { kind: "waited" };
+    if (held.step.kind === "hold" && held.step.why !== "refused") return held;
+    return {
+      action: "stay",
+      preview: {
+        col: obs.player.col,
+        conditional: true,
+        steps: [
+          { action: "stay", col: obs.player.col + ridingSpeed(obs) * T, dz: 0 },
+          { action: "hop_forward", col: Math.round(obs.player.col + ridingSpeed(obs) * T), dz: 1 },
+        ],
+      },
+      note: "wait_gap: waiting for the gap",
+      notice: { kind: "waiting_gap" },
+      step: {
+        kind: "wait",
+        n: ++this.liveWaits,
+        of: 0,
+        cell: crossingCell(obs).cell,
+        why: "gap",
+      },
+    };
   }
 
   private refusal(obs: Observation, memory: Memory): RouteAct {
@@ -601,12 +668,16 @@ const RANK: Readonly<Record<string, number>> = {
  * nearer edge when they are as near), and wait when neither side has an opening or both were tried.
  * The ideal follower of those options, never a model.
  */
-export function routeChoice(scene: SceneState): RouteManeuver {
+export function routeChoice(
+  scene: SceneState,
+  { live = false }: { live?: boolean } = {},
+): RouteManeuver {
   if (scene.chicken.edge_in === "a_moment") return "leave_platform";
   if (!canStand(scene.wait_here.stands_on)) return "step_off";
   const ahead = scene.cross_ahead;
   if (canStand(ahead.lands_on)) return "cross_ahead";
-  if (!isPermanent(ahead.lands_on) && ahead.things_move !== "still") return "cross_ahead";
+  if (!isPermanent(ahead.lands_on) && ahead.things_move !== "still")
+    return live ? "wait_gap" : "cross_ahead";
   const rank = (entry: SceneState["detour_left"]): number =>
     entry.recently_failed === "yes" ? 4 : (RANK[entry.opening_ahead] ?? 4);
   const [left, right] = [rank(scene.detour_left), rank(scene.detour_right)];
@@ -616,13 +687,15 @@ export function routeChoice(scene: SceneState): RouteManeuver {
   return place === "at_left_edge" || place === "left" ? "detour_right" : "detour_left";
 }
 
-/** A player with no model: the ideal chooser plus the route controller. Free, a reference. */
-export const execRoute: PolicyFactory = (() => {
-  const id = "exec-route";
+/**
+ * A player with no model: the ideal chooser of the lookup rules plus the route controller. Free, a reference. `live` is the
+ * chooser answering every tick, with the controller neither checking its hops nor waiting for a gap on its own.
+ */
+function scriptedRoute(id: string, live: boolean): PolicyFactory {
   return {
     id,
     create: () => {
-      const executor = new RouteExecutor();
+      const executor = new RouteExecutor({ live });
       const policy: ObservationPolicy = {
         kind: "observation",
         id,
@@ -638,7 +711,7 @@ export const execRoute: PolicyFactory = (() => {
               extra: { controller: step.step },
             };
           const scene = sceneState(obs, memory, { failed: executor.failedSides(memory) });
-          const first = executor.start(routeChoice(scene), obs, memory);
+          const first = executor.start(routeChoice(scene, { live }), obs, memory);
           return {
             action: first.action,
             ...(first.preview ? { preview: first.preview } : {}),
@@ -652,4 +725,7 @@ export const execRoute: PolicyFactory = (() => {
       return policy;
     },
   };
-})();
+}
+
+export const execRoute: PolicyFactory = scriptedRoute("exec-route", false);
+export const execRouteLive: PolicyFactory = scriptedRoute("exec-route-live", true);

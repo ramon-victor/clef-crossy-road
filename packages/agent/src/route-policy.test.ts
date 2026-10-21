@@ -470,6 +470,73 @@ describe("the route strategy through the Clef policy", () => {
     });
   });
 
+  describe("route-live: the model times the hop", () => {
+    const liveId = "clef:clef-flash:scene:route-live:lookup";
+    const liveOf = (client: ClefClient) => {
+      const policy = clefPolicy(client, parseClefPolicyId(liveId)).create(1);
+      if (policy.kind !== "observation") throw new Error("expected an observation policy");
+      return policy;
+    };
+    const waterAhead = () => world([grass([], 0), water([{ col: 4, speed: -1, type: "log" }], 1)]);
+
+    it("parses and prints back like route, shares its cache entries, and labels the help as a path executor", async () => {
+      expect(clefPolicyId(parseClefPolicyId(liveId))).toBe(liveId);
+      expect(() => parseClefPolicyId("clef:clef-flash:json:route-live:full")).toThrow();
+      expect(helpLabel(parseClefPolicyId(liveId))).toBe(
+        "words + rules + graph + platform clock + path executor",
+      );
+      expect(STRATEGY_IDS).toContain("route-live");
+      const live = clientAnswering("stand", "still", "wait_here", 0.9);
+      await liveOf(live.client).decide(world([grass([], 0), grass([], 1)]));
+      const plain = clientAnswering("stand", "still", "wait_here", 0.9);
+      await policyOf(plain.client).decide(world([grass([], 0), grass([], 1)]));
+      expect(live.requests[0]).toEqual(plain.requests[0]);
+    });
+
+    it("hops on the model's word alone: a cell it called standable is hopped on, however it turns out", async () => {
+      const { client } = clientAnswering("stand", "still", "wait_here", 0.9);
+      const decision = await liveOf(client).decide(waterAhead());
+      expect(decision).toMatchObject({
+        action: "hop_forward",
+        source: "model",
+        extra: { maneuver: "cross_ahead", controller: { kind: "hop" } },
+      });
+    });
+
+    it("waits a step when it says things pass, asks again at the next decision, and the bars add up", async () => {
+      const { client, requests } = clientAnswering("no_stand", "moving", "wait_here", 0.2);
+      const policy = liveOf(client);
+      const first = await policy.decide(waterAhead());
+      expect(first).toMatchObject({
+        action: "stay",
+        source: "model",
+        extra: {
+          maneuver: "wait_gap",
+          ahead: "passing",
+          controller: { kind: "wait", n: 1, of: 0, why: "gap" },
+        },
+      });
+      const second = await policy.decide(waterAhead());
+      expect(second.source).toBe("model");
+      expect(requests).toHaveLength(2);
+      const total = Object.values(first.probabilities ?? {}).reduce((a, b) => a + b, 0);
+      expect(total).toBeCloseTo(1);
+      // 0.2 is the chance of a cell to stand on, so the hop gets that much and the rest is a step of waiting.
+      expect(first.probabilities?.hop_forward).toBeCloseTo(0.2 * 0.9, 5);
+    });
+
+    it("keeps the other manoeuvres: a closed way is a detour, and the cell under it is still asked", async () => {
+      const { client } = clientAnswering("no_stand", "still", "detour_right", 0.1, undefined, {
+        choice: "move_off",
+        pMoveOff: 0.9,
+      });
+      const decision = await liveOf(client).decide(
+        world([grass([], -1), road([{ col: 2.5, speed: -6 }], 0), grass([0], 1)]),
+      );
+      expect(decision.extra).toMatchObject({ maneuver: "step_off", controller: { kind: "dodge" } });
+    });
+  });
+
   it("fromRoute rejects an option it does not know", () => {
     expect(() =>
       fromRoute({

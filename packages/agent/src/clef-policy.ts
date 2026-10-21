@@ -55,6 +55,9 @@ import { routePolicy } from "./route-policy.ts";
  *            routing: go means hop_forward, hold means the answer of the second question. Only with the
  *            `moves` view and the `ordered` manual (ADR-0010).
  * graph-maneuver: the same two questions about manoeuvres, with the executor of `maneuver` doing the hopping.
+ * route-live: the `route` lookups, with the model timing the hop (ADR-0013): every decision asks again, a standable
+ *            cell ahead is hopped on at once with nothing checked, and "things pass" stays one step. The detours, the
+ *            step off a cell and the way off a platform keep their controller.
  * route:     three one-field lookups in one request (`cell`: stand or no_stand; `moving`: moving or still;
  *            `around`: detour_left, detour_right or wait_here) and a controller that crosses, waits for a gap,
  *            or walks a detour (route.ts). A fourth lookup, `ride`, asks the platform clock while riding.
@@ -68,6 +71,7 @@ export const STRATEGY_IDS = [
   "graph",
   "graph-maneuver",
   "route",
+  "route-live",
 ] as const;
 export type StrategyId = (typeof STRATEGY_IDS)[number];
 
@@ -89,7 +93,7 @@ export interface ClefPolicyConfig {
 export const DEFAULT_CLEF: ClefPolicyConfig = {
   model: "clef-flash",
   encoder: "scene",
-  strategy: "route",
+  strategy: "route-live",
   manual: "lookup",
 };
 
@@ -160,7 +164,7 @@ function assertSupported(config: ClefPolicyConfig, id: string): void {
   ) {
     throw new Error(`The graph strategies need the moves view and the ordered manual: "${id}"`);
   }
-  const routes = config.strategy === "route";
+  const routes = config.strategy === "route" || config.strategy === "route-live";
   if (routes !== (config.encoder === "scene") || routes !== (config.manual === "lookup")) {
     throw new Error(
       `The route strategy, the scene view and the lookup manual only go together: "${id}"`,
@@ -188,11 +192,13 @@ export function helpLabel(config: ClefPolicyConfig): string {
   if (
     config.strategy === "graph" ||
     config.strategy === "graph-maneuver" ||
-    config.strategy === "route"
+    config.strategy === "route" ||
+    config.strategy === "route-live"
   ) {
     parts.push("graph");
   }
   if (config.strategy === "route") parts.push("platform clock", "route executor");
+  if (config.strategy === "route-live") parts.push("platform clock", "path executor");
   if (config.strategy === "maneuver" || config.strategy === "graph-maneuver")
     parts.push("executor");
   return parts.join(" + ");
@@ -218,7 +224,9 @@ export function selectGoUnlessRisky(risk: Record<Action, number>): Action {
 
 export function clefPolicy(client: ClefClient, config: ClefPolicyConfig): PolicyFactory {
   const id = clefPolicyId(config);
-  if (config.strategy === "route") return routePolicy(client, config, id);
+  if (config.strategy === "route" || config.strategy === "route-live") {
+    return routePolicy(client, config, id);
+  }
   const cacheTag = `${PROMPT_VERSION}|${config.encoder}|${config.strategy}|${config.manual}`;
   const maneuvers = config.strategy === "maneuver" || config.strategy === "graph-maneuver";
   const graphs = config.strategy === "graph" || config.strategy === "graph-maneuver";

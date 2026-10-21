@@ -4,6 +4,7 @@ import {
   DEFAULT_CLEF_ID,
   execCross,
   execRoute,
+  execRouteLive,
   execRules,
   lookaheadPolicy,
   type PolicyFactory,
@@ -21,7 +22,7 @@ export const isClefPolicy = (id: string): boolean =>
 
 /**
  * Policy ids accepted on the command line:
- *   always-forward | random | rule-view | rule-view-fx | rule-lanes | rule-moves | exec-cross | exec-rules | exec-route | lookahead | lookahead-<depth> | lookahead-comp:<ms>
+ *   always-forward | random | rule-view | rule-view-fx | rule-lanes | rule-moves | exec-cross | exec-rules | exec-route | exec-route-live | lookahead | lookahead-<depth> | lookahead-comp:<ms>
  *   clef | clef:<model>:<encoder>:<strategy>[:<manual>]   e.g. clef:clef-flash:json:choice:full
  */
 export function parsePolicy(id: string, getClient: () => ClefClient): PolicyFactory {
@@ -34,6 +35,7 @@ export function parsePolicy(id: string, getClient: () => ClefClient): PolicyFact
   if (id === execCross.id) return execCross;
   if (id === execRules.id) return execRules;
   if (id === execRoute.id) return execRoute;
+  if (id === execRouteLive.id) return execRouteLive;
   if (id === "lookahead") return lookaheadPolicy();
   const depth = /^lookahead-(\d+)$/.exec(id);
   if (depth) return lookaheadPolicy(Number(depth[1]));

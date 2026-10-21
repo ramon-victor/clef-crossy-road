@@ -13,12 +13,13 @@ export type DecisionNotice =
         | "safe_wait"
         | "exposed_wait"
         | "edge_wait"
+        | "waiting_gap"
         | "drift"
         | "waited"
         | "still_water"
         | "not_carried";
     }
-  | { kind: "clear"; maneuver: ControllerManeuver }
+  | { kind: "clear" | "go"; maneuver: ControllerManeuver }
   | { kind: "waiting"; maneuver: ControllerManeuver; cell: Cell; waited: number; limit: number }
   | { kind: "escape"; action: Action; remaining: number }
   | {

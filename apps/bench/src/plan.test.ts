@@ -134,5 +134,14 @@ describe("estimatePolicy: the route strategy", () => {
     expect(route.tokensPerDecision).toBeGreaterThan(1000);
     expect(route.decisionsPerEpisode).toBeGreaterThanOrEqual(30);
     expect(estimatePolicy("exec-route").usesApi).toBe(false);
+    expect(estimatePolicy("exec-route-live").usesApi).toBe(false);
+  });
+
+  it("plans route-live on the 195 consultations a game measured with the ideal chooser, not the 40 of route", () => {
+    const live = estimatePolicy("clef:clef-flash:scene:route-live:lookup");
+    expect(live.decisionsPerEpisode).toBe(200);
+    expect(live.tokensPerDecision).toBe(
+      estimatePolicy("clef:clef-flash:scene:route:lookup").tokensPerDecision,
+    );
   });
 });

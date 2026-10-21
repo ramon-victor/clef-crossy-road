@@ -411,11 +411,12 @@ function idealAndChosen(
   state: ProbeState,
   result: ProbeResult,
 ): { ideal: string; chosen: string } | undefined {
-  if (policy.startsWith("clef:") && parseClefPolicyId(policy).strategy === "route") {
+  const strategy = policy.startsWith("clef:") ? parseClefPolicyId(policy).strategy : undefined;
+  if (strategy === "route" || strategy === "route-live") {
     if (result.maneuver === undefined) return undefined;
     const { game, memory } = rebuild(state);
     return {
-      ideal: routeChoice(sceneState(observe(game), memory)),
+      ideal: routeChoice(sceneState(observe(game), memory), { live: strategy === "route-live" }),
       chosen: result.maneuver,
     };
   }

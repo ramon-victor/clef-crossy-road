@@ -58,12 +58,12 @@ describe("Clef policy ids", () => {
     expect(parseClefPolicyId(clefPolicyId(config))).toEqual(config);
   });
 
-  it("`clef` alone is the default Clef, the gameplay of ADR-0011", () => {
+  it("`clef` alone is the default Clef, the gameplay of ADR-0011 with the model timing the hop (ADR-0013)", () => {
     expect(parseClefPolicyId(DEFAULT_CLEF_ID)).toEqual(DEFAULT_CLEF);
     expect(DEFAULT_CLEF).toMatchObject({
       model: "clef-flash",
       encoder: "scene",
-      strategy: "route",
+      strategy: "route-live",
       manual: "lookup",
     });
     expect(parseClefPolicyId(clefPolicyId(DEFAULT_CLEF))).toEqual(DEFAULT_CLEF);

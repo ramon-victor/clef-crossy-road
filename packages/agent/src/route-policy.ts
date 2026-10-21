@@ -40,9 +40,11 @@ export function routePolicy(
   config: ClefPolicyConfig,
   id: string,
 ): PolicyFactory {
+  const live = config.strategy === "route-live";
   const questions = routeQuestions();
   const questionsOnAPlatform = routeQuestions(true);
-  const cacheTag = `${PROMPT_VERSION}|${config.encoder}|${config.strategy}|${config.manual}`;
+  // `route-live` sends the same questions as `route`, so a request both can make is one cache entry.
+  const cacheTag = `${PROMPT_VERSION}|${config.encoder}|route|${config.manual}`;
 
   /** The one place a request is put together, so what is shown is what is sent. */
   const requestFor = (obs: Observation, memory: Memory, executor: RouteExecutor): ClefRequest => ({
@@ -56,7 +58,7 @@ export function routePolicy(
   });
 
   const create = (): ObservationPolicy => {
-    const executor = new RouteExecutor();
+    const executor = new RouteExecutor({ live });
     return {
       kind: "observation",
       id,
@@ -80,7 +82,7 @@ export function routePolicy(
         const request = requestFor(obs, memory, executor);
         const sent = inputOf(request);
         hooks?.onAsk?.(sent);
-        const chosen = fromRoute(await client.run(request));
+        const chosen = fromRoute(await client.run(request), { live });
         const { act, started, note, notice } = begin(executor, chosen, obs, memory);
         return {
           ...chosen.decision,
@@ -139,7 +141,8 @@ export function refusalOrder(
   chosen: RouteManeuver,
   around: Readonly<Record<AroundOption, number>>,
 ): RouteManeuver[] {
-  if (chosen === "wait_here" || chosen === "leave_platform" || chosen === "step_off") return [];
+  if (chosen === "wait_here" || chosen === "wait_gap") return [];
+  if (chosen === "leave_platform" || chosen === "step_off") return [];
   return AROUND_OPTIONS.filter((option) => option !== "wait_here" && option !== chosen).sort(
     (a, b) => around[b] - around[a],
   );
@@ -174,7 +177,10 @@ export interface RouteChoice {
   fallbacks: RouteManeuver[];
 }
 
-export function fromRoute(result: ClefResult): RouteChoice {
+export function fromRoute(
+  result: ClefResult,
+  { live = false }: { live?: boolean } = {},
+): RouteChoice {
   const cell = choiceOf(result.answers[ROUTE_QUESTION_IDS[0]], CELL_OPTIONS, "cell");
   const moving = choiceOf(result.answers[ROUTE_QUESTION_IDS[1]], MOVING_OPTIONS, "moving");
   const around = choiceOf(result.answers[ROUTE_QUESTION_IDS[2]], AROUND_OPTIONS, "around");
@@ -198,14 +204,19 @@ export function fromRoute(result: ClefResult): RouteChoice {
         ? "step_off"
         : ahead === "closed"
           ? around.choice
-          : "cross_ahead";
+          : ahead === "passing" && live
+            ? "wait_gap"
+            : "cross_ahead";
   // `ride` and `here` take their shares one after the other, so that the bars still add up to one.
   const pExit = (pLeaving ?? 0) + (1 - (pLeaving ?? 0)) * pMoveOff;
   const rest = 1 - pExit;
-  const probabilities: Partial<Record<Action, number>> = { hop_forward: pCross * rest };
+  // Live, the model alone times the hop: only a standable cell is a hop, and things that pass are a step of waiting.
+  const pHop = live ? pStand : pCross;
+  const probabilities: Partial<Record<Action, number>> = { hop_forward: pHop * rest };
   for (const option of AROUND_OPTIONS) {
     probabilities[ROUTE_ACTION[option]] = pClosed * around.probabilities[option] * rest;
   }
+  if (live) probabilities.stay = (probabilities.stay ?? 0) + (pCross - pStand) * rest;
   for (const action of ACTIONS) probabilities[action] ??= 0;
   return {
     maneuver,
@@ -224,6 +235,7 @@ export function fromRoute(result: ClefResult): RouteChoice {
         around: around.choice,
         here: here.choice,
         pMoveOff,
+        ...(live ? { live: true } : {}),
         ...(ride === null ? {} : { ride: ride.choice, pLeaving }),
       },
       latencyMs: result.latencyMs,

@@ -116,6 +116,7 @@ export {
 } from "./prompts.ts";
 export {
   execRoute,
+  execRouteLive,
   HOLD_WHYS,
   type HoldWhy,
   MAX_DETOUR_STEPS,
@@ -124,6 +125,7 @@ export {
   type Route,
   type RouteAct,
   RouteExecutor,
+  type RouteExecutorOptions,
   type RouteManeuver,
   type RouteRequest,
   type RouteStep,
