@@ -3,10 +3,11 @@
 use std::fs;
 
 use serde_json::{json, Value};
-use tauri::{AppHandle, LogicalSize, Manager, State};
+use tauri::{AppHandle, Manager, PhysicalSize, State};
 
 use crate::{
     error::{CommandError, CommandResult},
+    windows::{minimum_size_for_css, WindowLayout},
     AppState,
 };
 
@@ -32,7 +33,11 @@ pub fn selftest_requested() -> bool {
 
 /// Native lifecycle actions used only by the three-window self-test.
 #[tauri::command]
-pub fn selftest_window_action(app: AppHandle, action: &str) -> CommandResult<()> {
+pub fn selftest_window_action(
+    app: AppHandle,
+    layout: State<'_, WindowLayout>,
+    action: &str,
+) -> CommandResult<()> {
     if !selftest_requested() {
         return Err(CommandError::new("self-test is not enabled"));
     }
@@ -50,20 +55,33 @@ pub fn selftest_window_action(app: AppHandle, action: &str) -> CommandResult<()>
                 .ok_or_else(|| CommandError::new("decisions missing"))?
                 .close()?;
         }
-        "minimize-decisions" => {
-            app.get_webview_window("decisions")
-                .ok_or_else(|| CommandError::new("decisions missing"))?
+        "minimize-controls" | "minimize-decisions" => {
+            let label = if action == "minimize-controls" {
+                "controls"
+            } else {
+                "decisions"
+            };
+            app.get_webview_window(label)
+                .ok_or_else(|| CommandError::new("auxiliary window missing"))?
                 .minimize()?;
         }
         "small-decisions" | "restore-decisions-size" => {
-            let (width, height) = if action == "small-decisions" {
-                (360.0, 480.0)
+            let (height, minimum_height) = if action == "small-decisions" {
+                (480.0, 480.0)
             } else {
-                (360.0, 720.0)
+                (800.0, 640.0)
             };
-            app.get_webview_window("decisions")
-                .ok_or_else(|| CommandError::new("decisions missing"))?
-                .set_size(LogicalSize::new(width, height))?;
+            let decisions = app
+                .get_webview_window("decisions")
+                .ok_or_else(|| CommandError::new("decisions missing"))?;
+            let ratio = layout.pixel_ratio();
+            decisions.set_min_size(Some(minimum_size_for_css(
+                360.0,
+                minimum_height,
+                ratio,
+                decisions.scale_factor()?,
+            )))?;
+            decisions.set_size(PhysicalSize::new(360.0 * ratio, height * ratio))?;
         }
         "minimize" => game.minimize()?,
         "restore" => {

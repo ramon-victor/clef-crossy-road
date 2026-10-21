@@ -1,9 +1,8 @@
 import { useState } from "preact/hooks";
-import type { BudgetStatus, CredentialStatus } from "../bridge/types.ts";
+import type { CredentialStatus } from "../bridge/types.ts";
 import { useI18n } from "../i18n/provider.tsx";
 import { parseSeedText } from "../seed.ts";
 import type { SessionState, Timing } from "../session.ts";
-import { BudgetCard } from "./BudgetCard.tsx";
 import { LanguageSelect } from "./LanguageSelect.tsx";
 
 const SPEEDS = [0.5, 1, 2, 4];
@@ -13,7 +12,6 @@ export interface SetupCardProps {
   state: SessionState;
   autoRestart: boolean;
   credentials: CredentialStatus | null;
-  budget: BudgetStatus | null;
   soundOn: boolean;
   configuring: boolean;
   onConfigure(): void;
@@ -31,39 +29,44 @@ export function SetupCard(props: SetupCardProps) {
   const [seedText, setSeedText] = useState("");
   return (
     <>
-      <details class="card setup" open>
-        <summary>{t("settings.game")}</summary>
-        <div class="setup-body">
-          {!state.human && (
-            <fieldset class="segmented">
-              <legend>{t("setup.timing")}</legend>
-              {TIMINGS.map((timing) => (
-                <button
-                  type="button"
-                  key={timing}
-                  class={state.timing === timing ? "on" : ""}
-                  aria-pressed={state.timing === timing}
-                  onClick={() => props.onTiming(timing)}
-                >
-                  {t(`setup.${timing}`)}
-                </button>
-              ))}
-            </fieldset>
-          )}
-          <fieldset class="speeds">
-            <legend>{t("setup.speed")}</legend>
-            {SPEEDS.map((speed) => (
+      <section class="playback-settings" aria-label={t("settings.game")}>
+        {!state.human && (
+          <fieldset class="segmented">
+            <legend>{t("setup.timing")}</legend>
+            {TIMINGS.map((timing) => (
               <button
                 type="button"
-                key={speed}
-                class={state.speed === speed ? "on" : ""}
-                aria-pressed={state.speed === speed}
-                onClick={() => props.onSpeed(speed)}
+                key={timing}
+                class={state.timing === timing ? "on" : ""}
+                aria-pressed={state.timing === timing}
+                onClick={() => props.onTiming(timing)}
               >
-                {number(speed)}×
+                {t(`setup.${timing}`)}
               </button>
             ))}
           </fieldset>
+        )}
+        <fieldset class="speeds">
+          <legend>{t("setup.speed")}</legend>
+          {SPEEDS.map((speed) => (
+            <button
+              type="button"
+              key={speed}
+              class={state.speed === speed ? "on" : ""}
+              aria-pressed={state.speed === speed}
+              onClick={() => props.onSpeed(speed)}
+            >
+              {number(speed)}×
+            </button>
+          ))}
+        </fieldset>
+      </section>
+      <details class="card setup map-settings">
+        <summary>
+          {t("settings.map")}
+          <span class="setting-value">#{state.seed}</span>
+        </summary>
+        <div class="setup-body">
           <form
             onSubmit={(event) => {
               event.preventDefault();
@@ -137,7 +140,6 @@ export function SetupCard(props: SetupCardProps) {
               {t(props.configuring ? "windows.pausing" : "setup.configure")}
             </button>
           </div>
-          <BudgetCard budget={props.budget} />
         </div>
       </details>
     </>

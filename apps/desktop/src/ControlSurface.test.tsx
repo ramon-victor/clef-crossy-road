@@ -102,3 +102,20 @@ describe("detached control surface", () => {
     expect(view.container.querySelector(".connection-dialog")).toBeNull();
   });
 });
+
+it("groups daily usage with the player and commands, outside collapsed account settings", () => {
+  const snapshot = { ...data(), budget: { spent: 500, limit: 10000, day: "2026-10-20" } };
+  const view = render(
+    <LanguageProvider initial={{ preference: "en", detected: "en" }}>
+      <ControlSurface data={snapshot} bridge={{} as Bridge} send={async () => {}} />
+    </LanguageProvider>,
+  );
+  const meter = view.getByRole("progressbar");
+  expect(meter.getAttribute("aria-valuenow")).toBe("500");
+  expect(meter.closest(".panel-top")).not.toBeNull();
+  expect(meter.closest("details")).toBeNull();
+  expect(view.container.querySelector(".panel-top .controls")).not.toBeNull();
+  expect(view.container.querySelector(".account-settings .budget")).toBeNull();
+  expect(view.container.querySelector(".map-settings")?.hasAttribute("open")).toBe(false);
+  expect(view.getByRole("group", { name: "Speed" }).closest("details")).toBeNull();
+});

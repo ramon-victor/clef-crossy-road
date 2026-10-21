@@ -7,6 +7,8 @@ import { useI18n } from "./i18n/provider.tsx";
 import { ErrorMessage } from "./panel/ErrorMessage.tsx";
 import type { Session, SessionState } from "./session.ts";
 import { Compass } from "./theater/Compass.tsx";
+import { CompassCaption } from "./theater/CompassCaption.tsx";
+import { buildCaption } from "./theater/caption.ts";
 import { modelChoice } from "./theater/choice.ts";
 import { buildExecution, type ExecutionView } from "./theater/execution.ts";
 import { Glyph } from "./theater/Glyph.tsx";
@@ -16,10 +18,13 @@ export interface GameCanvasProps {
   state: SessionState;
   sounds: Sounds;
   onReady?: (view: GameView) => void;
+  onUnavailable?: () => void;
   onFps?: (fps: number) => void;
   onRetry: () => void;
   onNewMap: () => void;
   onShowControls?: (() => void) | undefined;
+  onToggleControls?: (() => void) | undefined;
+  controlsVisible?: boolean;
   onToggleDecisions?: (() => void) | undefined;
   decisionsVisible?: boolean;
   /** The model's decision drawn around the chicken. It replaces the thought bubble while it is on. */
@@ -133,6 +138,8 @@ export function GameCanvas(props: GameCanvasProps) {
         frameId = requestAnimationFrame(loop);
       })
       .catch((error: unknown) => {
+        if (disposed) return;
+        latest.current.onUnavailable?.();
         setStatus("error");
         setErrorText(error instanceof Error ? error.message : String(error));
       });
@@ -151,6 +158,7 @@ export function GameCanvas(props: GameCanvasProps) {
   const chosen = last ? modelChoice(last) : null;
   const shownMove = chosen?.move ?? last?.action;
   const chosenP = chosen?.bars?.p[chosen.move];
+  const caption = props.compass.on ? buildCaption(state, execution, translation) : null;
 
   return (
     <div class="stage">
@@ -161,13 +169,14 @@ export function GameCanvas(props: GameCanvasProps) {
         <div class="hud-sub">{t("game.hud", { best: state.best, seed: String(state.seed) })}</div>
       </div>
 
-      {props.onShowControls && (
+      {props.onToggleControls && (
         <button
           type="button"
           class="game-tool open-controls"
-          onClick={props.onShowControls}
-          aria-label={t("windows.openControls")}
-          title={t("windows.openControlsHelp")}
+          onClick={props.onToggleControls}
+          aria-pressed={props.controlsVisible ?? false}
+          aria-label={t(props.controlsVisible ? "windows.hideControls" : "windows.openControls")}
+          title={t(props.controlsVisible ? "windows.hideControls" : "windows.openControlsHelp")}
         >
           <svg
             viewBox="0 0 24 24"
@@ -208,7 +217,7 @@ export function GameCanvas(props: GameCanvasProps) {
         </button>
       )}
 
-      {state.paused && status === "ready" && state.alive && !state.stalled && (
+      {state.paused && status === "ready" && state.alive && !state.stalled && !caption && (
         <div class="paused-note" role="status">
           {t("windows.paused")}
         </div>
@@ -252,11 +261,12 @@ export function GameCanvas(props: GameCanvasProps) {
       </div>
 
       {status === "ready" && props.compass.on && (
-        <Compass
-          session={session}
-          state={state}
-          execution={execution}
-          anchorRef={compassRef}
+        <Compass session={session} state={state} execution={execution} anchorRef={compassRef} />
+      )}
+
+      {status === "ready" && caption && (
+        <CompassCaption
+          view={caption}
           conversationOpen={props.compass.conversationOpen}
           onConversation={props.compass.onConversation}
         />
