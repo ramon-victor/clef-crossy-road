@@ -90,7 +90,7 @@ The desktop app is verified on Windows. CI checks the TypeScript code and the we
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/images/how-clef-plays-dark.png">
-  <img src="docs/images/how-clef-plays-light.png" alt="How Clef plays one step: the game is described in words, Clef-flash answers four one-word questions in one call, its answer times the hop, and code only walks detour paths before the next step">
+  <img src="docs/images/how-clef-plays-light.png" alt="How Clef plays one step: code turns the game into words, Clef-flash answers four one-word questions, and its answer hops now, waits and asks again, or goes round while code walks the path; then the next step starts">
 </picture>
 
 At every step, code turns the screen into words and sends Clef-flash **one request with four one-word questions** (five on a log).
