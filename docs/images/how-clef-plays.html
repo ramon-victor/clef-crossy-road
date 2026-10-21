@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<!--
+  Source of how-clef-plays-light.png and how-clef-plays-dark.png (README "How Clef plays").
+  Drawn by hand in the style of diagram-design (github.com/cathrynlavery/diagram-design): 4px grid, hairlines,
+  no shadows, two accent elements. Values are decision 24 of seed 624140 (cached Clef-flash replay).
+  To re-export, screenshot the <svg> at 2x with the browser in light and in dark colour scheme.
+-->
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>How Clef plays</title>
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --paper: #f5f5f5; --paper-2: #ececec; --ink: #2d3142; --muted: #4f5d75; --soft: #5a6580;
+      --rule: rgba(45, 49, 66, 0.12); --rule-solid: #bfc0c0; --accent: #bf4520; --accent-tint: rgba(191, 69, 32, 0.08);
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --paper: #2d3142; --paper-2: #393e53; --ink: #f5f5f5; --muted: #bfc0c0; --soft: #949eb2;
+        --rule: rgba(245, 245, 245, 0.12); --rule-solid: rgba(191, 192, 192, 0.25); --accent: #f08a59;
+        --accent-tint: rgba(240, 138, 89, 0.10);
+      }
+    }
+    body { margin: 0; padding: 24px; background: transparent; }
+    svg { display: block; width: 960px; }
+    .paper { fill: var(--paper); }
+    .card { fill: var(--paper); stroke: var(--rule-solid); stroke-width: 1; }
+    .chip { fill: var(--paper-2); }
+    .rule { stroke: var(--rule); stroke-width: 1; }
+    .wire { fill: none; stroke: var(--rule-solid); stroke-width: 1.25; }
+    .head { fill: var(--rule-solid); }
+    .eyebrow { font: 500 10px "Geist Mono", ui-monospace, monospace; letter-spacing: 0.14em; fill: var(--muted); }
+    .name { font: 600 16px Geist, system-ui, sans-serif; fill: var(--ink); }
+    .body { font: 400 12.5px Geist, system-ui, sans-serif; fill: var(--muted); }
+    .q { font: 500 12px Geist, system-ui, sans-serif; fill: var(--ink); }
+    .mono { font: 400 11px "Geist Mono", ui-monospace, monospace; fill: var(--ink); }
+    .mono-soft { font: 400 10.5px "Geist Mono", ui-monospace, monospace; fill: var(--soft); }
+    .callout { font: italic 400 15px "Instrument Serif", Georgia, serif; fill: var(--soft); }
+    .note { font: italic 400 13.5px "Instrument Serif", Georgia, serif; fill: var(--soft); }
+    .accent-text { fill: var(--accent); }
+    .accent-box { fill: var(--accent-tint); stroke: var(--accent); stroke-width: 1; }
+    .lane { fill: var(--paper-2); }
+  </style>
+</head>
+<body>
+<svg viewBox="0 0 960 528" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="clefplay-title clefplay-desc">
+  <title id="clefplay-title">How Clef plays one step</title>
+  <desc id="clefplay-desc">The game is described in words, Clef-flash answers four one-word questions in one call, its answer times the hop, and code only walks detour paths before the next step.</desc>
+  <defs>
+    <marker id="clefplay-arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon class="head" points="0 0, 8 3, 0 6"/></marker>
+  </defs>
+
+  <rect class="paper" width="960" height="528" rx="12"/>
+
+  <!-- header -->
+  <text class="eyebrow" x="24" y="36">HOW CLEF PLAYS ONE STEP</text>
+  <text class="callout" x="936" y="37" text-anchor="end">values from decision 24 of seed 624140</text>
+
+  <!-- connectors (drawn before the cards) -->
+  <path class="wire" d="M216 228 H254" marker-end="url(#clefplay-arrow)"/>
+  <path class="wire" d="M460 228 H498" marker-end="url(#clefplay-arrow)"/>
+  <path class="wire" d="M704 228 H742" marker-end="url(#clefplay-arrow)"/>
+  <path class="wire" d="M846 396 V420 Q846 428 838 428 H122 Q114 428 114 420 V398" marker-end="url(#clefplay-arrow)"/>
+  <rect class="paper" x="392" y="418" width="176" height="20"/>
+  <text class="mono-soft" x="480" y="432" text-anchor="middle">next step, 0.2 s later</text>
+
+  <!-- 01 the game -->
+  <rect class="card" x="12" y="60" width="204" height="336" rx="8"/>
+  <text class="eyebrow" x="28" y="88">01 · THE GAME</text>
+  <text class="name" x="28" y="112">Seeded simulation</text>
+  <text class="body" x="28" y="136">The rules of Crossy Road,</text>
+  <text class="body" x="28" y="154">at a fixed 60 Hz. Same seed,</text>
+  <text class="body" x="28" y="172">same moves, same game.</text>
+  <rect class="lane" x="28" y="192" width="172" height="28" rx="4"/>
+  <text class="mono-soft" x="40" y="210">water · logs →</text>
+  <rect class="lane" x="28" y="224" width="172" height="28" rx="4"/>
+  <text class="mono-soft" x="40" y="242">road · cars ←</text>
+  <rect class="lane" x="28" y="256" width="172" height="28" rx="4"/>
+  <text class="mono-soft" x="40" y="274">rail · warning light</text>
+  <rect class="lane" x="28" y="288" width="172" height="28" rx="4"/>
+  <text class="mono-soft" x="40" y="306">grass · trees</text>
+  <rect class="lane" x="28" y="320" width="172" height="28" rx="4"/>
+  <text class="mono-soft" x="40" y="338">grass · the chicken</text>
+  <text class="note" x="28" y="376">positions and speeds only</text>
+
+  <!-- 02 what Clef sees -->
+  <rect class="card" x="256" y="60" width="204" height="336" rx="8"/>
+  <text class="eyebrow" x="272" y="88">02 · WHAT CLEF SEES</text>
+  <text class="name" x="272" y="112">The screen, in words</text>
+  <text class="body" x="272" y="136">Code names what is in each</text>
+  <text class="body" x="272" y="154">cell the chicken could hop</text>
+  <text class="body" x="272" y="172">to. Words only, no numbers.</text>
+  <rect class="chip" x="272" y="192" width="172" height="24" rx="4"/>
+  <text class="mono" x="282" y="208">lands_on: water</text>
+  <rect class="chip" x="272" y="224" width="172" height="24" rx="4"/>
+  <text class="mono" x="282" y="240">things_move: still</text>
+  <rect class="chip" x="272" y="256" width="172" height="24" rx="4"/>
+  <text class="mono" x="282" y="272">left: none</text>
+  <rect class="chip" x="272" y="288" width="172" height="24" rx="4"/>
+  <text class="mono" x="282" y="304">right: three_or_more</text>
+  <rect class="chip" x="272" y="320" width="172" height="24" rx="4"/>
+  <text class="mono" x="282" y="336">stands_on: empty</text>
+  <text class="note" x="272" y="376">+ its last four moves</text>
+
+  <!-- 03 what Clef is asked -->
+  <rect class="card" x="500" y="60" width="204" height="336" rx="8"/>
+  <text class="eyebrow" x="516" y="88">03 · WHAT CLEF IS ASKED</text>
+  <text class="name" x="516" y="112">Four questions</text>
+  <text class="body" x="516" y="136">One REST call to</text>
+  <rect class="accent-box" x="616" y="122" width="80" height="20" rx="10"/>
+  <text class="mono accent-text" x="656" y="136" text-anchor="middle">Clef-flash</text>
+  <text class="body" x="516" y="154">Each answer comes with a</text>
+  <text class="body" x="516" y="172">probability.</text>
+  <text class="q" x="516" y="206">Can it stand ahead?</text>
+  <text class="mono-soft" x="516" y="222">no_stand · 57%</text>
+  <line class="rule" x1="516" y1="232" x2="688" y2="232"/>
+  <text class="q" x="516" y="250">Does that row move?</text>
+  <text class="mono-soft" x="516" y="266">still · 95%</text>
+  <line class="rule" x1="516" y1="276" x2="688" y2="276"/>
+  <text class="q" x="516" y="294">Which way round?</text>
+  <text class="mono-soft" x="516" y="310">right · 83%</text>
+  <line class="rule" x1="516" y1="320" x2="688" y2="320"/>
+  <text class="q" x="516" y="338">Can it stay here?</text>
+  <text class="mono-soft" x="516" y="354">remain · 97%</text>
+  <text class="note" x="516" y="380">+ “get off now?” on a log</text>
+
+  <!-- 04 who moves -->
+  <rect class="card" x="744" y="60" width="204" height="336" rx="8"/>
+  <text class="eyebrow" x="760" y="88">04 · WHO MOVES</text>
+  <text class="name" x="760" y="112">Clef times the hop</text>
+  <text class="body" x="760" y="136">Its answer is acted on at</text>
+  <text class="body" x="760" y="154">once. Nothing checks it or</text>
+  <text class="body" x="760" y="172">rescues a wrong one.</text>
+  <text class="mono-soft" x="760" y="208">move_off</text>
+  <text class="mono-soft" x="822" y="208">→</text>
+  <text class="q" x="836" y="208">step off</text>
+  <text class="mono-soft" x="760" y="232">stand</text>
+  <text class="mono-soft" x="822" y="232">→</text>
+  <text class="q" x="836" y="232">hop now</text>
+  <text class="mono-soft" x="760" y="256">moving</text>
+  <text class="mono-soft" x="822" y="256">→</text>
+  <text class="q" x="836" y="256">wait, ask again</text>
+  <rect class="accent-box" x="752" y="266" width="188" height="24" rx="4"/>
+  <text class="mono accent-text" x="760" y="282">else</text>
+  <text class="mono accent-text" x="822" y="282">→</text>
+  <text class="q accent-text" x="836" y="282">go round right</text>
+  <line class="rule" x1="760" y1="304" x2="932" y2="304"/>
+  <text class="body" x="760" y="326">Code only walks the path:</text>
+  <text class="body" x="760" y="344">the detour, a step off, the</text>
+  <text class="body" x="760" y="362">way off a log.</text>
+
+  <!-- legend strip -->
+  <line class="rule" x1="24" y1="456" x2="936" y2="456"/>
+  <text class="eyebrow" x="24" y="482">NEVER SHOWN</text>
+  <text class="body" x="24" y="502">“safe” labels, lists of valid moves, time to collision</text>
+  <text class="eyebrow" x="500" y="482">EVERY CALL</text>
+  <text class="body" x="500" y="502">cache first, then a 10,000-neuron daily ceiling</text>
+</svg>
+</body>
+</html>

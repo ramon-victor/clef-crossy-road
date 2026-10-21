@@ -4,6 +4,7 @@
 
 # Binary files must never be touched by line-ending conversion.
 *.png binary
+*.webp binary
 *.ico binary
 *.icns binary
 *.ttf binary
