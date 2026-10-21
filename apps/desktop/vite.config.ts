@@ -1,3 +1,4 @@
+/// <reference types="vitest/config" />
 import preact from "@preact/preset-vite";
 import { defineConfig } from "vite";
 import { devBridge } from "./dev-bridge.ts";
@@ -8,4 +9,5 @@ export default defineConfig({
   clearScreen: false,
   server: { port: 5173, strictPort: true, host: "localhost" },
   build: { target: "es2022", chunkSizeWarningLimit: 1200 },
+  test: { setupFiles: ["./src/test-setup.ts"] },
 });
