@@ -88,10 +88,13 @@ The desktop app is verified on Windows. CI checks the TypeScript code and the we
 
 ## How Clef plays
 
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/images/how-clef-plays-dark.png">
-  <img src="docs/images/how-clef-plays-light.png" alt="How Clef plays one step: code turns the game into words, Clef-flash answers four one-word questions, and its answer hops now, waits and asks again, or goes round while code walks the path; then the next step starts">
-</picture>
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/images/clef-flow-dark.svg">
+    <source media="(prefers-color-scheme: light)" srcset="docs/images/clef-flow-light.svg">
+    <img src="docs/images/clef-flow-light.svg" width="880" alt="Three real Clef-flash decisions on seed 624140, in a loop: the game is turned into words, Clef-flash answers four one-word questions in one call, and the answer hops now (decision 6), waits and asks again (decision 7) or goes round while code walks the path (decision 24)">
+  </picture>
+</p>
 
 At every step, code turns the screen into words and sends Clef-flash **one request with four one-word questions** (five on a log).
 The answers set the move straight away: *stand* hops now, *moving* waits a step and asks again, and otherwise Clef picks a side

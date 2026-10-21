@@ -45,6 +45,7 @@ the owner's say-so. `.env` holds the real `CF_API_TOKEN` and `CF_ACCOUNT_ID`: ne
 - `pnpm typecheck` / `pnpm lint` / `pnpm test`: run all three before declaring work done
 - `pnpm check` runs all three. Keep pnpm pinned in `packageManager` (12.14.0), validate upgrades with a frozen install and use the official installer if an older global binary cannot load the pinned version. CI checks Windows, Linux and macOS without credentials or API calls.
 - `pnpm --filter @ccr/core test`: core only, no network, ~3 s
+- `node scripts/gen-flow-figure.mjs` regenerates the README's animated figure (`docs/images/clef-flow-{light,dark}.svg`, three real decisions of the 624140 replay); never edit the SVGs by hand. CI runs it with `--check`.
 - `pnpm bench plan --policies <ids> --seeds 1..100`: estimates neurons and splits a run over days. **Run it before any `run` or `probe-run` that uses a model.**
   From another worktree, use `--root <main checkout>` and `node --env-file=<main checkout>/.env` to share the app's ledger, cache and runs. Do not copy the ledger: separate copies undercount spending. Restart a dev server after recording new cache entries because it keeps its loaded cache in memory.
   To read credentials from another env file, pass it after `.env` (the last file wins): `node --env-file=.env --env-file=<file> apps/bench/src/cli.ts <command>`.
