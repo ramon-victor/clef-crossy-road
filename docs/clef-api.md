@@ -88,7 +88,7 @@ A call costs `input_tokens × neurons per million / 1e6`. The 444-token smoke pr
 
 The 27B costs 6.3 times as much per token; measured, 143 decisions cost 3,507 neurons (24.5 each), in line with the published price. In the manoeuvre strategies the hops a controller makes are not model calls and cost nothing.
 
-Current `route` adds a fourth `ride` question while on a platform. The three-question measurements above are historical; do not treat them as a measured average for current gameplay. `pnpm bench plan` still uses estimates, so leave a margin.
+Current `route` has four questions (`cell`, `moving`, `around`, `here`) and adds a fifth, `ride`, while on a platform. One game recorded with `here` (seed 7, 2026-10-20) read 2,242 input tokens per call (19 requests, 147 neurons, about 7.8 each); the three-question figures above are historical and one game is not an average for current gameplay. `pnpm bench plan` still uses estimates, so leave a margin.
 
 ## Latency
 

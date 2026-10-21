@@ -126,6 +126,19 @@ The 2026-10-19 platform-exit fix lets the controller transit a warned rail when 
 
 The updated controller and model still need a matched-seed evaluation. The formal 100-seed gate remains pending.
 
+### 2026-10-20: Clef decides to step off its cell, and nothing rescues it
+
+[ADR-0012](adr/0012-clef-decides-to-step-off-no-rescue.md). Until now a refused manoeuvre or `wait_here` ran an escape search whatever Clef answered, so the steps back from a train or car were the controller's, shown on screen as Clef's. Now Clef answers a fifth lookup (`here`) in every request and picks `step_off`; a wrong answer leaves the chicken where it is.
+
+| Scripted reference (free, seeds 1 to 100, stall limit 60) | Mean rows [95% CI] | Median | Ended: car / train / edge / stalled / capped |
+|---|---|---|---|
+| `exec-route`, controller of 2026-10-19 (hidden rescue) | 64.58 [57.66, 71.47] | 68.5 | 22% / 3% / 11% / 24% / 40% |
+| `exec-route`, 2026-10-20 (the chooser steps off, no rescue) | 65.36 [58.52, 72.23] | 69.5 | 22% / 3% / 10% / 24% / 41% |
+
+Both runs were made here, on the same seeds. The intervals overlap almost entirely, and no paired interval was computed, so this shows the ceiling did not fall, not that it rose. The 61.6 above predates the exit fix and is not comparable with either row.
+
+**Model: one game.** Clef-flash on seed 7, recorded once (19 requests, 2,242 input tokens each, 147 neurons, cache replay with zero calls): 8 rows, killed by a car at decision 72. In its last six decisions Clef answered `here: move_off` correctly (0.91 to 0.94) every time its cell could not hold the chicken, and hopped right three times; on the last one `step_off` found no cell within 4 hops and the chicken waited on the road. This is a single game: it says the new path works end to end, not how well Clef plays it. The 22.43-row mean and every earlier Clef number belong to the previous controller and prompts, and no new full evaluation has been run.
+
 ## Latency finding
 
 These runs cover scripted references only, on 100 seeds; no model condition was run under injected latency. The serial and pipelined methods are defined in [benchmark.md](benchmark.md#latency-injection). Scores are mean rows crossed:
@@ -153,7 +166,7 @@ A Clef-flash round trip measured from Brazil is p50 about 326 ms with a small pr
 
 ## Open work
 
-- **Run the current default on 100 seeds** (`clef:clef-flash:scene:route:lookup`) against `exec-route` with matching limits and controller version. The earlier three-question estimate was 25,000 to 30,000 neurons across several days; the fourth lookup and longer games require a fresh `pnpm bench plan`. Keep the call cap in mind (`--max-calls` does not stop games in flight). The 27B on the same seeds only if it fits.
+- **Run the current default on 100 seeds, with `here`** (`clef:clef-flash:scene:route:lookup`) against `exec-route` with matching limits and controller version. The earlier three-question estimate was 25,000 to 30,000 neurons across several days; the fourth lookup and longer games require a fresh `pnpm bench plan`. Keep the call cap in mind (`--max-calls` does not stop games in flight). The 27B on the same seeds only if it fits.
 - **RL fine-tuning** with the core as environment ([ADR-0006](adr/0006-no-fine-tuning-no-self-host.md)). The diagnostic names the target: reading position and velocity to land on logs and lily pads. It needs Cloudflare's RL program or self-hosted open weights (Apache 2.0). `pnpm bench export` already writes (observation, action, reward, done) trajectories with physical facts only.
 - **`clef-omni` with images** on 25 to 40 seeds (about 80 neurons per seed, so 2,000 to 3,200), to complete the model matrix. The 46-state probe suggests no change.
 - **Probability-threshold veto** (refuse hops when P(`hop_forward`) is low). It should only help stop at the water's edge. A threshold rule replayed over recorded answers of the word conditions did not beat the argmax.

@@ -65,7 +65,7 @@ Pick a player under **Who plays**. The info button next to it shows the player's
 | Player | Calls the API | Notes |
 |---|---|---|
 | **You** | no | Arrow keys or WASD. |
-| **Clef-flash** (`clef-flash`) | yes | The code turns the screen into words and asks three scene lookups, plus `ride` while on a platform; a controller executes the hops and detours ([ADR-0011](adr/0011-route-controller-three-lookups.md)). Controller steps make no API call. The historical three-question request cost about 6 neurons; the platform request is larger. |
+| **Clef-flash** (`clef-flash`) | yes | The code turns the screen into words and asks four scene lookups (the cell ahead, whether that row moves, which way round, and whether the chicken can stay where it is), plus `ride` while on a platform; a controller executes the hops and detours ([ADR-0011](adr/0011-route-controller-three-lookups.md), [ADR-0012](adr/0012-clef-decides-to-step-off-no-rescue.md)). Controller steps make no API call and nothing rescues a wrong answer: a chicken Clef leaves on a cell that cannot hold it stays there. The caption tags the live move with who made it (`Clef` or `Controller`) and says "Nothing stepped in" when the chicken is left exposed. The historical three-question request cost about 6 neurons; the current one read about 7.8. |
 | **Clef (27B)** (`clef-27b`) | yes | Same gameplay, about 6.3 times the cost. No map is cached for it. |
 | Look-ahead, Always forward, Random | no | References: a 4-hop search over the simulator, the floor, and uniform random. |
 | **Custom** | yes, on a cache miss | Appears only when `CCR_PLAYER` names another model combination (see below). Uses the same request cache as other model players. |

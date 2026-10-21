@@ -1,6 +1,6 @@
 # ADR-0011 · Route controller, scene view and three lookups: the "assisted navigation" level
 
-- **Status:** accepted · **Date:** 2026-10-15 · **Complements** [ADR-0010](0010-words-rules-maneuver-executor.md)
+- **Status:** accepted · **Date:** 2026-10-15 · **Complements** [ADR-0010](0010-words-rules-maneuver-executor.md) · **Amended by** [ADR-0012](0012-clef-decides-to-step-off-no-rescue.md) (a fourth lookup `here`, and the hold no longer rescues the chicken: statements below about "urgent edge handling" and escapes from a refusal describe the controller before 2026-10-20)
 
 ## Context and problem statement
 

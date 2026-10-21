@@ -22,7 +22,7 @@
 
 Clef Crossy Road tests Cloudflare's **Clef-flash** decision model (Workers AI, REST only) in a deterministic, headless
 TypeScript port of the rules of Evan Bacon's [Expo-Crossy-Road](https://github.com/EvanBacon/Expo-Crossy-Road). The default
-player asks the model three lookups about the scene, plus a fourth while riding a platform, then a route controller executes the hops, waits and detours. Other
+player asks the model four lookups about the scene (including whether the chicken can stay where it is), plus a fifth while riding a platform, then a route controller executes the hops, waits and detours; nothing rescues a wrong answer. Other
 conditions ask the model to choose each move directly.
 
 A [Tauri v2](https://v2.tauri.app/) desktop app renders the game with Three.js in one window and its controls in another. Browser development keeps an integrated layout, with the same two buttons over the game to hide or show its side panels. Controls groups the player, commands and daily Neurons. Decisions shows
