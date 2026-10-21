@@ -1182,6 +1182,43 @@ canvas.game:focus-visible {
   border-style: dashed;
 }
 
+/* The model's share of each move, on the arrow's outer face: a sibling of .cb (its dimmed opacity must not reach it) and never gold. */
+.cp {
+  position: absolute;
+  left: 0;
+  top: 0;
+  min-width: 44px;
+  padding: 4px 7px 5px;
+  border-radius: 8px;
+  border: 2px solid rgba(255, 255, 255, 0.5);
+  background: rgba(14, 24, 46, 0.9);
+  box-shadow: 0 3px 0 rgba(0, 0, 0, 0.3);
+  color: #fff;
+  font-family: "Retro", monospace;
+  font-size: 12px;
+  line-height: 1;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  opacity: 0.72;
+  transform: translate(calc(var(--lx) - 50%), calc(var(--ly) - 50%));
+}
+
+.cp::after {
+  content: "";
+  display: block;
+  height: 3px;
+  margin-top: 4px;
+  border-radius: 2px;
+  background: linear-gradient(90deg, #fff calc(var(--p) * 100%), rgba(255, 255, 255, 0.2) 0);
+}
+
+/* The model's own pick, which the controller may not start with. */
+.cp.chosen {
+  opacity: 1;
+  border-color: #fff;
+}
+
 /* The platform under the chicken is taking it to the edge of the world: how long it has. */
 .edge-clock {
   position: absolute;
@@ -1339,6 +1376,13 @@ canvas.game:focus-visible {
   }
 }
 
+@keyframes cp-in {
+  from {
+    opacity: 0;
+    transform: translate(calc(var(--lx) - 50%), calc(var(--ly) - 50% + 6px)) scale(0.85);
+  }
+}
+
 /* Motion only for people who have not asked for less of it. Each element's own style is its end state. */
 @media (prefers-reduced-motion: no-preference) {
   .cb {
@@ -1351,7 +1395,12 @@ canvas.game:focus-visible {
     animation: cb-wait 1s ease-in-out infinite;
   }
 
-  .compass.paused .cb {
+  .cp {
+    animation: cp-in 0.2s ease-out;
+  }
+
+  .compass.paused .cb,
+  .compass.paused .cp {
     animation-play-state: paused;
   }
 }

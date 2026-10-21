@@ -1,9 +1,8 @@
 import { ACTIONS, type Action } from "@ccr/core";
 import type { Ref } from "preact";
-import { ACTION_GLYPH } from "../format.ts";
 import { useI18n } from "../i18n/provider.tsx";
 import type { Session, SessionState } from "../session.ts";
-import { buildCompass } from "./compass.ts";
+import { buildCompass, moveOf } from "./compass.ts";
 import { EdgeClock } from "./EdgeClock.tsx";
 import type { ExecutionView } from "./execution.ts";
 import { Glyph, PixelIcon } from "./Glyph.tsx";
@@ -20,6 +19,18 @@ const AT: Readonly<Record<Action, { x: number; y: number }>> = {
   stay: { x: 0.74, y: 0.84 },
 };
 
+/** Centre of each move's percentage, in CSS pixels from the chicken: the arrow's outer face, clear of the edge clock. */
+const LABEL_AT: Readonly<Record<Action, { x: number; y: number }>> = {
+  hop_forward: { x: 0, y: -132 },
+  hop_back: { x: 0, y: 132 },
+  hop_left: { x: -142, y: 0 },
+  hop_right: { x: 142, y: 0 },
+  stay: { x: 112, y: 71 },
+};
+
+/** A move that rounds to 0% has no chip; the decisions window lists them all. */
+const labelled = (p: number | null): p is number => p !== null && Math.round(p * 100) >= 1;
+
 export interface CompassProps {
   session: Session;
   state: SessionState;
@@ -34,6 +45,7 @@ export interface CompassProps {
  */
 export function Compass({ session, state, execution, anchorRef }: CompassProps) {
   const translation = useI18n();
+  const { percent } = translation;
   const view = buildCompass(state, translation);
   const visible =
     state.alive &&
@@ -43,13 +55,7 @@ export function Compass({ session, state, execution, anchorRef }: CompassProps) 
       execution.action !== null ||
       execution.next !== null ||
       execution.blocked);
-  const moves = view.moves.length
-    ? view.moves
-    : ACTIONS.map((action) => ({
-        action,
-        glyph: ACTION_GLYPH[action],
-        blocked: false,
-      }));
+  const moves = view.moves.length ? view.moves : ACTIONS.map((action) => moveOf(action));
   return (
     <div ref={anchorRef} class="compass-anchor" aria-hidden="true">
       <EdgeClock session={session} />
@@ -76,6 +82,20 @@ export function Compass({ session, state, execution, anchorRef }: CompassProps) 
                 ) : (
                   <Glyph glyph={move.glyph} size={33} />
                 )}
+              </div>
+            );
+          })}
+          {moves.map((move) => {
+            if (!labelled(move.p)) return null;
+            const at = LABEL_AT[move.action];
+            return (
+              <div
+                key={move.action}
+                class={`cp ${move.chosen ? "chosen" : ""}`}
+                data-label={move.action}
+                style={`--lx:${at.x}px;--ly:${at.y}px;--p:${move.p.toFixed(3)}`}
+              >
+                {percent(move.p)}
               </div>
             );
           })}
