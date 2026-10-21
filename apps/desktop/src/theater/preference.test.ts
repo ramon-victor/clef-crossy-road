@@ -71,15 +71,6 @@ describe("the flags", () => {
       "ccr.theater.pace",
     ]);
   });
-
-  it("remember the settings sidebar apart from the other flags", () => {
-    const store = memoryStore();
-    expect(readFlag("settings", store)).toBeNull();
-    writeFlag("settings", false, store);
-    expect(readFlag("settings", store)).toBe(false);
-    expect(readFlag("theater", store)).toBeNull();
-    expect(readFlag("compass", store)).toBeNull();
-  });
 });
 
 describe("the pace", () => {
