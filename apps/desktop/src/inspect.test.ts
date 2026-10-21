@@ -12,15 +12,16 @@ describe("policyFacts", () => {
     expect(policyFacts("clef:clef-flash:json:choice:full")?.level).toBe("now");
   });
 
-  it("names the words level, the rules style and the executor", () => {
+  it("names the words level, the rules style and who times the hops", () => {
     expect(policyFacts("clef:clef-flash:lanes:choice:rules")).toMatchObject({
       level: "words",
       style: "rules",
-      executor: false,
+      timedBy: null,
     });
-    expect(policyFacts("clef:clef-flash:lanes:maneuver:rules")?.executor).toBe(true);
-    expect(policyFacts("clef:clef-flash:scene:route:lookup")?.executor).toBe(true);
-    expect(policyFacts("clef:clef-flash:json-fx:choice:full")?.executor).toBe(false);
+    expect(policyFacts("clef:clef-flash:lanes:maneuver:rules")?.timedBy).toBe("controller");
+    expect(policyFacts("clef:clef-flash:scene:route:lookup")?.timedBy).toBe("controller");
+    expect(policyFacts("clef:clef-flash:scene:route-live:lookup")?.timedBy).toBe("model");
+    expect(policyFacts("clef:clef-flash:json-fx:choice:full")?.timedBy).toBeNull();
   });
 
   it("has nothing to say about players that never ask a model", () => {

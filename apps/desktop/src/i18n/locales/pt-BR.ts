@@ -231,6 +231,8 @@ export const ptBR = {
   "inspect.style": "Perguntas: {{style}}",
   "inspect.executor":
     "O modelo escolhe a manobra; o controlador cuida da execução e do momento de agir.",
+  "inspect.modelTimes":
+    "O modelo decide o momento de cada salto e nada confere a resposta; o controlador só percorre o caminho para contornar, sair da casa ou sair da plataforma.",
   "inspect.empty":
     "Ainda não há decisões para mostrar. Selecione o Clef e aguarde um movimento. Esta janela mostra a entrada de cada decisão; os jogadores de referência não consultam modelos.",
   "inspect.latest": "Mais recente",

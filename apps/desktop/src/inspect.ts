@@ -8,8 +8,11 @@ export interface PolicyFacts {
   level: PerceptionLevel;
   /** How the question and the options are written. */
   style: ManualId;
-  /** Set when a controller times the hops: the model only picks the manoeuvre. */
-  executor: boolean;
+  /**
+   * Who times the hops when a controller takes part: `controller` when the model only picks the manoeuvre,
+   * `model` when the model times every hop and the controller only walks paths; null when the model picks each move.
+   */
+  timedBy: "controller" | "model" | null;
 }
 
 /** The facts about a model player that the inspector shows next to what it read; null for anyone else. */
@@ -23,10 +26,12 @@ export function policyFacts(policyId: string | null): PolicyFacts | null {
     encoder: config.encoder,
     level,
     style: config.manual,
-    executor:
-      config.strategy === "maneuver" ||
-      config.strategy === "route" ||
-      config.strategy === "route-live",
+    timedBy:
+      config.strategy === "route-live"
+        ? "model"
+        : config.strategy === "maneuver" || config.strategy === "route"
+          ? "controller"
+          : null,
   };
 }
 

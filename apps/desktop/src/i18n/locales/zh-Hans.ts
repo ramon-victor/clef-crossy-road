@@ -225,6 +225,8 @@ export const zhHans = {
   "inspect.sees": "感知信息：{{sees}}",
   "inspect.style": "提问方式：{{style}}",
   "inspect.executor": "模型选择行动方案，自动控制器负责执行并确定时机。",
+  "inspect.modelTimes":
+    "模型决定每次跳跃的时机，且没有任何检查；自动控制器只负责走完绕行、离开格子或离开浮台的路线。",
   "inspect.empty":
     "暂无可显示的决策。请选择 Clef 并等待一次移动。此窗口显示每次决策的输入；对照玩家不查询模型。",
   "inspect.latest": "最新",

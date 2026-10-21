@@ -226,6 +226,8 @@ export const en = {
   "inspect.style": "Questions: {{style}}",
   "inspect.executor":
     "The model chooses the manoeuvre; the controller handles its execution and timing.",
+  "inspect.modelTimes":
+    "The model times every hop and nothing checks it; the controller only walks the path to go round, step off the cell or get off the platform.",
   "inspect.empty":
     "Nothing to show yet. Select Clef and let it make a move. This window shows the input for each decision; reference players never ask a model.",
   "inspect.latest": "Latest",

@@ -195,7 +195,9 @@ export function InputInspector({ history, policyId, onClose }: InputInspectorPro
               {t("inspect.sees", { sees: t(`perception.${facts.level}`, { seconds: 0.2 }) })}
               <br />
               {t("inspect.style", { style: t(`style.${facts.style}`) })}
-              {facts.executor && <p>{t("inspect.executor")}</p>}
+              {facts.timedBy && (
+                <p>{t(facts.timedBy === "model" ? "inspect.modelTimes" : "inspect.executor")}</p>
+              )}
             </section>
           )}
         </div>

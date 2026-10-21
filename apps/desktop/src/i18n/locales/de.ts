@@ -236,6 +236,8 @@ export const de = {
   "inspect.style": "Fragen: {{style}}",
   "inspect.executor":
     "Das Modell wählt das Manöver; die automatische Steuerung übernimmt Ausführung und Zeitpunkt.",
+  "inspect.modelTimes":
+    "Das Modell bestimmt den Zeitpunkt jedes Sprungs, und nichts prüft ihn; die automatische Steuerung geht nur den Weg zum Umgehen oder zum Verlassen des Felds oder der Plattform.",
   "inspect.empty":
     "Noch keine Entscheidungen vorhanden. Wählen Sie Clef und warten Sie auf einen Zug. Dieses Fenster zeigt die Eingabe jeder Entscheidung; Referenzspieler fragen kein Modell ab.",
   "inspect.latest": "Neueste",

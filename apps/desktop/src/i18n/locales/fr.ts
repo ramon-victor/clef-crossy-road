@@ -235,6 +235,8 @@ export const fr = {
   "inspect.style": "Questions : {{style}}",
   "inspect.executor":
     "Le modèle choisit la manœuvre ; le contrôleur gère son exécution et le moment d’agir.",
+  "inspect.modelTimes":
+    "Le modèle décide du moment de chaque saut et rien ne le vérifie ; le contrôleur ne fait que suivre le chemin pour contourner, quitter la case ou quitter la plateforme.",
   "inspect.empty":
     "Aucune décision à afficher. Sélectionnez Clef et attendez un déplacement. Cette fenêtre montre l’entrée de chaque décision ; les joueurs de référence ne sollicitent aucun modèle.",
   "inspect.latest": "La plus récente",

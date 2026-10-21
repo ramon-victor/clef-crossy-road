@@ -232,6 +232,8 @@ export const es = {
   "inspect.style": "Preguntas: {{style}}",
   "inspect.executor":
     "El modelo elige la maniobra; el controlador se encarga de ejecutarla y decidir cuándo actuar.",
+  "inspect.modelTimes":
+    "El modelo decide el momento de cada salto y nada lo comprueba; el controlador solo recorre el camino para rodear, salir de la casilla o salir de la plataforma.",
   "inspect.empty":
     "Aún no hay decisiones que mostrar. Selecciona Clef y espera un movimiento. Esta ventana muestra la entrada de cada decisión; los jugadores de referencia no consultan modelos.",
   "inspect.latest": "Más reciente",
