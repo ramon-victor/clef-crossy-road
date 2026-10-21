@@ -23,6 +23,18 @@ const AT: Readonly<Record<Action, { x: number; y: number }>> = {
   stay: { x: 0.74, y: 0.84 },
 };
 
+/** Where the centre of each move's percentage sits, in CSS pixels from the chicken: on the button's outer face, clear of the edge clock and the caption. */
+const LABEL_AT: Readonly<Record<Action, { x: number; y: number }>> = {
+  hop_forward: { x: 0, y: -132 },
+  hop_back: { x: 0, y: 132 },
+  hop_left: { x: -142, y: 0 },
+  hop_right: { x: 142, y: 0 },
+  stay: { x: 112, y: 71 },
+};
+
+/** A move that rounds to 0% gets no label: the decisions window lists every one. */
+const labelled = (p: number | null): p is number => p !== null && Math.round(p * 100) >= 1;
+
 export interface CompassProps {
   session: Session;
   state: SessionState;
@@ -47,7 +59,7 @@ export function Compass({
   onConversation,
 }: CompassProps) {
   const translation = useI18n();
-  const { t, number } = translation;
+  const { t, number, percent } = translation;
   const view = buildCompass(state, translation);
   const visible =
     state.alive &&
@@ -63,6 +75,8 @@ export function Compass({
         action,
         glyph: ACTION_GLYPH[action],
         blocked: false,
+        p: null,
+        chosen: false,
       }));
   const step = state.last ? controllerStep(state.last.decision) : null;
   const waitingForGap = execution.action === "stay" && step?.kind === "wait";
@@ -100,6 +114,20 @@ export function Compass({
                   ) : (
                     <Glyph glyph={move.glyph} size={33} />
                   )}
+                </div>
+              );
+            })}
+            {moves.map((move) => {
+              if (!labelled(move.p)) return null;
+              const at = LABEL_AT[move.action];
+              return (
+                <div
+                  key={`${move.action}-${view.index}`}
+                  class={`cp ${move.chosen ? "chosen" : ""}`}
+                  data-label={move.action}
+                  style={`--lx:${at.x}px;--ly:${at.y}px;--p:${move.p.toFixed(3)}`}
+                >
+                  {percent(move.p)}
                 </div>
               );
             })}

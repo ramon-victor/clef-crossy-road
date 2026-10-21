@@ -13,6 +13,42 @@ describe("compass model context, separate from live execution", () => {
     expect(view.since).toEqual(expect.any(Number));
   });
 
+  it("carries how much the model wanted each move, and which one it chose", async () => {
+    const s = await answeredSession(routeAnswers("stand", "still", "wait_here", 0.9), 1);
+    const { moves } = buildCompass(s.state());
+    const p = Object.fromEntries(moves.map((m) => [m.action, m.p]));
+    expect(p.hop_forward).toBeCloseTo(0.95, 3);
+    expect(p.hop_left).toBeCloseTo(0.01, 3);
+    expect(p.hop_right).toBeCloseTo(0.03, 3);
+    expect(p.stay).toBeCloseTo(0.01, 3);
+    expect(p.hop_back).toBe(0);
+    expect(moves.filter((m) => m.chosen).map((m) => m.action)).toEqual(["hop_forward"]);
+  });
+
+  it("has no share for a closed move, nor while the model reads, nor for a strategy without probabilities", async () => {
+    const reading = buildCompass(
+      readingSession(routeAnswers("no_stand", "still", "detour_right", 0.1)).state(),
+    );
+    expect(reading.moves.every((m) => m.p === null && !m.chosen)).toBe(true);
+
+    const s = await answeredSession(routeAnswers("no_stand", "still", "detour_right", 0.1));
+    const state = s.state();
+    const { moves } = buildCompass(state);
+    expect(moves.find((m) => m.action === "hop_forward")).toMatchObject({ blocked: true, p: null });
+    expect(moves.find((m) => m.action === "hop_right")?.p).toBeCloseTo(0.6, 3);
+    expect(moves.filter((m) => m.chosen).map((m) => m.action)).toEqual(["hop_right"]);
+
+    if (!state.lastModel) throw new Error("missing answer");
+    const bare = {
+      ...state.lastModel,
+      action: "hop_forward" as const,
+      decision: { action: "hop_forward" as const, source: "model" as const },
+    };
+    const none = buildCompass({ ...state, lastModel: bare, last: bare });
+    expect(none.moves).toHaveLength(5);
+    expect(none.moves.every((m) => m.p === null)).toBe(true);
+  });
+
   it("keeps the chosen manoeuvre as context when its first step is backwards", async () => {
     const s = await answeredSession(routeAnswers("no_stand", "still", "detour_right", 0.1));
     const state = s.state();

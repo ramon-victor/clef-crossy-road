@@ -2,7 +2,7 @@ import { ACTIONS, type Action } from "@ccr/core";
 import { ACTION_GLYPH } from "../format.ts";
 import { type Translator, translator } from "../i18n/translate.ts";
 import type { SessionState } from "../session.ts";
-import { barsOf } from "./choice.ts";
+import { barsOf, winnerOf } from "./choice.ts";
 import { controllerSays, controllerStep, foldWaits, waitsForGap } from "./controller.ts";
 import { pickMode } from "./frame.ts";
 import { decisionLabel } from "./labels.ts";
@@ -16,6 +16,10 @@ export interface CompassMove {
   glyph: string;
   /** Drawn as a block, not as a bar: the way ahead is closed. */
   blocked: boolean;
+  /** How much the model wanted this move within its routing fork; null while it reads, when closed, or when the strategy has no probabilities. */
+  p: number | null;
+  /** The move the model chose, which the controller may start with another move. */
+  chosen: boolean;
 }
 
 /** One chip of the strip under the game: a move, or a run of the same wait. */
@@ -71,6 +75,8 @@ const moveOf = (action: Action, shown: Partial<CompassMove> = {}): CompassMove =
   action,
   glyph: ACTION_GLYPH[action],
   blocked: false,
+  p: null,
+  chosen: false,
   ...shown,
 });
 
@@ -97,6 +103,7 @@ export function buildCompass(
   const bars = log ? barsOf(log) : null;
   if (mode !== "answered" || !log) return { ...ASLEEP, strip };
 
+  const chosen = winnerOf(log);
   const turn = state.turns.find((t) => t.model === log);
   const decision = decisionLabel(asText(log.decision.extra?.maneuver), log.action, translation);
   const go = state.phase !== "reading";
@@ -107,11 +114,14 @@ export function buildCompass(
     ...ASLEEP,
     mode,
     index: log.index,
-    moves: ACTIONS.map((action) =>
-      moveOf(action, {
-        blocked: bars?.blocked.has(action) ?? false,
-      }),
-    ),
+    moves: ACTIONS.map((action) => {
+      const blocked = bars?.blocked.has(action) ?? false;
+      return moveOf(action, {
+        blocked,
+        p: blocked ? null : (bars?.p[action] ?? null),
+        chosen: action === chosen,
+      });
+    }),
     doing: says === null ? null : go ? says : translation.t("theater.next", { step: says }),
     verdict:
       turn && waitsForGap(turn)
