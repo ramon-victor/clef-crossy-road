@@ -1,0 +1,15 @@
+# Keeps the SHA-pinned actions in .github/workflows current: at most one grouped PR a month, and
+# never a release younger than a week. npm and cargo stay manual: their pins are deliberate.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    cooldown:
+      default-days: 7
+    groups:
+      actions:
+        patterns: ["*"]
+    commit-message:
+      prefix: ci
