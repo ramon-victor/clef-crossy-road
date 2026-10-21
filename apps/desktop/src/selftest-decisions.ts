@@ -16,6 +16,16 @@ export async function runDecisionsSelfTest(): Promise<() => void> {
         let report: Record<string, unknown>;
         if (payload.action === "inspector") {
           const opened = document.querySelector(".inspector") !== null;
+          const focused = document.querySelector('[data-action="close-inspector"]');
+          const focusBounds = focused?.getBoundingClientRect();
+          const viewport = document.querySelector(".decision-content")?.getBoundingClientRect();
+          const tolerance = 1 / window.devicePixelRatio;
+          const focusTargetVisible =
+            !!focusBounds &&
+            !!viewport &&
+            focusBounds.top >= viewport.top - tolerance &&
+            focusBounds.bottom <= viewport.bottom + tolerance;
+          const focusVisible = focused === document.activeElement && focusTargetVisible;
           const state = text(".inspector-pre");
           const click = (tab: string) =>
             document.querySelector<HTMLButtonElement>(`[data-tab="${tab}"]`)?.click();
@@ -27,9 +37,13 @@ export async function runDecisionsSelfTest(): Promise<() => void> {
           const options = text(".inspector-body");
           document.querySelector<HTMLButtonElement>('[data-action="close-inspector"]')?.click();
           await sleep(100);
+          const focusReturned =
+            document.activeElement?.matches('[data-action="inspect-input"]') === true;
           document.querySelector<HTMLButtonElement>(".back-to-live")?.click();
           report = {
             opened,
+            focusVisible,
+            focusReturned,
             inDecisionsWindow: current.label === "decisions",
             inline: document.querySelector('[role="dialog"]') === null,
             stateHasRows: state.includes('"cross_ahead"') && state.includes('"detour_left"'),
@@ -47,6 +61,26 @@ export async function runDecisionsSelfTest(): Promise<() => void> {
             closedAgain: document.querySelector(".inspector") === null,
             ...(state ? {} : { contentSkipped: "No model request in the local cache" }),
           };
+        } else if (payload.action === "history") {
+          document.querySelector<HTMLButtonElement>('[data-view="history"]')?.click();
+          await sleep(100);
+          document.querySelector<HTMLButtonElement>(".decision-history-item")?.click();
+          await sleep(100);
+          const items = document.querySelectorAll(".decision-history-item").length;
+          report = {
+            items,
+            bounded: items <= 6,
+            staysInHistory:
+              document.querySelector('[data-view="history"]')?.getAttribute("aria-selected") ===
+              "true",
+            oneExpanded:
+              document.querySelectorAll('.decision-history-item[aria-expanded="true"]').length ===
+              1,
+            executionShown: document.querySelector(".decision-execution") !== null,
+            technicalDetailsInline:
+              document.querySelector('[data-action="technical-details"]') !== null,
+          };
+          document.querySelector<HTMLButtonElement>(".back-to-live")?.click();
         } else if (payload.action === "pause") {
           document.querySelector<HTMLButtonElement>(".theater-pause")?.click();
           await sleep(250);
@@ -80,6 +114,11 @@ export async function runDecisionsSelfTest(): Promise<() => void> {
                 (node) => getComputedStyle(node).opacity === "1",
               ),
               diagram: document.querySelector(".decision-scene svg") !== null,
+              gameCharacter:
+                document
+                  .querySelector("image.board-chicken")
+                  ?.getAttribute("href")
+                  ?.startsWith("data:image/png;") === true,
               action: text(".decision-action h3"),
               intent: text(".decision-intent strong"),
               primaryFits: [
@@ -89,6 +128,7 @@ export async function runDecisionsSelfTest(): Promise<() => void> {
             },
           };
         }
+        report.viewport = [window.innerWidth, window.innerHeight];
         await emitTo("main", "selftest:decisions-result", { id: payload.id, report });
       })().catch(() => {});
     },

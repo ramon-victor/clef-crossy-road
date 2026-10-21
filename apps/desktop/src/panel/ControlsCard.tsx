@@ -1,5 +1,6 @@
 import { useI18n } from "../i18n/provider.tsx";
 import type { SessionState } from "../session.ts";
+import { UiIcon } from "./UiIcon.tsx";
 
 export interface ControlsCardProps {
   state: SessionState;
@@ -26,25 +27,33 @@ export function ControlsCard({
         class="btn primary"
         onClick={onPause}
         title={t("controls.space")}
-        disabled={minimized}
+        disabled={minimized || !state.alive || state.stalled}
         aria-pressed={state.paused}
       >
-        {state.paused ? `▶ ${t("controls.resume")}` : `⏸ ${t("controls.pause")}`}
+        <UiIcon name={state.paused ? "play" : "pause"} />
+        {t(state.paused ? "controls.resume" : "controls.pause")}
       </button>
       <button
         type="button"
         class="btn"
         onClick={onStep}
-        disabled={minimized || state.human || state.timing !== "step" || !state.paused}
+        disabled={
+          minimized ||
+          !state.alive ||
+          state.stalled ||
+          state.human ||
+          state.timing !== "step" ||
+          !state.paused
+        }
         title={t("controls.stepHelp")}
       >
-        ⏭ {t("controls.step")}
+        <UiIcon name="step" /> {t("controls.step")}
       </button>
       <button type="button" class="btn" onClick={onRetry} title="R">
-        ↺ {t("controls.retry")}
+        <UiIcon name="retry" /> {t("controls.retry")}
       </button>
       <button type="button" class="btn" onClick={onNewMap} title="M">
-        ✦ {t("controls.newMap")}
+        <UiIcon name="map" /> {t("controls.newMap")}
       </button>
     </section>
   );

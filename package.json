@@ -14,6 +14,7 @@
   "scripts": {
     "dev": "node scripts/fetch-assets.mjs && pnpm --filter @ccr/desktop dev",
     "dev:desktop": "node scripts/fetch-assets.mjs && pnpm --filter @ccr/desktop tauri dev",
+    "icons": "node scripts/make-icon.mjs",
     "typecheck": "pnpm -r typecheck",
     "test": "pnpm -r test",
     "check": "pnpm typecheck && pnpm lint && pnpm test",

@@ -147,8 +147,17 @@ export function InputInspector({ history, policyId, onClose }: InputInspectorPro
 
   useLayoutEffect(() => {
     const previous = document.activeElement;
-    closeRef.current?.focus();
+    const focus = () => {
+      closeRef.current?.focus({ preventScroll: true });
+      closeRef.current?.scrollIntoView?.({ block: "nearest" });
+    };
+    focus();
+    // A native window can finish activation after this commit; focus once more after layout.
+    const frame = requestAnimationFrame(focus);
+    if (!document.hasFocus()) window.addEventListener("focus", focus, { once: true });
     return () => {
+      cancelAnimationFrame(frame);
+      window.removeEventListener("focus", focus);
       ++copyRequest.current;
       clearTimeout(copyTimer.current);
       if (previous instanceof HTMLElement && previous.isConnected) previous.focus();

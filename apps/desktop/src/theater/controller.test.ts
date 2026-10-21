@@ -4,6 +4,7 @@ import {
   controllerSays,
   controllerStep,
   leaveText,
+  recordedSteps,
   waitingText,
   waitsForGap,
   walkText,
@@ -190,4 +191,43 @@ describe("waitsForGap", () => {
       ),
     ).toBe(false);
   });
+});
+
+it("folds equivalent recorded waits but preserves changes of reason, source and intervening hops", () => {
+  const log = (index: number, why = "gap", source: "model" | "executor" = "executor") => ({
+    index,
+    tick: index,
+    row: 1,
+    action: "stay" as const,
+    wallMs: 0,
+    decision: {
+      action: "stay" as const,
+      source,
+      notice: {
+        kind: "waiting",
+        maneuver: "cross_ahead",
+        cell: "vehicle",
+        waited: index,
+        limit: 15,
+      } as const,
+      extra: { controller: { kind: "wait", n: index, of: 15, cell: "vehicle", why } },
+    },
+  });
+  const waits = [
+    log(1),
+    log(2),
+    log(3, "no_rest"),
+    log(4, "no_rest", "model"),
+    { ...log(5), action: "hop_forward" as const },
+    log(6),
+  ];
+  const before = JSON.stringify(waits);
+  expect(recordedSteps(waits).map(({ log, count }) => [log.index, count])).toEqual([
+    [2, 2],
+    [3, 1],
+    [4, 1],
+    [5, 1],
+    [6, 1],
+  ]);
+  expect(JSON.stringify(waits)).toBe(before);
 });

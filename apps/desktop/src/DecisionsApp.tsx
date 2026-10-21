@@ -1,3 +1,4 @@
+import type { ChickenArtwork } from "@ccr/render";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useEffect, useRef, useState } from "preact/hooks";
 import { connectControls, showControls, WINDOW_EVENTS } from "./bridge/windows.ts";
@@ -11,6 +12,7 @@ import { Theater } from "./theater/Theater.tsx";
 export function DecisionsApp() {
   const { t } = useI18n();
   const [data, setData] = useState<ControlsData | null>(null);
+  const [artwork, setArtwork] = useState<ChickenArtwork | null | undefined>(undefined);
   const [connection, setConnection] = useState<Awaited<ReturnType<typeof connectControls>> | null>(
     null,
   );
@@ -27,7 +29,7 @@ export function DecisionsApp() {
       const remote = await connectControls((next) => {
         setData(next);
         setSyncFailed(false);
-      });
+      }, setArtwork);
       stops.push(remote.dispose);
       stops.push(
         await current.listen(WINDOW_EVENTS.decisionsShown, () => {
@@ -113,6 +115,7 @@ export function DecisionsApp() {
       )}
       {data && connection ? (
         <Theater
+          artwork={artwork}
           state={data.state}
           kind={data.choices.find((choice) => choice.id === data.selectedId)?.kind}
           compassOn={data.compassOn}

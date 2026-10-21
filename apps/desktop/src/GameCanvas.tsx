@@ -18,10 +18,13 @@ export interface GameCanvasProps {
   state: SessionState;
   sounds: Sounds;
   onReady?: (view: GameView) => void;
+  onUnavailable?: () => void;
   onFps?: (fps: number) => void;
   onRetry: () => void;
   onNewMap: () => void;
   onShowControls?: (() => void) | undefined;
+  onToggleControls?: (() => void) | undefined;
+  controlsVisible?: boolean;
   onToggleDecisions?: (() => void) | undefined;
   decisionsVisible?: boolean;
   /** The model's decision drawn around the chicken. It replaces the thought bubble while it is on. */
@@ -135,6 +138,8 @@ export function GameCanvas(props: GameCanvasProps) {
         frameId = requestAnimationFrame(loop);
       })
       .catch((error: unknown) => {
+        if (disposed) return;
+        latest.current.onUnavailable?.();
         setStatus("error");
         setErrorText(error instanceof Error ? error.message : String(error));
       });
@@ -164,13 +169,14 @@ export function GameCanvas(props: GameCanvasProps) {
         <div class="hud-sub">{t("game.hud", { best: state.best, seed: String(state.seed) })}</div>
       </div>
 
-      {props.onShowControls && (
+      {props.onToggleControls && (
         <button
           type="button"
           class="game-tool open-controls"
-          onClick={props.onShowControls}
-          aria-label={t("windows.openControls")}
-          title={t("windows.openControlsHelp")}
+          onClick={props.onToggleControls}
+          aria-pressed={props.controlsVisible ?? false}
+          aria-label={t(props.controlsVisible ? "windows.hideControls" : "windows.openControls")}
+          title={t(props.controlsVisible ? "windows.hideControls" : "windows.openControlsHelp")}
         >
           <svg
             viewBox="0 0 24 24"

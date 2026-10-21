@@ -10,7 +10,7 @@ export function BudgetCard({ budget }: BudgetCardProps) {
   const { t, number } = useI18n();
   const exhausted = budget !== null && budget.spent >= budget.limit;
   return (
-    <section class={`card budget${exhausted ? " warn" : ""}`}>
+    <section class={`budget${exhausted ? " warn" : ""}`} aria-label={t("budget.label")}>
       <div class="budget-head">
         <div class="field-label" title={t("budget.help")}>
           {t("budget.today")}
