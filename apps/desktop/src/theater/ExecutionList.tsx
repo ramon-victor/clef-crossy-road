@@ -1,3 +1,4 @@
+import { decidedBy } from "@ccr/agent";
 import { ACTION_GLYPH } from "../format.ts";
 import { actionLabel, noticeText } from "../i18n/presentation.ts";
 import { useI18n } from "../i18n/provider.tsx";
@@ -34,7 +35,9 @@ export function ExecutionList({ round }: { round: TurnView }) {
                       : log.decision.note) ??
                     t("decisions.sent")}
                 </p>
-                {log.decision.source === "executor" && <small>{t("decisions.controller")}</small>}
+                {decidedBy(log.decision) === "controller" && (
+                  <small>{t("decisions.controller")}</small>
+                )}
               </div>
             </li>
           ))}

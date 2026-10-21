@@ -46,7 +46,7 @@ describe("decision presentation", () => {
     expect(view.title).toBe("Waiting here");
     expect(view.explanation).toBe("Waiting for the way to clear.");
     expect(view.controller).toBe(true);
-    expect(view.answers.map((answer) => answer.id)).toEqual(["cell"]);
+    expect(view.answers.map((answer) => answer.id)).toEqual(["cell", "here"]);
   });
 
   it("does not claim a move was sent while its answer is held for reading", async () => {

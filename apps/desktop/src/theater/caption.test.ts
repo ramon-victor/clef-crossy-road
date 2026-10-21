@@ -101,6 +101,49 @@ describe("compact game caption", () => {
     expect(buildCaption(s.state(), empty)).toBeNull();
   });
 
+  it("says who made the live move, and that nobody stepped in when the chicken was left on a cell it cannot hold", async () => {
+    const play = async (decision: Record<string, unknown>) => {
+      const session = new Session({ decisionTicks: 1 });
+      session.setPolicy(constantPolicy("stay", decision));
+      session.start(1);
+      session.frame(FRAME);
+      await settle();
+      return session.state();
+    };
+    const exposed = await play({
+      source: "model",
+      extra: { maneuver: "wait_here", controller: { kind: "hold", why: "exposed" } },
+    });
+    expect(buildCaption(exposed, { ...empty, action: "stay" })).toMatchObject({
+      text: "Nothing stepped in: it stays on a cell that can't hold it",
+      unaided: true,
+      by: null,
+    });
+    const drifting = await play({
+      source: "model",
+      extra: { maneuver: "wait_here", controller: { kind: "hold", why: "edge" } },
+    });
+    expect(buildCaption(drifting, { ...empty, action: "stay" })?.text).toBe(
+      "Nothing stepped in: the platform carries it off the map",
+    );
+    const refused = await play({
+      source: "model",
+      extra: { maneuver: "cross_ahead", controller: { kind: "hold", why: "refused" } },
+    });
+    expect(buildCaption(refused, { ...empty, action: "stay" })).toMatchObject({
+      by: { who: "controller", label: "Controller" },
+      unaided: false,
+    });
+    const dodge = await play({
+      source: "model",
+      extra: { maneuver: "step_off", controller: { kind: "dodge", left: 1 } },
+    });
+    expect(buildCaption(dodge, { ...empty, action: "hop_back" })).toMatchObject({
+      by: { who: "model", label: "Clef" },
+      unaided: false,
+    });
+  });
+
   it("shows reference actions without inventing a model choice and retranslates without changing records", async () => {
     const s = await waiting();
     const state = s.state();

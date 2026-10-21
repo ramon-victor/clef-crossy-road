@@ -17,7 +17,12 @@ export function CompassCaption({ view, conversationOpen, onConversation }: Compa
         <span class={`cap-icon ${view.active ? "active" : ""}`} aria-hidden="true">
           <Glyph glyph={view.glyph} size={22} />
         </span>
-        <div class="cap-main" role="status" aria-atomic="true">
+        <div class={`cap-main ${view.unaided ? "unaided" : ""}`} role="status" aria-atomic="true">
+          {view.by && (
+            <>
+              <span class={`cap-by ${view.by.who}`}>{view.by.label}</span>{" "}
+            </>
+          )}
           {view.text}
         </div>
         {!conversationOpen && (

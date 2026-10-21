@@ -5,7 +5,7 @@ import type { DecisionLog } from "../session.ts";
 import { asNumber, asText } from "./view.ts";
 
 export interface BranchView {
-  kind: "leaving" | "closed" | "passing" | "open";
+  kind: "leaving" | "dodging" | "closed" | "passing" | "open";
   p: number;
 }
 
@@ -22,7 +22,7 @@ const NONE = Object.fromEntries(ACTIONS.map((action) => [action, 0])) as Record<
 /** The move the model chose: the manoeuvre it picked, which the controller may start with another move. */
 export function winnerOf(log: DecisionLog): Action {
   const maneuver = asText(log.decision.extra?.maneuver);
-  if (maneuver === "leave_platform") return log.action;
+  if (maneuver === "leave_platform" || maneuver === "step_off") return log.action;
   return (maneuver ? ACTION_OF[maneuver] : undefined) ?? log.action;
 }
 
@@ -47,6 +47,14 @@ export function barsOf(log: DecisionLog): Bars | null {
       p: { ...NONE, [log.action]: p },
       blocked: new Set(),
       branch: { kind: "leaving", p },
+    };
+  }
+  if (maneuver === "step_off") {
+    const p = asNumber(extra?.pMoveOff) ?? 1;
+    return {
+      p: { ...NONE, [log.action]: p },
+      blocked: new Set(),
+      branch: { kind: "dodging", p },
     };
   }
   const ways = Object.fromEntries(

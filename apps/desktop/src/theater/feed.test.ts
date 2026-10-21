@@ -15,7 +15,7 @@ describe("buildFeed: the conversation", () => {
     expect(turn?.move).toBeNull();
     expect(turn?.scene?.tile).toEqual(expect.any(String));
     expect(turn?.scene?.gaps).toHaveLength(2);
-    expect(turn?.questions.map((q) => q.id)).toEqual(["cell", "moving", "around"]);
+    expect(turn?.questions.map((q) => q.id)).toEqual(["cell", "moving", "around", "here"]);
     expect(turn?.questions.every((q) => q.options.every((o) => o.p === null))).toBe(true);
     expect(turn?.facts).toMatchObject({ model: "clef-flash", latencyMs: undefined, cached: false });
   });
@@ -27,7 +27,7 @@ describe("buildFeed: the conversation", () => {
     expect(turn?.reading).toBe(false);
     expect(turn?.since).toBeNull();
     expect(turn?.move).toEqual({ glyph: "→", label: "Detour right" });
-    expect(turn?.summary).toEqual(["✗", "▪", "→"]);
+    expect(turn?.summary).toEqual(["✗", "▪", "→", "✓"]);
     const cell = turn?.questions[0];
     expect(cell?.options.map((o) => [o.short, o.p, o.chosen])).toEqual([
       ["Yes", 0.1, false],

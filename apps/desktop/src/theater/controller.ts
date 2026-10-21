@@ -10,6 +10,7 @@ export type ControllerStep =
   | { kind: "wait"; n: number; of: number; cell: string; why: WaitWhy }
   | { kind: "walk"; n: number; left: number }
   | { kind: "leave"; n: number; left: number }
+  | { kind: "dodge"; left: number }
   | { kind: "hold"; why: HoldWhy | null };
 
 const isCount = (value: unknown): value is number =>
@@ -35,6 +36,8 @@ export function controllerStep(decision: Pick<Decision, "extra">): ControllerSte
             why: step.why === "no_rest" ? "no_rest" : "gap",
           }
         : null;
+    case "dodge":
+      return isCount(step.left) ? { kind: "dodge", left: step.left } : null;
     case "walk":
     case "leave":
       return isCount(step.n) && isCount(step.left)
@@ -111,7 +114,7 @@ export function controllerSays(
   if (step?.kind === "wait") return waitingText(step, translation);
   if (step?.kind === "walk") return walkText(step, translation);
   if (step?.kind === "leave") return leaveText(step, translation);
-  if (step?.kind === "hold")
+  if (step?.kind === "hold" || step?.kind === "dodge")
     return decision.notice ? noticeText(decision.notice, translation) : controllerNote(decision);
   return null;
 }

@@ -1,3 +1,4 @@
+import { decidedBy } from "@ccr/agent";
 import type { Action } from "@ccr/core";
 import { actionLabel, gameEndTitle } from "../i18n/presentation.ts";
 import { type Translator, translator } from "../i18n/translate.ts";
@@ -91,7 +92,7 @@ export function buildDecisionPresentation(
     current,
     round,
     rounds,
-    controller: step !== null || current?.decision.source === "executor",
+    controller: current !== null && decidedBy(current.decision) === "controller",
     answers,
   };
 }

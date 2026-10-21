@@ -31,11 +31,12 @@ export function clientAnswering(answers: Record<string, unknown>): ClefClient {
   return new ClefClient({ transport, cache: new MemoryCache(), sleep: async () => {} });
 }
 
-/** The three lookups of the default gameplay, answered as told. */
+/** The lookups of the default gameplay, answered as told; the chicken is always told it can stay where it is. */
 export const routeAnswers = (cell: string, moving: string, around: string, pStand = 0.8) => ({
   cell: choice(cell, { stand: pStand, no_stand: 1 - pStand }),
   moving: choice(moving, { moving: 0.5, still: 0.5 }),
   around: choice(around, { detour_left: 0.2, detour_right: 0.6, wait_here: 0.2 }),
+  here: choice("remain", { remain: 0.9, move_off: 0.1 }),
 });
 
 /** A session playing the default gameplay, stopped while the first question is out. */

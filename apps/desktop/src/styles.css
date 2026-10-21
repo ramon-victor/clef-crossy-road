@@ -1327,6 +1327,28 @@ canvas.game:focus-visible {
   overflow-wrap: anywhere;
 }
 
+.cap-by {
+  display: inline-block;
+  margin-right: 6px;
+  padding: 0 6px;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 4px;
+  color: #d6e1f2;
+  font-size: 11px;
+  line-height: 16px;
+  vertical-align: 1px;
+}
+
+/* The controller's steps are drawn quieter and dashed: they are not Clef's call. */
+.cap-by.controller {
+  border-style: dashed;
+  color: #b1bfd4;
+}
+
+.cap-main.unaided {
+  color: #ffb4b4;
+}
+
 .cap-choice {
   min-height: 18px;
   font-size: 12px;

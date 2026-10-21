@@ -45,6 +45,9 @@ function skippedBecause(
   if (extra?.ride === "leaving" && ALWAYS_ASKED.some((id) => id === questionId)) {
     return t("route.skip.leaving");
   }
+  if (extra?.here === "move_off" && ALWAYS_ASKED.some((id) => id === questionId)) {
+    return t("route.skip.dodging");
+  }
   if (questionId === "moving" && extra?.cell === "stand") return t("route.skip.stand");
   if (questionId === "around" && ahead !== "closed") return t("route.skip.open");
   return null;

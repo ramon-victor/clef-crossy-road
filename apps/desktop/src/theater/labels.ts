@@ -18,6 +18,7 @@ const ROUTE_OPTIONS = {
   cell: ["stand", "no_stand"],
   moving: ["moving", "still"],
   around: ["detour_left", "detour_right", "wait_here"],
+  here: ["remain", "move_off"],
   ride: ["leaving", "staying"],
 } as const;
 
@@ -31,6 +32,8 @@ const OPTION_GLYPH = {
   wait_here: "•",
   leaving: "!",
   staying: "✓",
+  remain: "✓",
+  move_off: "!",
 } as const;
 
 const MANEUVER_GLYPH = {
@@ -42,6 +45,7 @@ const MANEUVER_GLYPH = {
   back_off: "↓",
   wait_here: "•",
   leave_platform: "↓",
+  step_off: "↓",
 } as const;
 
 export const ALWAYS_ASKED = ["cell", "moving", "around"] as const;
@@ -105,6 +109,13 @@ export function decisionLabel(
       glyph: ACTION_GLYPH[action],
       label: translation.t("theater.move.leave_platform"),
       short: translation.t("route.getOff"),
+    };
+  }
+  if (maneuverId === "step_off") {
+    return {
+      glyph: ACTION_GLYPH[action],
+      label: translation.t("theater.move.step_off"),
+      short: translation.t("route.stepOff"),
     };
   }
   return optionLabel(

@@ -62,7 +62,7 @@ it("keeps one readable status through 15 waits and history eviction, with Detail
     if (n > 1) screen.rerender(ui(n));
     screen.rerender(ui(n, true));
     expect(screen.getByRole("status")).toBe(status);
-    expect(status.textContent).toBe("Esperando um tronco");
+    expect(status.textContent).toBe("Controlador Esperando um tronco");
     expect(screen.container.querySelector(".compass-caption")).toBe(card);
     expect(screen.container.querySelector(".cap-strip")).toBe(strip);
     expect(screen.container.querySelector(".cap-choice")?.textContent).toContain("Clef escolheu:");
@@ -78,7 +78,15 @@ it("keeps queued movement secondary and omits the Details shortcut when the conv
   const screen = render(
     <LanguageProvider initial={{ preference: "en", detected: "en" }}>
       <CompassCaption
-        view={{ text: "Now: forward", glyph: "↑", context: "next: right", strip: [], active: true }}
+        view={{
+          text: "Now: forward",
+          glyph: "↑",
+          context: "next: right",
+          strip: [],
+          active: true,
+          by: null,
+          unaided: false,
+        }}
         conversationOpen
         onConversation={() => {}}
       />
@@ -87,4 +95,36 @@ it("keeps queued movement secondary and omits the Details shortcut when the conv
   expect(screen.getByRole("status").textContent).toBe("Now: forward");
   expect(screen.container.querySelector(".cap-choice")?.textContent).toBe("next: right");
   expect(screen.queryByRole("button")).toBeNull();
+});
+
+it("tags the move with who made it, and marks a chicken nobody helped", () => {
+  const view = {
+    text: "Now: back",
+    glyph: "↓",
+    context: null,
+    strip: [],
+    active: true,
+    by: { who: "controller" as const, label: "Controller" },
+    unaided: false,
+  };
+  const screen = render(
+    <LanguageProvider initial={{ preference: "en", detected: "en" }}>
+      <CompassCaption view={view} conversationOpen onConversation={() => {}} />
+    </LanguageProvider>,
+  );
+  expect(screen.getByRole("status").textContent).toBe("Controller Now: back");
+  expect(screen.container.querySelector(".cap-by.controller")?.textContent).toBe("Controller");
+  screen.rerender(
+    <LanguageProvider initial={{ preference: "en", detected: "en" }}>
+      <CompassCaption
+        view={{ ...view, text: "Nothing stepped in", by: null, unaided: true }}
+        conversationOpen
+        onConversation={() => {}}
+      />
+    </LanguageProvider>,
+  );
+  expect(screen.container.querySelector(".cap-main.unaided")?.textContent).toBe(
+    "Nothing stepped in",
+  );
+  expect(screen.container.querySelector(".cap-by")).toBeNull();
 });

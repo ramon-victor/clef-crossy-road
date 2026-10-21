@@ -127,6 +127,23 @@ describe("stripOf: the latest moves under the game", () => {
     ]);
   });
 
+  it("draws a move big only when the model made it: a step off the cell, not a hold the controller put in place of its pick", () => {
+    const entryOf = (index: number, action: Action, extra: Record<string, unknown>) =>
+      ({ index, action, decision: { action, source: "model", extra } }) as never;
+    const chips = stripOf([
+      entryOf(0, "hop_back", { maneuver: "step_off", controller: { kind: "dodge", left: 1 } }),
+      entryOf(1, "stay", { maneuver: "cross_ahead", controller: { kind: "hold", why: "exposed" } }),
+      entryOf(2, "stay", { maneuver: "wait_here", controller: { kind: "hold", why: "refused" } }),
+      entryOf(3, "hop_left", { maneuver: "cross_ahead", fallback: "detour_left" }),
+    ]);
+    expect(chips.map((c) => [c.glyph, c.big])).toEqual([
+      ["↓", true],
+      ["•", false],
+      ["•", true],
+      ["←", false],
+    ]);
+  });
+
   it("does not fold waits that are not in one run, nor moves that are not waits", () => {
     const wait = { kind: "wait", n: 1, of: 15, cell: "vehicle" };
     const chips = stripOf([

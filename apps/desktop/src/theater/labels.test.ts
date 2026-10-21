@@ -3,6 +3,8 @@ import {
   CELL_OPTIONS,
   clefPolicy,
   DEFAULT_CLEF,
+  HERE_OPTIONS,
+  HERE_QUESTION_ID,
   MOVING_OPTIONS,
   RIDE_OPTIONS,
   RIDE_QUESTION_ID,
@@ -41,14 +43,15 @@ describe("the labels of the route lookups", () => {
     cell: CELL_OPTIONS,
     moving: MOVING_OPTIONS,
     around: AROUND_OPTIONS,
+    here: HERE_OPTIONS,
     ride: RIDE_OPTIONS,
   } as const;
 
   it("name every question and every option the strategy sends, so a new one cannot go unlabelled", () => {
     expect(Object.keys(ROUTE_LABELS).sort()).toEqual(
-      [...ROUTE_QUESTION_IDS, RIDE_QUESTION_ID].sort(),
+      [...ROUTE_QUESTION_IDS, HERE_QUESTION_ID, RIDE_QUESTION_ID].sort(),
     );
-    for (const id of [...ROUTE_QUESTION_IDS, RIDE_QUESTION_ID] as const) {
+    for (const id of [...ROUTE_QUESTION_IDS, HERE_QUESTION_ID, RIDE_QUESTION_ID] as const) {
       expect(Object.keys(ROUTE_LABELS[id]?.options ?? {}), id).toEqual([...options[id]]);
     }
   });

@@ -1,3 +1,4 @@
+import { decidedBy } from "@ccr/agent";
 import { ACTIONS, type Action } from "@ccr/core";
 import { ACTION_GLYPH } from "../format.ts";
 import { type Translator, translator } from "../i18n/translate.ts";
@@ -32,7 +33,7 @@ export interface CompassMove {
 export interface StripChip {
   index: number;
   glyph: string;
-  /** The model's own move, as against a step of the controller's. */
+  /** The model's own move (`decidedBy`), as against a step the controller took. */
   big: boolean;
   /** How many steps the chip stands for (a run of waits is one chip). */
   count: number;
@@ -73,7 +74,7 @@ export function stripOf(history: SessionState["history"]): StripChip[] {
     (entry): StripChip => ({
       index: entry.index,
       glyph: ACTION_GLYPH[entry.action],
-      big: entry.decision.source !== "executor",
+      big: decidedBy(entry.decision) === "model",
       count: 1,
     }),
   );

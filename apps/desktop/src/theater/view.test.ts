@@ -13,13 +13,13 @@ import {
 import { questionsOf } from "./view.ts";
 
 describe("questionsOf: what the model was asked", () => {
-  it("lists the three lookups in order, with their options, and no answer while it reads", () => {
+  it("lists the lookups in order, with their options, and no answer while it reads", () => {
     const s = readingSession(routeAnswers("no_stand", "still", "detour_right", 0.1));
     const input = s.state().asking?.input;
     if (!input) throw new Error("expected a question to be out");
     const questions = questionsOf(input, null);
 
-    expect(questions.map((q) => q.id)).toEqual(["cell", "moving", "around"]);
+    expect(questions.map((q) => q.id)).toEqual(["cell", "moving", "around", "here"]);
     const cell = questions[0];
     expect(cell?.title).toBe("Can it stand there?");
     expect(cell?.options.map((o) => o.id)).toEqual(["stand", "no_stand"]);
@@ -75,8 +75,8 @@ describe("questionsOf: what the model was asked", () => {
       },
     };
     const questions = questionsOf(riding.decision.sent, riding);
-    expect(questions.map((q) => q.id)).toEqual(["cell", "moving", "around", "ride"]);
-    const ride = questions[3];
+    expect(questions.map((q) => q.id)).toEqual(["cell", "moving", "around", "here", "ride"]);
+    const ride = questions[4];
     expect(ride?.title).toBe("Is the edge a moment away?");
     expect(ride?.options.map((o) => [o.short, o.p, o.chosen])).toEqual([
       ["Leave", 0.1, false],

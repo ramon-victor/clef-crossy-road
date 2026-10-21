@@ -53,7 +53,7 @@ describe("visual decision panel", () => {
     expect(session.state()).toEqual(state);
     fireEvent.click(view.getByRole("button", { name: "Technical details" }));
     expect(view.container.querySelector(".stats")).not.toBeNull();
-    expect(view.container.querySelectorAll("section.question-result")).toHaveLength(3);
+    expect(view.container.querySelectorAll("section.question-result")).toHaveLength(4);
     fireEvent.click(view.getByRole("button", { name: "Compass (C)" }));
     expect(props.onCompass).toHaveBeenCalledOnce();
   });
