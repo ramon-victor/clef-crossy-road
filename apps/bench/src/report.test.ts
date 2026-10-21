@@ -134,5 +134,11 @@ describe("perceptionOf: the route strategy", () => {
     expect(perceptionOf("exec-route")).toBe(
       "scene + rules + platform clock + route executor (scripted)",
     );
+    expect(perceptionOf("exec-route-live")).toBe(
+      "scene + rules + platform clock + path executor (scripted, hops timed by the chooser)",
+    );
+    expect(perceptionOf("clef:clef-flash:scene:route-live:lookup")).toBe(
+      "words + rules + graph + platform clock + path executor",
+    );
   });
 });

@@ -14,11 +14,11 @@ export const USAGE = `Usage:
 
 Policies: always-forward, random, lookahead, lookahead-<depth>, rule-view, rule-view-fx (scripted players
           that read the same view as the view / view-fx encoders: references, not models),
-          rule-lanes, rule-moves, exec-cross, exec-rules, exec-route (free scripted references: no model),
-          clef   (the app's Clef: clef-flash, scene view, route strategy, lookup manual),
+          rule-lanes, rule-moves, exec-cross, exec-rules, exec-route, exec-route-live (free scripted references: no model),
+          clef   (the app's Clef: clef-flash, scene view, route-live strategy, lookup manual),
           clef:<model>:<encoder>:<strategy>[:<manual>]   (model: clef-flash|clef|clef-omni,
           encoder: json|json-rel|grid|image|view|view-fx|json-fx|lanes|moves|scene,
-          strategy: choice|critic|critic-go|maneuver|graph|graph-maneuver|route, manual: full|minimal|routing|rules|ordered|exclusive|lookup)
+          strategy: choice|critic|critic-go|maneuver|graph|graph-maneuver|route|route-live, manual: full|minimal|routing|rules|ordered|exclusive|lookup)
 
 run options:
   --concurrency <n>      parallel episodes (default 1 for baselines, 4 when a Clef policy is used)
