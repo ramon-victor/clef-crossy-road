@@ -81,7 +81,7 @@ export const CLEF_27B_CONFIG: ClefPolicyConfig = { ...DEFAULT_CLEF, model: "clef
  * `pnpm bench run ... --daily-neurons 0` (any cache miss is refused, nothing is spent) before writing it here.
  * The 27B has none, because a game of it costs about 6 times as much.
  */
-export const CLEF_CACHED_SEEDS = "7-7";
+export const CLEF_CACHED_SEEDS = "624140-624140";
 
 /** Ids that shortcuts used before: `clef` was Clef-flash, and `clef-words` was its words-and-controller variant. */
 const ALIASES: Readonly<Record<string, string>> = { clef: CLEF_ID, "clef-words": CLEF_ID };
