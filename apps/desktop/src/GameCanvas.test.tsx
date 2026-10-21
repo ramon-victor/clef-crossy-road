@@ -6,6 +6,7 @@ import type { Sounds } from "./audio.ts";
 import { GameCanvas } from "./GameCanvas.tsx";
 import { LanguageProvider } from "./i18n/provider.tsx";
 import { Session } from "./session.ts";
+import { answeredSession, routeAnswers } from "./theater/test-support.ts";
 
 vi.mock("@ccr/render", () => ({
   GameView: { create: async () => ({ resize: () => {}, dispose: () => {} }) },
@@ -60,4 +61,35 @@ it("keeps a model failure actionable in the game when both auxiliary windows are
   expect(openSettings).toHaveBeenCalledOnce();
   expect(toggleSettings).toHaveBeenCalledOnce();
   expect(openDecisions).toHaveBeenCalledOnce();
+});
+
+it("shows pause once in the caption, restores the plain notice when hidden, and opens Details", async () => {
+  const session = await answeredSession(routeAnswers("stand", "still", "wait_here"), 1);
+  session.setPaused(true);
+  const open = vi.fn();
+  const ui = (on: boolean) => (
+    <LanguageProvider initial={{ preference: "en", detected: "en" }}>
+      <GameCanvas
+        session={session}
+        state={session.state()}
+        sounds={{} as Sounds}
+        onRetry={vi.fn()}
+        onNewMap={vi.fn()}
+        compass={{ on, conversationOpen: false, onConversation: open }}
+      />
+    </LanguageProvider>
+  );
+  const screen = render(ui(true));
+  await waitFor(() =>
+    expect(screen.getByRole("status").textContent).toBe("Paused · Space to resume"),
+  );
+  expect(screen.container.querySelector(".compass-caption")).not.toBeNull();
+  expect(screen.container.querySelector(".paused-note")).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: "Details" }));
+  expect(open).toHaveBeenCalledOnce();
+  screen.rerender(ui(false));
+  expect(screen.container.querySelector(".compass-caption")).toBeNull();
+  expect(screen.container.querySelector(".paused-note")?.textContent).toBe(
+    "Paused · Space to resume",
+  );
 });

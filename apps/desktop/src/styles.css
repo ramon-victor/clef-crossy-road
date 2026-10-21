@@ -1217,144 +1217,113 @@ canvas.game:focus-visible {
 .compass-caption {
   position: absolute;
   left: 50%;
-  bottom: 14px;
+  bottom: 12px;
   z-index: 3;
-  width: min(calc(100% - 28px), 460px);
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding: 8px 12px;
-  border-radius: 14px;
-  border: 3px solid var(--ink);
-  background: rgba(14, 24, 46, 0.9);
-  box-shadow: 0 5px 0 rgba(29, 43, 69, 0.4);
+  width: min(calc(100% - 24px), 420px);
+  display: grid;
+  gap: 5px;
+  padding: 10px 12px;
+  border-radius: var(--radius);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: #16243b;
+  box-shadow: 0 3px 12px rgba(14, 24, 46, 0.18);
   color: #fff;
   pointer-events: none;
   transform: translateX(-50%);
 }
 
-.cap-main {
-  min-height: 20px;
-  display: flex;
-  flex-wrap: wrap;
+.cap-head {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr) auto;
   align-items: center;
-  gap: 4px 8px;
-  padding-right: 64px;
+  gap: 8px;
+  min-height: 36px;
+}
+
+.cap-icon {
+  display: grid;
+  place-items: center;
+  color: #b1bfd4;
+}
+
+.cap-icon.active {
+  color: var(--accent);
+}
+
+.cap-main {
+  min-width: 0;
   font-size: 13px;
+  line-height: 18px;
   font-weight: 700;
-}
-
-.compass-caption .dots i {
-  background: var(--accent);
-}
-
-.cap-main .sep {
-  color: var(--accent);
-}
-
-.cap-main .skip {
-  opacity: 0.5;
-}
-
-.cap-verdict {
-  font-family: var(--ui-font);
-  font-size: 15px;
-  font-weight: 700;
-  color: var(--accent);
-}
-
-.cap-branch {
-  font-size: 12px;
-  font-weight: 600;
-  color: rgba(255, 255, 255, 0.7);
-}
-
-.cap-note {
-  font-size: 12px;
-  color: rgba(255, 255, 255, 0.85);
-}
-
-.cap-choice,
-.cap-route {
-  font-size: 12px;
-  color: rgba(255, 255, 255, 0.7);
   overflow-wrap: anywhere;
 }
 
-.cap-route {
-  color: #8fe3ff;
+.cap-choice {
+  min-height: 18px;
+  font-size: 12px;
+  line-height: 18px;
+  color: #b1bfd4;
+  overflow-wrap: anywhere;
 }
 
-.cap-note-tag {
-  display: inline-block;
-  margin-right: 4px;
-  padding: 0 6px;
-  border-radius: 99px;
-  background: #8fe3ff;
-  color: #0e2238;
+.cap-history {
+  min-width: 0;
+  min-height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px 10px;
+}
+
+.cap-history-label {
+  flex: 1;
+  min-width: 0;
+  color: #a1b2cc;
   font-size: 11px;
-  font-weight: 700;
-}
-
-.cap-clock {
-  margin-left: auto;
-  font-family: "Retro", monospace;
-  font-weight: 400;
-  font-variant-numeric: tabular-nums;
-  color: var(--accent);
+  line-height: 16px;
+  overflow-wrap: anywhere;
 }
 
 .cap-strip {
+  flex: 0 0 164px;
   display: flex;
   justify-content: flex-end;
-  gap: 5px;
-  overflow: hidden;
-  -webkit-mask-image: linear-gradient(to right, transparent, #000 30%);
-  mask-image: linear-gradient(to right, transparent, #000 30%);
+  gap: 4px;
 }
 
 .hchip {
   flex: none;
-  min-width: 24px;
+  width: 24px;
   height: 24px;
-  padding: 0 4px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 2px;
-  border-radius: 7px;
-  border: 2px solid rgba(255, 255, 255, 0.3);
-  color: rgba(255, 255, 255, 0.7);
-  font-size: 13px;
-}
-
-.hchip-count,
-.walk-count {
-  font-family: "Segoe UI", system-ui, sans-serif;
-  font-size: 11px;
-  font-weight: 700;
+  display: grid;
+  place-items: center;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: #a1b2cc;
 }
 
 .hchip.big {
-  border-color: var(--accent);
-  background: rgba(255, 214, 64, 0.15);
-  color: var(--accent);
+  border-color: rgba(255, 255, 255, 0.3);
+  color: #d6e1f2;
 }
 
 .cap-details {
-  position: absolute;
-  top: 8px;
-  right: 12px;
-  padding: 0;
-  border: 0;
-  background: none;
-  color: var(--accent);
+  padding: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 6px;
+  background: transparent;
+  color: #d6e1f2;
   font: inherit;
-  font-size: 12px;
-  font-weight: 700;
-  text-decoration: underline;
+  font-size: 11px;
+  line-height: 16px;
+  font-weight: 600;
   cursor: pointer;
   pointer-events: auto;
+}
+
+.cap-details:hover {
+  background: rgba(255, 255, 255, 0.08);
 }
 
 .cap-details:focus-visible {
@@ -1384,20 +1353,6 @@ canvas.game:focus-visible {
 
   .compass.paused .cb {
     animation-play-state: paused;
-  }
-
-  .compass-caption .hchip:last-child {
-    animation: t-pop 0.3s both;
-  }
-}
-@keyframes t-pop {
-  from {
-    opacity: 0;
-    transform: scale(0.8);
-  }
-  to {
-    opacity: 1;
-    transform: none;
   }
 }
 @media (prefers-reduced-motion: reduce) {
