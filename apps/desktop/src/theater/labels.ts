@@ -44,6 +44,7 @@ const MANEUVER_GLYPH = {
   sidestep_right: "→",
   back_off: "↓",
   wait_here: "•",
+  wait_gap: "•",
   leave_platform: "↓",
   step_off: "↓",
 } as const;

@@ -159,7 +159,7 @@ export const ptBR = {
   "player.random.detail": "Escolhe entre as cinco ações com a mesma probabilidade.",
   "player.clef-flash.label": "Clef-flash",
   "player.clef-flash.detail":
-    "Modelo de decisão de 9B da Cloudflare. Nosso código descreve a tela em palavras e faz três perguntas: a galinha pode ficar na casa à frente, há movimento nessa linha e por qual lado deve contornar? Um controlador automático executa os saltos e desvios sem custo. Cerca de {{cost, number}} Neurons por conjunto de perguntas. Em uma plataforma, uma quarta pergunta verifica se é hora de sair.",
+    "Modelo de decisão de 9B da Cloudflare. Nosso código descreve a tela em palavras e faz quatro perguntas: a galinha pode pisar na casa à frente, há movimento nessa linha, por qual lado deve contornar e pode ficar onde está? O Clef decide passo a passo quando pular ou esperar, e nada confere nem socorre uma resposta errada. Um controlador automático só encontra o caminho de contorno e a saída da plataforma, sem custo. Cerca de {{cost, number}} Neurons por conjunto de perguntas, um conjunto por passo. Em uma plataforma, uma quinta pergunta verifica se é hora de sair.",
   "player.clef-27b.label": "Clef (27B)",
   "player.clef-27b.detail":
     "O modelo maior da Cloudflare, com a mesma jogabilidade. Custa cerca de {{ratio, number}} vezes mais: {{cost, number}} Neurons por conjunto de perguntas, ou cerca de {{sets, number}} conjuntos por dia na cota gratuita. Não há mapas em cache incluídos para este modelo.",
@@ -301,6 +301,7 @@ export const ptBR = {
   "notice.exposed_wait": "Ficou em uma casa que não sustenta a galinha. Ninguém interveio.",
   "notice.edge_wait": "Uma plataforma leva a galinha para fora do mapa. Ninguém interveio.",
   "notice.clear": "{{maneuver}}: a casa está livre; saltando.",
+  "notice.go": "{{maneuver}}: o modelo disse que dá para pisar na casa; pulando.",
   "notice.waiting":
     "{{maneuver}}: esperando a casa ficar livre ({{cell}}), {{waited, number}}/{{limit, number}}.",
   "notice.escape_one":
@@ -331,12 +332,14 @@ export const ptBR = {
   "notice.reached_other": "{{maneuver}}: alcançou uma linha nova após {{count, number}} saltos.",
   "notice.reached_many": "{{maneuver}}: alcançou uma linha nova após {{count, number}} saltos.",
   "notice.waited": "Esperou aqui.",
+  "notice.waiting_gap": "Esperando um passo pela brecha.",
   "notice.model": "O modelo escolheu: {{maneuver}}. {{step}}",
   "maneuver.cross_ahead": "atravessar à frente",
   "maneuver.sidestep_left": "ir para a esquerda",
   "maneuver.sidestep_right": "ir para a direita",
   "maneuver.back_off": "recuar",
   "maneuver.wait_here": "esperar aqui",
+  "maneuver.wait_gap": "esperar a brecha",
   "maneuver.detour_left": "contornar pela esquerda",
   "maneuver.detour_right": "contornar pela direita",
   "side.left": "esquerda",
@@ -466,6 +469,7 @@ export const ptBR = {
   "scene.clock.later": "a borda do mapa ainda está longe",
   "scene.clock.not_carried": "não está levando a galinha para a borda",
   "controller.waitGap": "esperando {{obstacle}} {{n, number}}/{{of, number}}",
+  "controller.waitLive": "esperando {{obstacle}} ({{n, number}})",
   "controller.waitRest":
     "a casa está livre, mas {{obstacle}} chegaria antes de a galinha continuar · esperando {{n, number}}/{{of, number}}",
   "controller.pass.vehicle": "um veículo passar",
@@ -481,6 +485,7 @@ export const ptBR = {
   "theater.move.sidestep_right": "Dar um passo à direita",
   "theater.move.back_off": "Recuar",
   "theater.move.wait_here": "Esperar aqui",
+  "theater.move.wait_gap": "Esperar a brecha",
   "theater.move.leave_platform": "Sair da plataforma",
   "theater.move.step_off": "Sair da casa",
   "route.detour_left.label": "Pela esquerda",

@@ -159,7 +159,7 @@ export const es = {
   "player.random.detail": "Elige entre las cinco acciones con la misma probabilidad.",
   "player.clef-flash.label": "Clef-flash",
   "player.clef-flash.detail":
-    "Modelo de decisión de 9B de Cloudflare. Nuestro código describe la pantalla con palabras y plantea tres preguntas: ¿puede el pollo quedarse en la casilla de delante, hay movimiento en esa fila y por qué lado debe rodearla? Un controlador automático ejecuta los saltos y rodeos sin costo. Unos {{cost, number}} Neurons por conjunto de preguntas. En una plataforma, una cuarta pregunta comprueba si es hora de salir.",
+    "Modelo de decisión de 9B de Cloudflare. Nuestro código describe la pantalla con palabras y plantea cuatro preguntas: ¿puede el pollo pisar la casilla de delante, hay movimiento en esa fila, por qué lado debe rodearla y puede quedarse donde está? Clef decide paso a paso cuándo saltar o esperar, y nada comprueba ni rescata una respuesta equivocada. Un controlador automático solo encuentra el camino del rodeo y la salida de la plataforma, sin costo. Unos {{cost, number}} Neurons por conjunto de preguntas, uno por paso. En una plataforma, una quinta pregunta comprueba si es hora de salir.",
   "player.clef-27b.label": "Clef (27B)",
   "player.clef-27b.detail":
     "El modelo más grande de Cloudflare, con la misma mecánica de juego. Consume unas {{ratio, number}} veces más: {{cost, number}} Neurons por conjunto de preguntas, unos {{sets, number}} conjuntos diarios con la cuota gratuita. No se incluyen mapas en caché para este modelo.",
@@ -302,6 +302,7 @@ export const es = {
   "notice.exposed_wait": "Se quedó en una casilla que no sostiene al pollo. Nadie intervino.",
   "notice.edge_wait": "Una plataforma lleva al pollo fuera del mapa. Nadie intervino.",
   "notice.clear": "{{maneuver}}: la casilla está libre; saltando.",
+  "notice.go": "{{maneuver}}: el modelo dijo que se puede pisar la casilla; saltando.",
   "notice.waiting":
     "{{maneuver}}: esperando a que se despeje la casilla ({{cell}}), {{waited, number}}/{{limit, number}}.",
   "notice.escape_one":
@@ -334,12 +335,14 @@ export const es = {
   "notice.reached_many":
     "{{maneuver}}: alcanzó una fila nueva después de {{count, number}} saltos.",
   "notice.waited": "Esperó aquí.",
+  "notice.waiting_gap": "Esperando un paso el hueco.",
   "notice.model": "El modelo eligió: {{maneuver}}. {{step}}",
   "maneuver.cross_ahead": "cruzar hacia delante",
   "maneuver.sidestep_left": "ir a la izquierda",
   "maneuver.sidestep_right": "ir a la derecha",
   "maneuver.back_off": "retroceder",
   "maneuver.wait_here": "esperar aquí",
+  "maneuver.wait_gap": "esperar el hueco",
   "maneuver.detour_left": "rodear por la izquierda",
   "maneuver.detour_right": "rodear por la derecha",
   "side.left": "izquierda",
@@ -469,6 +472,7 @@ export const es = {
   "scene.clock.later": "el borde del mapa aún está lejos",
   "scene.clock.not_carried": "no lleva a la gallina hacia el borde",
   "controller.waitGap": "esperando {{obstacle}} {{n, number}}/{{of, number}}",
+  "controller.waitLive": "esperando {{obstacle}} ({{n, number}})",
   "controller.waitRest":
     "la casilla está libre, pero {{obstacle}} llegaría antes de que la gallina pudiera seguir · esperando {{n, number}}/{{of, number}}",
   "controller.pass.vehicle": "que pase un vehículo",
@@ -484,6 +488,7 @@ export const es = {
   "theater.move.sidestep_right": "Dar un paso a la derecha",
   "theater.move.back_off": "Retroceder",
   "theater.move.wait_here": "Esperar aquí",
+  "theater.move.wait_gap": "Esperar el hueco",
   "theater.move.leave_platform": "Salir de la plataforma",
   "theater.move.step_off": "Salir de la casilla",
   "route.detour_left.label": "Por la izquierda",

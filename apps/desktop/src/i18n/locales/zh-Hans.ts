@@ -157,7 +157,7 @@ export const zhHans = {
   "player.random.detail": "以相同概率选择五种动作之一。",
   "player.clef-flash.label": "Clef-flash",
   "player.clef-flash.detail":
-    "Cloudflare 的 9B 决策模型。代码用文字描述画面，并提出三个问题：小鸡能否停留在前方格子、该行的物体是否移动、应从哪侧绕行？自动控制器免费执行跳跃和绕行。每组问题约消耗 {{cost, number}} Neurons。 站在浮台上时，还会通过第四个问题判断是否该离开。",
+    "Cloudflare 的 9B 决策模型。代码用文字描述画面，并提出四个问题：小鸡能否站上前方格子、该行的物体是否移动、应从哪侧绕行，以及能否留在原地？跳跃还是等待由 Clef 一步一步决定，没有任何机制检查或挽救错误答案。自动控制器只负责找出绕行路线和离开浮台的路径，且免费。每组问题约消耗 {{cost, number}} Neurons，每一步一组。站在浮台上时，还会通过第五个问题判断是否该离开。",
   "player.clef-27b.label": "Clef (27B)",
   "player.clef-27b.detail":
     "Cloudflare 的更大模型，采用相同玩法。消耗量约为 {{ratio, number}} 倍：每组问题 {{cost, number}} Neurons，每日免费额度约可支持 {{sets, number}} 组。此模型不附带已缓存的地图。",
@@ -287,6 +287,7 @@ export const zhHans = {
   "notice.exposed_wait": "停在了无法承载小鸡的格子上，没有任何介入。",
   "notice.edge_wait": "浮台正把小鸡带出地图，没有任何介入。",
   "notice.clear": "{{maneuver}}：格子已空出，开始跳跃。",
+  "notice.go": "{{maneuver}}：模型判断该格可以站立，跳跃。",
   "notice.waiting":
     "{{maneuver}}：等待格子空出（{{cell}}），{{waited, number}}/{{limit, number}}。",
   "notice.escape_one": "离开无法停留的格子：{{action}}（还需跳跃 {{remaining, number}} 次）。",
@@ -314,12 +315,14 @@ export const zhHans = {
   "notice.reached_other": "{{maneuver}}：跳跃 {{count, number}} 次后已到达新的一行。",
   "notice.reached_many": "{{maneuver}}：跳跃 {{count, number}} 次后已到达新的一行。",
   "notice.waited": "已原地等待。",
+  "notice.waiting_gap": "等待空隙一步。",
   "notice.model": "模型选择：{{maneuver}}。{{step}}",
   "maneuver.cross_ahead": "向前穿过",
   "maneuver.sidestep_left": "向左移动",
   "maneuver.sidestep_right": "向右移动",
   "maneuver.back_off": "向后退",
   "maneuver.wait_here": "原地等待",
+  "maneuver.wait_gap": "等待空隙",
   "maneuver.detour_left": "从左侧绕行",
   "maneuver.detour_right": "从右侧绕行",
   "side.left": "左侧",
@@ -445,6 +448,7 @@ export const zhHans = {
   "scene.clock.later": "距地图边缘尚远",
   "scene.clock.not_carried": "没有将小鸡带向边缘",
   "controller.waitGap": "等待{{obstacle}} {{n, number}}/{{of, number}}",
+  "controller.waitLive": "等待{{obstacle}}（{{n, number}}）",
   "controller.waitRest":
     "落点虽空，但{{obstacle}}会在小鸡继续前进前抵达 · 等待 {{n, number}}/{{of, number}}",
   "controller.pass.vehicle": "车辆通过",
@@ -460,6 +464,7 @@ export const zhHans = {
   "theater.move.sidestep_right": "向右侧移",
   "theater.move.back_off": "后退",
   "theater.move.wait_here": "原地等待",
+  "theater.move.wait_gap": "等待空隙",
   "theater.move.leave_platform": "离开浮台",
   "theater.move.step_off": "离开格子",
   "route.detour_left.label": "从左边绕行",

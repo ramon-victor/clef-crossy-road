@@ -74,6 +74,7 @@ describe("what the controller is doing, in words", () => {
       cell,
       why: "gap" as const,
     });
+    expect(waitingText({ ...wait("vehicle"), of: 0 })).toBe("waiting for a vehicle to pass (3)");
     expect(waitingText(wait("vehicle"))).toBe("waiting for a vehicle to pass 3/15");
     expect(waitingText(wait("train_coming"))).toBe("waiting for the train to pass 3/15");
     expect(waitingText(wait("water"))).toBe("waiting for a log to come 3/15");

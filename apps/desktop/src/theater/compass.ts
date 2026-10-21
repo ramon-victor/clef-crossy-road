@@ -70,7 +70,8 @@ export function stripOf(history: SessionState["history"]): StripChip[] {
   const chips = foldWaits(
     history,
     (entry) =>
-      entry.decision.source === "executor" && controllerStep(entry.decision)?.kind === "wait",
+      (entry.decision.source === "executor" || entry.decision.extra?.live === true) &&
+      controllerStep(entry.decision)?.kind === "wait",
     (entry): StripChip => ({
       index: entry.index,
       glyph: ACTION_GLYPH[entry.action],

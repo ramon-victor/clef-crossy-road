@@ -162,7 +162,7 @@ export const de = {
   "player.random.detail": "Wählt jede der fünf Aktionen mit gleicher Wahrscheinlichkeit.",
   "player.clef-flash.label": "Clef-flash",
   "player.clef-flash.detail":
-    "Cloudflares 9B-Entscheidungsmodell. Unser Code beschreibt den Bildschirm mit Worten und stellt drei Fragen: Kann das Huhn auf dem Feld davor stehen, bewegt sich dort etwas und auf welcher Seite soll es ausweichen? Eine automatische Steuerung führt Sprünge und Umwege kostenlos aus. Etwa {{cost, number}} Neurons pro Fragensatz. Auf einer Plattform prüft eine vierte Frage, ob es Zeit zum Absteigen ist.",
+    "Cloudflares 9B-Entscheidungsmodell. Unser Code beschreibt den Bildschirm mit Worten und stellt vier Fragen: Kann das Huhn auf dem Feld davor stehen, bewegt sich dort etwas, auf welcher Seite soll es ausweichen und kann es dort bleiben, wo es ist? Clef entscheidet Schritt für Schritt, wann gesprungen oder gewartet wird, und nichts prüft oder rettet eine falsche Antwort. Eine automatische Steuerung findet nur den Weg um das Hindernis und von der Plattform herunter, kostenlos. Etwa {{cost, number}} Neurons pro Fragensatz, ein Satz pro Schritt. Auf einer Plattform prüft eine fünfte Frage, ob es Zeit zum Absteigen ist.",
   "player.clef-27b.label": "Clef (27B)",
   "player.clef-27b.detail":
     "Cloudflares größeres Modell mit demselben Spielablauf. Etwa {{ratio, number}}-fache Kosten: {{cost, number}} Neurons pro Fragensatz, also rund {{sets, number}} Fragensätze pro Tag im kostenlosen Kontingent. Für dieses Modell sind keine Karten im Cache enthalten.",
@@ -315,6 +315,7 @@ export const de = {
   "notice.exposed_wait": "Blieb auf einem Feld, das das Huhn nicht trägt. Niemand griff ein.",
   "notice.edge_wait": "Eine Plattform trägt das Huhn aus der Karte. Niemand griff ein.",
   "notice.clear": "{{maneuver}}: Das Feld ist frei, Sprung wird ausgeführt.",
+  "notice.go": "{{maneuver}}: Das Modell sagt, das Feld ist betretbar; Sprung.",
   "notice.waiting":
     "{{maneuver}}: Warten auf ein freies Feld ({{cell}}), {{waited, number}}/{{limit, number}}.",
   "notice.escape_one":
@@ -347,12 +348,14 @@ export const de = {
   "notice.reached_other": "{{maneuver}}: Neue Reihe nach {{count, number}} Sprüngen erreicht.",
   "notice.reached_many": "{{maneuver}}: Neue Reihe nach {{count, number}} Sprüngen erreicht.",
   "notice.waited": "Hier gewartet.",
+  "notice.waiting_gap": "Einen Schritt auf die Lücke warten.",
   "notice.model": "Modellwahl: {{maneuver}}. {{step}}",
   "maneuver.cross_ahead": "vorwärts überqueren",
   "maneuver.sidestep_left": "nach links gehen",
   "maneuver.sidestep_right": "nach rechts gehen",
   "maneuver.back_off": "zurückgehen",
   "maneuver.wait_here": "hier warten",
+  "maneuver.wait_gap": "auf die Lücke warten",
   "maneuver.detour_left": "links umgehen",
   "maneuver.detour_right": "rechts umgehen",
   "side.left": "links",
@@ -482,6 +485,7 @@ export const de = {
   "scene.clock.later": "der Kartenrand ist noch weit weg",
   "scene.clock.not_carried": "sie trägt das Huhn nicht zum Rand",
   "controller.waitGap": "wartet auf {{obstacle}} {{n, number}}/{{of, number}}",
+  "controller.waitLive": "wartet auf {{obstacle}} ({{n, number}})",
   "controller.waitRest":
     "das Feld ist frei, aber {{obstacle}} würde es vor dem nächsten Sprung erreichen · wartet {{n, number}}/{{of, number}}",
   "controller.pass.vehicle": "ein vorbeifahrendes Fahrzeug",
@@ -497,6 +501,7 @@ export const de = {
   "theater.move.sidestep_right": "Nach rechts ausweichen",
   "theater.move.back_off": "Zurückweichen",
   "theater.move.wait_here": "Hier warten",
+  "theater.move.wait_gap": "Auf die Lücke warten",
   "theater.move.leave_platform": "Plattform verlassen",
   "theater.move.step_off": "Vom Feld treten",
   "route.detour_left.label": "Links herum",

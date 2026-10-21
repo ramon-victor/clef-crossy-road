@@ -160,7 +160,7 @@ export const ja = {
   "player.random.detail": "5つの行動から同じ確率で選びます。",
   "player.clef-flash.label": "Clef-flash",
   "player.clef-flash.detail":
-    "Cloudflare の 9B 判断モデルです。コードが画面を言葉に変換し、前のマスに留まれるか、その行に動きがあるか、どちらに迂回するかを尋ねます。ジャンプや迂回は自動制御が無料で実行します。質問一式につき約 {{cost, number}} Neurons を消費します。 足場に乗っているときは、降りるタイミングかどうかを4つ目の質問で確認します。",
+    "Cloudflare の 9B 判断モデルです。コードが画面を言葉に変換し、前のマスに立てるか、その行に動きがあるか、どちらに迂回するか、今の場所にとどまれるかの4つを尋ねます。跳ぶか待つかは Clef が1歩ずつ決め、誤った答えを確認したり救ったりするものはありません。自動制御は迂回路と足場からの降り方を見つけるだけで、無料です。質問一式につき約 {{cost, number}} Neurons を消費し、1歩ごとに1回尋ねます。足場に乗っているときは、降りるタイミングかどうかを5つ目の質問で確認します。",
   "player.clef-27b.label": "Clef (27B)",
   "player.clef-27b.detail":
     "同じ仕組みでプレイする Cloudflare の大型モデルです。消費量は約 {{ratio, number}} 倍で、質問一式につき {{cost, number}} Neurons。1日の無料枠で約 {{sets, number}} 組の質問を送れます。このモデル用のキャッシュ済みマップは含まれていません。",
@@ -298,6 +298,7 @@ export const ja = {
   "notice.exposed_wait": "ニワトリを支えられないマスにとどまりました。誰も介入しませんでした。",
   "notice.edge_wait": "足場がニワトリをマップの外へ運んでいます。誰も介入しませんでした。",
   "notice.clear": "{{maneuver}}：マスが空いたため、ジャンプします。",
+  "notice.go": "{{maneuver}}：モデルが立てると答えたため、ジャンプします。",
   "notice.waiting":
     "{{maneuver}}：マスが空くのを待っています（{{cell}}）、{{waited, number}}/{{limit, number}}。",
   "notice.escape_one":
@@ -328,12 +329,14 @@ export const ja = {
   "notice.reached_other": "{{maneuver}}：{{count, number}} 回のジャンプで新しい行に到達しました。",
   "notice.reached_many": "{{maneuver}}：{{count, number}} 回のジャンプで新しい行に到達しました。",
   "notice.waited": "その場で待機しました。",
+  "notice.waiting_gap": "すき間を1歩待っています。",
   "notice.model": "モデルの選択：{{maneuver}}。{{step}}",
   "maneuver.cross_ahead": "前へ渡る",
   "maneuver.sidestep_left": "左へ移動",
   "maneuver.sidestep_right": "右へ移動",
   "maneuver.back_off": "後ろへ下がる",
   "maneuver.wait_here": "その場で待つ",
+  "maneuver.wait_gap": "すき間を待つ",
   "maneuver.detour_left": "左へ迂回",
   "maneuver.detour_right": "右へ迂回",
   "side.left": "左側",
@@ -460,6 +463,7 @@ export const ja = {
   "scene.clock.later": "マップの端までまだ距離がある",
   "scene.clock.not_carried": "ニワトリは端へ運ばれていない",
   "controller.waitGap": "{{obstacle}}を待機中 {{n, number}}/{{of, number}}",
+  "controller.waitLive": "{{obstacle}}を待っています（{{n, number}}）",
   "controller.waitRest":
     "着地先は空いていますが、次のジャンプまでに{{obstacle}}が来るため待機中 {{n, number}}/{{of, number}}",
   "controller.pass.vehicle": "車両の通過",
@@ -475,6 +479,7 @@ export const ja = {
   "theater.move.sidestep_right": "右へ移動",
   "theater.move.back_off": "後退",
   "theater.move.wait_here": "ここで待つ",
+  "theater.move.wait_gap": "すき間を待つ",
   "theater.move.leave_platform": "足場から降りる",
   "theater.move.step_off": "マスから離れる",
   "route.detour_left.label": "左側から回る",

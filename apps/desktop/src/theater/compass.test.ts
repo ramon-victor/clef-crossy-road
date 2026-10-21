@@ -17,10 +17,11 @@ describe("compass model context, separate from live execution", () => {
     const s = await answeredSession(routeAnswers("stand", "still", "wait_here", 0.9), 1);
     const { moves } = buildCompass(s.state());
     const p = Object.fromEntries(moves.map((m) => [m.action, m.p]));
-    expect(p.hop_forward).toBeCloseTo(0.95, 3);
+    // The model times the hop: the hop is the chance of a cell to stand on, and things that pass are a step of waiting.
+    expect(p.hop_forward).toBeCloseTo(0.9, 3);
     expect(p.hop_left).toBeCloseTo(0.01, 3);
     expect(p.hop_right).toBeCloseTo(0.03, 3);
-    expect(p.stay).toBeCloseTo(0.01, 3);
+    expect(p.stay).toBeCloseTo(0.06, 3);
     expect(p.hop_back).toBe(0);
     expect(moves.filter((m) => m.chosen).map((m) => m.action)).toEqual(["hop_forward"]);
   });
@@ -141,6 +142,29 @@ describe("stripOf: the latest moves under the game", () => {
       ["•", false],
       ["•", true],
       ["←", false],
+    ]);
+  });
+
+  it("folds the model's own run of waits into one big chip, as it asks again at every step", () => {
+    const liveWait = (index: number) =>
+      ({
+        index,
+        action: "stay",
+        decision: {
+          action: "stay",
+          source: "model",
+          extra: { live: true, controller: { kind: "wait", n: index + 1, of: 0, cell: "water" } },
+        },
+      }) as never;
+    const chips = stripOf([
+      liveWait(0),
+      liveWait(1),
+      liveWait(2),
+      entry(3, "hop_forward", "model", { kind: "hop" }),
+    ]);
+    expect(chips.map((c) => [c.glyph, c.big, c.count])).toEqual([
+      ["•", true, 3],
+      ["↑", true, 1],
     ]);
   });
 

@@ -676,6 +676,27 @@ describe("Session: holding a model's move for a person to read", () => {
     expect(s.game.score).toBe(1);
   });
 
+  it("does not hold a second wait for a gap in a row: the model is asked again at every step", async () => {
+    const wait: Decision = {
+      ...MODEL_ANSWER,
+      action: "stay",
+      extra: { live: true, controller: { kind: "wait", n: 1, of: 0, cell: "water", why: "gap" } },
+    };
+    const { s, at } = clocked(1000, [wait, wait, wait]);
+    s.frame(FRAME);
+    await settle();
+    expect(s.state().phase).toBe("reading");
+    at(1000);
+    s.frame(FRAME);
+    run(s, 0.5);
+    await settle();
+    s.frame(FRAME);
+    await settle();
+    // The first answer was read; the second, the same kind of wait, plays at once.
+    expect(s.state().decisions).toBeGreaterThanOrEqual(2);
+    expect(s.state().phase).not.toBe("reading");
+  });
+
   it("counts the move, in the statistics and for whoever follows the game, only when it is played", async () => {
     const paid: Decision = { ...MODEL_ANSWER, neurons: 5, inputTokens: 1000 };
     let clock = 0;

@@ -69,6 +69,20 @@ export function barsOf(log: DecisionLog): Bars | null {
   }
   const pCross = 1 - pClosed;
   const scaled = Object.entries(ways).map(([action, p]) => [action, pClosed * p]);
+  const pStand = asNumber(extra?.pStand);
+  if (extra?.live === true && pStand !== undefined) {
+    // The model times the hop: only a cell it called standable is a hop, and things that pass are a step of waiting.
+    return {
+      p: {
+        ...NONE,
+        ...Object.fromEntries(scaled),
+        hop_forward: pStand,
+        stay: pCross - pStand + pClosed * (ways.stay ?? 0),
+      },
+      blocked: new Set(),
+      branch: { kind: extra?.ahead === "passing" ? "passing" : "open", p: pCross },
+    };
+  }
   return {
     p: { ...NONE, hop_forward: pCross, ...Object.fromEntries(scaled) },
     blocked: new Set(),

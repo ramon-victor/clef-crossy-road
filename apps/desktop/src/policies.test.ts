@@ -36,11 +36,11 @@ describe("who can play", () => {
     expect(choices.filter((c) => c.kind === "model")).toHaveLength(2);
   });
 
-  it("both Clef play the gameplay of ADR-0011: the scene view, three lookups and the route controller", () => {
+  it("both Clef play the gameplay of ADR-0011 with the model timing the hop (ADR-0013): the scene view, the lookups and the path controller", () => {
     expect(DEFAULT_CLEF).toEqual({
       model: "clef-flash",
       encoder: "scene",
-      strategy: "route",
+      strategy: "route-live",
       manual: "lookup",
     });
     expect(CLEF_27B_CONFIG).toEqual({ ...DEFAULT_CLEF, model: "clef" });

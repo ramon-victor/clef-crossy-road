@@ -23,7 +23,10 @@ export function policyFacts(policyId: string | null): PolicyFacts | null {
     encoder: config.encoder,
     level,
     style: config.manual,
-    executor: config.strategy === "maneuver" || config.strategy === "route",
+    executor:
+      config.strategy === "maneuver" ||
+      config.strategy === "route" ||
+      config.strategy === "route-live",
   };
 }
 

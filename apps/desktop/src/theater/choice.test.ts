@@ -28,6 +28,35 @@ const logOf = (
   },
 });
 
+describe("barsOf: the model times the hop", () => {
+  const live = (ahead: string, pStand: number, pMoving: number) => {
+    const pCross = pStand + (1 - pStand) * pMoving;
+    const maneuver = ahead === "passing" ? "wait_gap" : "cross_ahead";
+    return logOf(
+      { live: true, maneuver, ahead, pStand, pMoving, pClosed: 1 - pCross },
+      {},
+      ahead === "passing" ? "stay" : "hop_forward",
+    );
+  };
+
+  it("gives the hop the chance of a cell to stand on and the step of waiting the rest of what passes", () => {
+    const bars = barsOf(live("passing", 0.2, 0.5));
+    expect(bars?.p.hop_forward).toBeCloseTo(0.2, 5);
+    // 0.4 of the answers say things pass, 0.4 close the way and 0.2 of those wait where they are.
+    expect(bars?.p.stay).toBeCloseTo(0.4 + 0.4 * 0.2, 5);
+    expect(bars?.p.hop_right).toBeCloseTo(0.4 * 0.6, 5);
+    expect(bars?.branch?.kind).toBe("passing");
+    expect(bars?.branch?.p).toBeCloseTo(0.6, 5);
+  });
+
+  it("names a cell to stand on an open way and the move it makes the hop", () => {
+    const log = live("open", 0.9, 0.5);
+    expect(winnerOf(log)).toBe("hop_forward");
+    expect(winnerOf(live("passing", 0.2, 0.5))).toBe("stay");
+    expect(barsOf(log)?.branch?.kind).toBe("open");
+  });
+});
+
 describe("winnerOf: the move the model chose", () => {
   it.each([
     ["cross_ahead", "hop_back", "hop_forward"],

@@ -160,7 +160,7 @@ export const fr = {
   "player.random.detail": "Choisit parmi les cinq actions avec la même probabilité.",
   "player.clef-flash.label": "Clef-flash",
   "player.clef-flash.detail":
-    "Modèle de décision 9B de Cloudflare. Notre code décrit l’écran avec des mots et pose trois questions : le poulet peut-il rester sur la case devant lui, y a-t-il du mouvement dans cette rangée et de quel côté faut-il contourner ? Un contrôleur automatique exécute gratuitement les sauts et les détours. Environ {{cost, number}} Neurons par série de questions. Sur une plateforme, une quatrième question vérifie s’il faut descendre.",
+    "Modèle de décision 9B de Cloudflare. Notre code décrit l’écran avec des mots et pose quatre questions : le poulet peut-il se poser sur la case devant lui, y a-t-il du mouvement dans cette rangée, de quel côté faut-il contourner et peut-il rester où il est ? Clef décide pas à pas quand sauter ou attendre, et rien ne vérifie ni ne rattrape une mauvaise réponse. Un contrôleur automatique ne fait que trouver le chemin du détour et la sortie de la plateforme, gratuitement. Environ {{cost, number}} Neurons par série de questions, une série par pas. Sur une plateforme, une cinquième question vérifie s’il faut descendre.",
   "player.clef-27b.label": "Clef (27B)",
   "player.clef-27b.detail":
     "Le grand modèle de Cloudflare, avec les mêmes mécanismes de jeu. Il consomme environ {{ratio, number}} fois plus : {{cost, number}} Neurons par série de questions, soit environ {{sets, number}} séries par jour avec le quota gratuit. Aucune carte en cache n’est incluse pour ce modèle.",
@@ -310,6 +310,7 @@ export const fr = {
   "notice.edge_wait":
     "Une plateforme emporte le poulet hors de la carte. Personne n'est intervenu.",
   "notice.clear": "{{maneuver}} : la case est libre ; saut en cours.",
+  "notice.go": "{{maneuver}} : le modèle a dit que la case est praticable ; saut.",
   "notice.waiting":
     "{{maneuver}} : attente d’une case libre ({{cell}}), {{waited, number}}/{{limit, number}}.",
   "notice.escape_one":
@@ -340,12 +341,14 @@ export const fr = {
   "notice.reached_other": "{{maneuver}} : nouvelle rangée atteinte après {{count, number}} sauts.",
   "notice.reached_many": "{{maneuver}} : nouvelle rangée atteinte après {{count, number}} sauts.",
   "notice.waited": "Attente sur place.",
+  "notice.waiting_gap": "Attente d’un pas pour le passage.",
   "notice.model": "Choix du modèle : {{maneuver}}. {{step}}",
   "maneuver.cross_ahead": "traverser devant",
   "maneuver.sidestep_left": "aller à gauche",
   "maneuver.sidestep_right": "aller à droite",
   "maneuver.back_off": "reculer",
   "maneuver.wait_here": "attendre ici",
+  "maneuver.wait_gap": "attendre le passage",
   "maneuver.detour_left": "contourner par la gauche",
   "maneuver.detour_right": "contourner par la droite",
   "side.left": "gauche",
@@ -476,6 +479,7 @@ export const fr = {
   "scene.clock.later": "le bord de la carte est encore loin",
   "scene.clock.not_carried": "elle n’entraîne pas le poulet vers le bord",
   "controller.waitGap": "attend {{obstacle}} {{n, number}}/{{of, number}}",
+  "controller.waitLive": "attend {{obstacle}} ({{n, number}})",
   "controller.waitRest":
     "la case est libre, mais {{obstacle}} l’atteindrait avant que le poulet reparte · attente {{n, number}}/{{of, number}}",
   "controller.pass.vehicle": "le passage d’un véhicule",
@@ -491,6 +495,7 @@ export const fr = {
   "theater.move.sidestep_right": "Faire un pas à droite",
   "theater.move.back_off": "Reculer",
   "theater.move.wait_here": "Attendre ici",
+  "theater.move.wait_gap": "Attendre le passage",
   "theater.move.leave_platform": "Quitter la plateforme",
   "theater.move.step_off": "Quitter la case",
   "route.detour_left.label": "Par la gauche",

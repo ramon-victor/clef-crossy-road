@@ -67,10 +67,14 @@ export function waitingText(
         ? t(`controller.pass.${cell}`)
         : t("controller.pass.other", { cell: spoken(cell) });
   }
-  return t(step.why === "no_rest" ? "controller.waitRest" : "controller.waitGap", {
-    ...step,
-    obstacle,
-  });
+  // A wait with no limit (`of` is 0) is the model's own, one decision at a time.
+  const key =
+    step.why === "no_rest"
+      ? "controller.waitRest"
+      : step.of === 0
+        ? "controller.waitLive"
+        : "controller.waitGap";
+  return t(key, { ...step, obstacle });
 }
 
 export function walkText(

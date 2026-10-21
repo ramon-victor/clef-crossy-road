@@ -157,7 +157,7 @@ export const en = {
   "player.random.detail": "Chooses uniformly among the five actions.",
   "player.clef-flash.label": "Clef-flash",
   "player.clef-flash.detail":
-    "Cloudflare’s 9B decision model. Our code describes the screen in words and asks three questions: can the chicken stand on the cell ahead, do things move there, and which side should it go around? An automatic controller handles the hops and detours for free. About {{cost, number}} Neurons per question set. On a platform, a fourth question checks whether it is time to get off.",
+    "Cloudflare’s 9B decision model. Our code describes the screen in words and asks four questions: can the chicken stand on the cell ahead, do things move there, which side should it go around, and can it stay where it is? Clef decides, step by step, when to hop or wait, and nothing checks or rescues a wrong answer. An automatic controller only finds the way round and off the platform, for free. About {{cost, number}} Neurons per question set, one set per step. On a platform, a fifth question checks whether it is time to get off.",
   "player.clef-27b.label": "Clef (27B)",
   "player.clef-27b.detail":
     "Cloudflare’s larger model, with the same gameplay. About {{ratio, number}} times the cost: {{cost, number}} Neurons per question set, or about {{sets, number}} sets per free day. No cached maps are included for this model.",
@@ -294,6 +294,7 @@ export const en = {
   "notice.exposed_wait": "Stayed on a cell that cannot hold the chicken. Nothing stepped in.",
   "notice.edge_wait": "A platform is carrying the chicken off the map. Nothing stepped in.",
   "notice.clear": "{{maneuver}}: the cell is clear; hopping.",
+  "notice.go": "{{maneuver}}: the model said the cell can be stood on; hopping.",
   "notice.waiting":
     "{{maneuver}}: waiting for the cell to clear ({{cell}}), {{waited, number}}/{{limit, number}}.",
   "notice.escape_one":
@@ -324,12 +325,14 @@ export const en = {
   "notice.reached_other": "{{maneuver}}: reached a new row after {{count, number}} hops.",
   "notice.reached_many": "{{maneuver}}: reached a new row after {{count, number}} hops.",
   "notice.waited": "Waited here.",
+  "notice.waiting_gap": "Waiting one step for the gap.",
   "notice.model": "Model chose: {{maneuver}}. {{step}}",
   "maneuver.cross_ahead": "cross ahead",
   "maneuver.sidestep_left": "step left",
   "maneuver.sidestep_right": "step right",
   "maneuver.back_off": "step back",
   "maneuver.wait_here": "wait here",
+  "maneuver.wait_gap": "wait for the gap",
   "maneuver.detour_left": "detour left",
   "maneuver.detour_right": "detour right",
   "side.left": "left",
@@ -458,6 +461,7 @@ export const en = {
   "scene.clock.later": "the edge of the world is still a way off",
   "scene.clock.not_carried": "it is not taking the chicken to the edge",
   "controller.waitGap": "waiting for {{obstacle}} {{n, number}}/{{of, number}}",
+  "controller.waitLive": "waiting for {{obstacle}} ({{n, number}})",
   "controller.waitRest":
     "the cell is clear, but {{obstacle}} would reach it before the chicken could go on · waiting {{n, number}}/{{of, number}}",
   "controller.pass.vehicle": "a vehicle to pass",
@@ -473,6 +477,7 @@ export const en = {
   "theater.move.sidestep_right": "Sidestep right",
   "theater.move.back_off": "Back off",
   "theater.move.wait_here": "Wait here",
+  "theater.move.wait_gap": "Wait for the gap",
   "theater.move.leave_platform": "Get off the platform",
   "theater.move.step_off": "Step off the cell",
   "route.detour_left.label": "Round on the left",

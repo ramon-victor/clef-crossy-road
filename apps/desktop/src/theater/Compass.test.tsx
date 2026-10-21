@@ -31,7 +31,7 @@ describe("compass execution hierarchy", () => {
     const chips = [...screen.container.querySelectorAll(".cp")];
     expect(
       Object.fromEntries(chips.map((c) => [c.getAttribute("data-label"), c.textContent])),
-    ).toEqual({ hop_forward: "95%", hop_left: "1%", hop_right: "3%", stay: "1%" });
+    ).toEqual({ hop_forward: "90%", hop_left: "1%", hop_right: "3%", stay: "6%" });
     expect(
       chips.filter((c) => c.classList.contains("chosen")).map((c) => c.getAttribute("data-label")),
     ).toEqual(["hop_forward"]);
@@ -72,7 +72,7 @@ describe("compass execution hierarchy", () => {
     );
     const screen = render(compass({ action: "stay", next: null, blocked: false, overlay: null }));
     const pause = screen.container.querySelector('.cp[data-label="stay"]');
-    expect(pause?.textContent).toBe("95%");
+    expect(pause?.textContent).toBe("90%");
     expect(pause?.querySelector(".cp-arrow")).not.toBeNull();
     expect(pause?.classList.contains("chosen")).toBe(true);
 

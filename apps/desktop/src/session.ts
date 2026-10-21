@@ -120,6 +120,11 @@ const TURNS = 6;
 /** More than the longest manoeuvre: a crossing waits up to 15 steps for a gap and a detour walks up to 12 hops. */
 const TURN_STEPS = 24;
 
+/** A step the model spent waiting for a gap (`route-live`): its own decision, asked again at every step. */
+const liveWait = (decision: Decision): boolean =>
+  decision.extra?.live === true &&
+  (decision.extra.controller as { kind?: unknown } | undefined)?.kind === "wait";
+
 export class Session {
   game: Game;
   private seed = 1;
@@ -496,7 +501,9 @@ export class Session {
   /** How long this answer is held before it is played: only a model's, and only while the world waits for it. */
   private lingerFor(decision: Decision): number {
     const asked = decision.source !== "executor" && decision.sent !== undefined;
-    return this.stepMode && asked ? this.lingerMs / this.speed : 0;
+    // A model that waits for a gap is asked again every step: reading each of those answers would stop the game.
+    const again = liveWait(decision) && this.last !== null && liveWait(this.last.decision);
+    return this.stepMode && asked && !again ? this.lingerMs / this.speed : 0;
   }
 
   /** The chicken makes the move. In step timing this starts the hop the next decision waits for. */
