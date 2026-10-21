@@ -137,7 +137,7 @@ request costs roughly 6 neurons and a game takes tens of requests; the 27B model
 `pnpm bench plan` before any benchmark that calls a model: it estimates the cost and splits a run into days that fit.
 
 **Replays are free only with a local cache.** The decision cache lives in `runs/` (gitignored), so a fresh clone has none. The
-desktop app opens on Clef-flash at seed 7, which then calls the API and needs credentials. Use the look-ahead player to stay at
+desktop app opens on Clef-flash at seed 624140, which then calls the API and needs credentials. Use the look-ahead player to stay at
 zero cost.
 
 ## Benchmark
