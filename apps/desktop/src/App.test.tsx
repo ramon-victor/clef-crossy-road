@@ -80,6 +80,7 @@ vi.mock("./GameCanvas.tsx", () => ({
     onShowControls,
     onToggleControls,
     controlsVisible,
+    controlsTarget,
     onToggleDecisions,
     decisionsVisible,
   }: GameCanvasProps) => (
@@ -88,7 +89,12 @@ vi.mock("./GameCanvas.tsx", () => ({
         game control
       </button>
       {onToggleControls && (
-        <button type="button" onClick={onToggleControls} aria-pressed={controlsVisible}>
+        <button
+          type="button"
+          onClick={onToggleControls}
+          aria-pressed={controlsVisible}
+          data-target={controlsTarget}
+        >
           settings
         </button>
       )}
@@ -109,6 +115,7 @@ afterEach(async () => {
   runtime.snapshot = null;
   runtime.controlsVisible = false;
   localStorage.removeItem("ccr.theater");
+  localStorage.removeItem("ccr.settings");
 });
 
 describe("game window shortcuts", () => {
@@ -254,5 +261,68 @@ describe("game window shortcuts", () => {
     expect(event.defaultPrevented).toBe(false);
     expect(showControls).not.toHaveBeenCalled();
     expect(runtime.bridge.run).not.toHaveBeenCalled();
+  });
+});
+
+describe("side panel toggles", () => {
+  const mount = (desktop = false) =>
+    render(
+      <LanguageProvider initial={{ preference: "en", detected: "en" }}>
+        <App desktop={desktop} />
+      </LanguageProvider>,
+    );
+  const settingsPanel = (view: ReturnType<typeof mount>) =>
+    view.container.querySelector("aside.panel");
+
+  it("hides and shows the settings sidebar from the game, and remembers the choice", async () => {
+    const view = mount();
+    expect(settingsPanel(view)).not.toBeNull();
+    const toggle = view.getByRole("button", { name: "settings" });
+    expect(toggle.getAttribute("data-target")).toBe("sidebar");
+    fireEvent.click(toggle);
+    await waitFor(() => expect(settingsPanel(view)).toBeNull());
+    expect(localStorage.getItem("ccr.settings")).toBe("off");
+    view.unmount();
+
+    const reopened = mount();
+    expect(settingsPanel(reopened)).toBeNull();
+    fireEvent.click(reopened.getByRole("button", { name: "settings" }));
+    await waitFor(() => expect(settingsPanel(reopened)).not.toBeNull());
+    expect(localStorage.getItem("ccr.settings")).toBe("on");
+  });
+
+  it("reopens the hidden sidebar from the game's Configure action, offered only then", async () => {
+    const view = mount();
+    const game = view.getByRole("button", { name: "game control" });
+    fireEvent.click(game);
+    expect(settingsPanel(view)).not.toBeNull();
+    fireEvent.click(view.getByRole("button", { name: "settings" }));
+    await waitFor(() => expect(settingsPanel(view)).toBeNull());
+    fireEvent.click(game);
+    await waitFor(() => expect(settingsPanel(view)).not.toBeNull());
+  });
+
+  it("brings the conversation back from the game after it was closed", async () => {
+    const view = mount();
+    const toggle = view.getByRole("button", { name: "decisions" });
+    // The app opens on a model player until the launch options pick the human one, which starts closed.
+    await waitFor(() => expect(toggle.getAttribute("aria-pressed")).toBe("false"));
+    fireEvent.click(toggle);
+    await waitFor(() => expect(view.getByTestId("conversation")).toBeTruthy());
+    expect(toggle.getAttribute("aria-pressed")).toBe("true");
+    fireEvent.click(toggle);
+    await waitFor(() => expect(view.queryByTestId("conversation")).toBeNull());
+    expect(toggle.getAttribute("aria-pressed")).toBe("false");
+    fireEvent.click(toggle);
+    await waitFor(() => expect(view.getByTestId("conversation")).toBeTruthy());
+  });
+
+  it("keeps the stored sidebar choice out of the native window toggle", async () => {
+    const view = mount(true);
+    const settings = view.getByRole("button", { name: "settings" });
+    expect(settings.getAttribute("data-target")).toBe("window");
+    fireEvent.click(settings);
+    await waitFor(() => expect(settings.getAttribute("aria-pressed")).toBe("true"));
+    expect(localStorage.getItem("ccr.settings")).toBeNull();
   });
 });

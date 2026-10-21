@@ -38,7 +38,7 @@ Each language has a fixed translator rather than mutating a global language sing
 
 `SessionState.errorInfo` allows an already displayed error to be translated again; `BridgeError` preserves classification across Rust/Vite, client and session. Inspector tabs use stable `data-tab` attributes so self-tests do not depend on English labels. CLI, reports and terminal logs remain English/ASCII. No dependencies or behavior were added to the deterministic core for localization.
 
-Only non-sensitive preferences use browser storage: `ccr.locale`, `ccr.theater`, `ccr.compass` and `ccr.theater.pace`. Native auxiliary-window visibility is per run; `ccr.theater` controls the browser column only. Pinned decisions are retranslated from original records. Credentials remain in the backend ([SECURITY.md](../SECURITY.md)).
+Only non-sensitive preferences use browser storage: `ccr.locale`, `ccr.theater`, `ccr.settings`, `ccr.compass` and `ccr.theater.pace`. Native auxiliary-window visibility is per run; `ccr.theater` and `ccr.settings` control the browser columns only. Pinned decisions are retranslated from original records. Credentials remain in the backend ([SECURITY.md](../SECURITY.md)).
 
 ## Editing catalogs
 

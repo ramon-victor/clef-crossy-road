@@ -116,6 +116,8 @@ export const ja = {
   "death.train": "列車にひかれた",
   "death.out_of_bounds": "マップの外に出た",
   "panel.label": "ゲームの操作",
+  "panel.show": "設定を表示",
+  "panel.hide": "設定を非表示",
   "player.who": "プレイヤー",
   "player.modelController": "モデル＋自動制御",
   "player.model": "AI プレイヤー",

@@ -25,6 +25,8 @@ export interface GameCanvasProps {
   onShowControls?: (() => void) | undefined;
   onToggleControls?: (() => void) | undefined;
   controlsVisible?: boolean;
+  /** Where the settings live, which decides how their button is worded. */
+  controlsTarget?: keyof typeof CONTROLS_TEXT;
   onToggleDecisions?: (() => void) | undefined;
   decisionsVisible?: boolean;
   /** The model's decision drawn around the chicken. It replaces the thought bubble while it is on. */
@@ -33,6 +35,15 @@ export interface GameCanvasProps {
 
 /** How far above its feet the compass is centred, in world units: the middle of the chicken. */
 const COMPASS_LIFT = 0.5;
+
+const CONTROLS_TEXT = {
+  window: {
+    show: "windows.openControls",
+    hide: "windows.hideControls",
+    showHint: "windows.openControlsHelp",
+  },
+  sidebar: { show: "panel.show", hide: "panel.hide", showHint: "panel.show" },
+} as const;
 
 /** Owns the WebGL view and the animation loop; everything else is plain DOM on top of it. */
 export function GameCanvas(props: GameCanvasProps) {
@@ -158,6 +169,7 @@ export function GameCanvas(props: GameCanvasProps) {
   const chosen = last ? modelChoice(last) : null;
   const shownMove = chosen?.move ?? last?.action;
   const chosenP = chosen?.bars?.p[chosen.move];
+  const controlsText = CONTROLS_TEXT[props.controlsTarget ?? "window"];
   const caption = props.compass.on ? buildCaption(state, execution, translation) : null;
 
   return (
@@ -175,8 +187,8 @@ export function GameCanvas(props: GameCanvasProps) {
           class="game-tool open-controls"
           onClick={props.onToggleControls}
           aria-pressed={props.controlsVisible ?? false}
-          aria-label={t(props.controlsVisible ? "windows.hideControls" : "windows.openControls")}
-          title={t(props.controlsVisible ? "windows.hideControls" : "windows.openControlsHelp")}
+          aria-label={t(props.controlsVisible ? controlsText.hide : controlsText.show)}
+          title={t(props.controlsVisible ? controlsText.hide : controlsText.showHint)}
         >
           <svg
             viewBox="0 0 24 24"

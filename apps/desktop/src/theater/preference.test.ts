@@ -64,7 +64,12 @@ describe("the flags", () => {
   });
 
   it("list every key they keep, so it can be put back", () => {
-    expect(PREFERENCE_KEYS).toEqual(["ccr.theater", "ccr.compass", "ccr.theater.pace"]);
+    expect(PREFERENCE_KEYS).toEqual([
+      "ccr.theater",
+      "ccr.compass",
+      "ccr.settings",
+      "ccr.theater.pace",
+    ]);
   });
 });
 

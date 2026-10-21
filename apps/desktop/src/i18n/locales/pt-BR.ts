@@ -116,6 +116,8 @@ export const ptBR = {
   "death.train": "Atingido por um trem",
   "death.out_of_bounds": "Saiu dos limites do mapa",
   "panel.label": "Controles do jogo",
+  "panel.show": "Exibir configurações",
+  "panel.hide": "Ocultar configurações",
   "player.who": "Quem joga",
   "player.modelController": "Modelo + controlador",
   "player.model": "Jogador com IA",

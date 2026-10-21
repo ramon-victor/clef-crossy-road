@@ -88,6 +88,7 @@ export function App({ desktop = false }: { desktop?: boolean }) {
     desktop ? false : readFlag("theater"),
   );
   const [compassChoice, setCompassChoice] = useState<boolean | null>(() => readFlag("compass"));
+  const [sidebarOpen, setSidebarOpen] = useState(() => readFlag("settings") ?? true);
   const [pace, setPaceState] = useState<Pace>(() => readPace());
   const viewRef = useRef<GameView | null>(null);
   const [artwork, setArtwork] = useState<ChickenArtwork | null | undefined>(undefined);
@@ -221,6 +222,11 @@ export function App({ desktop = false }: { desktop?: boolean }) {
     void setDecisionsVisible(showTheater).catch(() => setWindowFailed(true));
   }, [desktop, launchReady, windowsReady, showTheater]);
   const theaterVisible = desktop ? decisionsVisible : showTheater;
+  const settingsVisible = desktop ? controlsVisible : sidebarOpen;
+  const setSidebar = useCallback((on: boolean) => {
+    setSidebarOpen(on);
+    writeFlag("settings", on);
+  }, []);
   const showCompass = openByDefault(compassChoice, selected?.kind);
   const setCompass = useCallback((on: boolean) => {
     setCompassChoice(on);
@@ -422,21 +428,28 @@ export function App({ desktop = false }: { desktop?: boolean }) {
   }, [desktop, session, setTheater]);
 
   const openControls = useCallback(() => {
-    if (desktop)
-      void showControls()
-        .then(() => setWindowFailed(false))
-        .catch(() => setWindowFailed(true));
-  }, [desktop]);
+    if (!desktop) {
+      setSidebar(true);
+      return;
+    }
+    void showControls()
+      .then(() => setWindowFailed(false))
+      .catch(() => setWindowFailed(true));
+  }, [desktop, setSidebar]);
   const toggleDecisions = useCallback(() => {
     void execute({ type: "theater", enabled: !theaterVisible })
       .then(() => setWindowFailed(false))
       .catch(() => setWindowFailed(true));
   }, [theaterVisible, execute]);
   const toggleSettings = useCallback(() => {
+    if (!desktop) {
+      setSidebar(!sidebarOpen);
+      return;
+    }
     void toggleControls()
       .then(() => setWindowFailed(false))
       .catch(() => setWindowFailed(true));
-  }, []);
+  }, [desktop, sidebarOpen, setSidebar]);
 
   useEffect(() => {
     const unlockSound = () => sounds.unlock();
@@ -550,10 +563,11 @@ export function App({ desktop = false }: { desktop?: boolean }) {
           conversationOpen: theaterVisible,
           onConversation: () => void openDecisions().catch(() => setWindowFailed(true)),
         }}
-        onShowControls={desktop ? openControls : undefined}
-        onToggleControls={desktop ? toggleSettings : undefined}
-        controlsVisible={controlsVisible}
-        onToggleDecisions={desktop ? toggleDecisions : undefined}
+        onShowControls={desktop || !settingsVisible ? openControls : undefined}
+        onToggleControls={toggleSettings}
+        controlsVisible={settingsVisible}
+        controlsTarget={desktop ? "window" : "sidebar"}
+        onToggleDecisions={toggleDecisions}
         decisionsVisible={theaterVisible}
       />
       {windowFailed && (
@@ -577,7 +591,9 @@ export function App({ desktop = false }: { desktop?: boolean }) {
           fps={fps}
         />
       )}
-      {!desktop && <ControlSurface data={controls} bridge={bridge} send={execute} />}
+      {!desktop && settingsVisible && (
+        <ControlSurface data={controls} bridge={bridge} send={execute} />
+      )}
     </div>
   );
 }

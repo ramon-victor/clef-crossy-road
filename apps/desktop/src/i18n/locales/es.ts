@@ -116,6 +116,8 @@ export const es = {
   "death.train": "Atropellado por un tren",
   "death.out_of_bounds": "Fuera de los límites del mapa",
   "panel.label": "Controles del juego",
+  "panel.show": "Mostrar configuración",
+  "panel.hide": "Ocultar configuración",
   "player.who": "Quién juega",
   "player.modelController": "Modelo + controlador",
   "player.model": "Jugador con IA",

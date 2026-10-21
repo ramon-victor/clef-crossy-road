@@ -13,7 +13,7 @@ How to run Clef Crossy Road in the browser or its three Tauri windows, who can p
 
 **Platform.** The desktop app needs Node 24+, pnpm 12.14.0 and Rust with the [Tauri prerequisites](https://v2.tauri.app/start/prerequisites/) for the platform (MSVC C++ build tools and WebView2 on Windows). Desktop launch has been verified on Windows, and backend tests have also run on Linux. CI checks TypeScript and the web build on Windows, Linux and macOS; this does not establish native UI support on every platform. The launchers are Windows scripts.
 
-Desktop starts with only the game visible. Settings and decisions are created hidden; each matching game button toggles its window. **F2** always opens and focuses settings, **T** toggles decisions, and **I** opens the latest exact model request. A minimized settings window is restored by its game button. The settings button follows native visibility, including title-bar closure. An earlier visibility preference never opens an auxiliary window at native startup. Browser development keeps an integrated layout.
+Desktop starts with only the game visible. Settings and decisions are created hidden; each matching game button toggles its window. **F2** always opens and focuses settings, **T** toggles decisions, and **I** opens the latest exact model request. A minimized settings window is restored by its game button. The settings button follows native visibility, including title-bar closure. An earlier visibility preference never opens an auxiliary window at native startup. Browser development keeps an integrated layout: settings and decisions are side columns next to the game, and the same two buttons over the game hide or show them (**T** also toggles decisions; **F2** stays with the browser). The choice is kept in `ccr.settings` and `ccr.theater`.
 
 The game opens in a phone-like portrait window, up to 440 × 800 CSS pixels. Settings opens at 320 pixels wide on its left and decisions at 360 pixels wide on its right, with the same height and aligned tops. On shorter displays the game narrows proportionally, down to 360 pixels. Normal resize minimums are game 360 × 640, settings 320 × 640 and decisions 360 × 640; these shrink only when the work area cannot fit them. Placement includes the monitor work area, margins and window decorations. Windows overlap within the work area when necessary.
 
@@ -94,7 +94,7 @@ Movement and timing keys are ignored while a field, button, expander or dialog h
 | F2 | Show and focus native controls |
 | I | Show the latest answered request in the conversation’s inline technical details |
 | C | Toggle the compass around the chicken |
-| T | Show or hide the independent decisions window (conversation column in browser development) |
+| T | Show or hide the independent decisions window (conversation column in browser development, also from the button over the game) |
 | Esc | Close the inspector, the info popover or the Cloudflare dialog |
 
 ## Settings and decisions
