@@ -95,7 +95,7 @@ Design influences are listed in [references.md](references.md#related-work). Lis
 
 ## Controller versus model
 
-The controller does the hopping, picks the instant and walks the detour. Historically the model chose crossing, a detour or waiting. Current gameplay also asks when to leave a platform and, if a maneuver cannot start, tries other detours in the model's probability order. Both versions require labelled comparisons ([ADR-0011](adr/0011-route-controller-three-lookups.md)).
+Historically the controller did the hopping, picked the instant and walked the detour, and the model chose crossing, a detour or waiting. Since [ADR-0013](adr/0013-model-times-the-hop.md) the model also times the hop, and the controller walks detours only. Current gameplay also asks when to leave a platform and, if a maneuver cannot start, tries other detours in the model's probability order. Both versions require labelled comparisons ([ADR-0011](adr/0011-route-controller-three-lookups.md)).
 
 | Reference (100 seeds) | Rows | What it isolates |
 |---|---|---|
