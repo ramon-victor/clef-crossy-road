@@ -3,7 +3,13 @@ import { ACTION_GLYPH } from "../format.ts";
 import { type Translator, translator } from "../i18n/translate.ts";
 import type { SessionState } from "../session.ts";
 import { barsOf, winnerOf } from "./choice.ts";
-import { controllerSays, controllerStep, foldWaits, waitsForGap } from "./controller.ts";
+import {
+  controllerSays,
+  controllerStep,
+  foldWaits,
+  waitingStep,
+  waitsForGap,
+} from "./controller.ts";
 import { pickMode } from "./frame.ts";
 import { decisionLabel } from "./labels.ts";
 import { asText } from "./view.ts";
@@ -41,6 +47,8 @@ export interface CompassView {
   doing: string | null;
   /** What the answers come to ("Go straight · when clear"). */
   verdict: string | null;
+  /** The move the controller is waiting to make, while it waits for a gap; null when it waits for nothing or the model chose to wait. */
+  waiting: Action | null;
   /** When the question went out, in the session's clock; set while the model reads. */
   since: number | null;
   /** The latest moves, the model's own big and the controller's small. */
@@ -53,6 +61,7 @@ const ASLEEP: Omit<CompassView, "strip"> = {
   moves: [],
   doing: null,
   verdict: null,
+  waiting: null,
   since: null,
 };
 
@@ -127,6 +136,7 @@ export function buildCompass(
       turn && waitsForGap(turn)
         ? translation.t("theater.whenClear", { move: decision.label })
         : decision.label,
+    waiting: waitingStep(state) && chosen !== "stay" ? chosen : null,
     strip,
   };
 }

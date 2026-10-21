@@ -1202,6 +1202,14 @@ canvas.game:focus-visible {
   white-space: nowrap;
   opacity: 0.72;
   transform: translate(calc(var(--lx) - 50%), calc(var(--ly) - 50%));
+  transition:
+    opacity 0.2s,
+    border-color 0.2s;
+}
+
+.cp-arrow {
+  margin-right: 3px;
+  vertical-align: -1px;
 }
 
 .cp::after {

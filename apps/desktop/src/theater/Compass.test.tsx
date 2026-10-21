@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { LanguageProvider } from "../i18n/provider.tsx";
 import { Compass } from "./Compass.tsx";
 import type { ExecutionView } from "./execution.ts";
-import { answeredSession, routeAnswers } from "./test-support.ts";
+import { answeredSession, routeAnswers, waitingState } from "./test-support.ts";
 
 afterEach(async () => {
   cleanup();
@@ -55,6 +55,30 @@ describe("compass execution hierarchy", () => {
     expect(screen.container.querySelector('[data-move="stay"]')?.classList.contains("actual")).toBe(
       false,
     );
+  });
+
+  it("keeps the pick the pause waits for on its chip through the frames between two waits", async () => {
+    const session = await answeredSession(routeAnswers("stand", "still", "wait_here", 0.9), 1);
+    const state = waitingState(session.state());
+    const compass = (execution: ExecutionView) => (
+      <LanguageProvider initial={{ preference: "en", detected: "en" }}>
+        <Compass
+          session={session}
+          state={state}
+          execution={execution}
+          anchorRef={{ current: null }}
+        />
+      </LanguageProvider>
+    );
+    const screen = render(compass({ action: "stay", next: null, blocked: false, overlay: null }));
+    const pause = screen.container.querySelector('.cp[data-label="stay"]');
+    expect(pause?.textContent).toBe("95%");
+    expect(pause?.querySelector(".cp-arrow")).not.toBeNull();
+    expect(pause?.classList.contains("chosen")).toBe(true);
+
+    screen.rerender(compass({ action: null, next: null, blocked: false, overlay: null }));
+    expect(screen.container.querySelector(".cb.actual")).toBeNull();
+    expect(screen.container.querySelector('.cp[data-label="stay"]')).toBe(pause);
   });
 
   it("labels a held or queued answer as next and clears the display on error", async () => {

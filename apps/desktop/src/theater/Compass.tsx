@@ -25,7 +25,7 @@ const LABEL_AT: Readonly<Record<Action, { x: number; y: number }>> = {
   hop_back: { x: 0, y: 132 },
   hop_left: { x: -142, y: 0 },
   hop_right: { x: 142, y: 0 },
-  stay: { x: 112, y: 71 },
+  stay: { x: 120, y: 71 },
 };
 
 /** A move that rounds to 0% has no chip; the decisions window lists them all. */
@@ -56,6 +56,7 @@ export function Compass({ session, state, execution, anchorRef }: CompassProps) 
       execution.next !== null ||
       execution.blocked);
   const moves = view.moves.length ? view.moves : ACTIONS.map((action) => moveOf(action));
+  const pick = moves.find((move) => move.action === view.waiting);
   return (
     <div ref={anchorRef} class="compass-anchor" aria-hidden="true">
       <EdgeClock session={session} />
@@ -86,16 +87,19 @@ export function Compass({ session, state, execution, anchorRef }: CompassProps) 
             );
           })}
           {moves.map((move) => {
-            if (!labelled(move.p)) return null;
+            const waitsFor = move.action === "stay" && labelled(pick?.p ?? null) ? pick : undefined;
+            const shown = waitsFor ?? move;
+            if (!labelled(shown.p)) return null;
             const at = LABEL_AT[move.action];
             return (
               <div
                 key={move.action}
-                class={`cp ${move.chosen ? "chosen" : ""}`}
+                class={`cp ${shown.chosen ? "chosen" : ""}`}
                 data-label={move.action}
-                style={`--lx:${at.x}px;--ly:${at.y}px;--p:${move.p.toFixed(3)}`}
+                style={`--lx:${at.x}px;--ly:${at.y}px;--p:${shown.p.toFixed(3)}`}
               >
-                {percent(move.p)}
+                {waitsFor && <Glyph glyph={waitsFor.glyph} size={11} class="cp-arrow" />}
+                {percent(shown.p)}
               </div>
             );
           })}
