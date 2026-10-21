@@ -19,7 +19,10 @@ describe("baselines", () => {
     expect(result.policy).toBe("always-forward");
   });
 
-  it("look-ahead is far better than the trivial baselines (it reads the simulator)", async () => {
+  // 180 full games: about 2 s here and on a busy CI runner, so it gets a 30 s budget.
+  it("look-ahead is far better than the trivial baselines (it reads the simulator)", {
+    timeout: 30_000,
+  }, async () => {
     const [ahead, forward, random] = await Promise.all(
       [lookaheadPolicy(3), alwaysForward, randomPolicy].map((p) => meanScore(p, seeds(60))),
     );

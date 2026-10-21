@@ -22,6 +22,20 @@ function stepwise(m: Mover, ticks: number) {
   return out;
 }
 
+/**
+ * The first tick where the closed form leaves the stepwise rule, or null. Same tolerance as
+ * `toBeCloseTo(x, 6)`; one assertion per mover instead of one per tick keeps the test in milliseconds.
+ */
+function firstMismatch(m: Mover, ticks: number) {
+  const ref = stepwise(m, ticks);
+  for (let n = 0; n <= ticks; n++) {
+    const want = ref[n] ?? { x: Number.NaN, wrapped: false };
+    const got = { x: moverX(m, n), wrapped: moverWrapped(m, n) };
+    if (!(Math.abs(got.x - want.x) < 5e-7) || got.wrapped !== want.wrapped) return { n, got, want };
+  }
+  return null;
+}
+
 describe("mover closed form", () => {
   it("matches the stepwise upstream rule for random cars and trains", () => {
     const rng = createRng(2024, 1);
@@ -30,19 +44,10 @@ describe("mover closed form", () => {
       const speed = (rng.next() * 0.06 + 0.02) * dir;
       const x0 = -6 * dir - rng.next() * 8 * dir;
       const m = createMover({ kind: "car", variant: 0, width: 2, speed, x0, wrapOffset: 11 });
-      const ref = stepwise(m, 1500);
-      for (let n = 0; n <= 1500; n++) {
-        expect(moverX(m, n)).toBeCloseTo(ref[n]?.x ?? Number.NaN, 6);
-        expect(moverWrapped(m, n)).toBe(ref[n]?.wrapped);
-      }
+      expect(firstMismatch(m, 1500)).toBeNull();
     }
     for (let trial = 0; trial < 50; trial++) {
-      const t = trainAt(rng.next() * 220 - 110);
-      const ref = stepwise(t, 1500);
-      for (let n = 0; n <= 1500; n++) {
-        expect(moverX(t, n)).toBeCloseTo(ref[n]?.x ?? Number.NaN, 6);
-        expect(moverWrapped(t, n)).toBe(ref[n]?.wrapped);
-      }
+      expect(firstMismatch(trainAt(rng.next() * 220 - 110), 1500)).toBeNull();
     }
   });
 

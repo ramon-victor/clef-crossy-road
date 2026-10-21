@@ -44,6 +44,12 @@ const SMALL = {
   "platform-far": 3,
 } as const;
 
+// Sampling plays 40 seeded games: about a second here, up to 5 s on a busy CI runner. The describes
+// below share one sample (the tests only read it), and the calls that sample get a 30 s budget.
+const SAMPLING_TIMEOUT = 30_000;
+let sampled: Promise<ProbeState[]> | undefined;
+const sample = () => (sampled ??= sampleStates({ seeds: SEEDS, quotas: SMALL }));
+
 describe("classify", () => {
   it("sorts a decision point by what is ahead and what hopping forward does", () => {
     expect(classify("water", "dies")).toBe("water-deadly");
@@ -60,10 +66,10 @@ describe("classify", () => {
 describe("sampleStates", () => {
   let a: ProbeState[];
   beforeAll(async () => {
-    a = await sampleStates({ seeds: SEEDS, quotas: SMALL });
-  });
+    a = await sample();
+  }, SAMPLING_TIMEOUT);
 
-  it("is deterministic and keeps to the quotas", async () => {
+  it("is deterministic and keeps to the quotas", { timeout: SAMPLING_TIMEOUT }, async () => {
     const b = await sampleStates({ seeds: SEEDS, quotas: SMALL });
     expect(b).toEqual(a);
     const counts = (id: string) => a.filter((s) => s.stratum === id).length;
@@ -324,8 +330,8 @@ describe("runProbe", () => {
 describe("agreement with the ideal follower of the words", () => {
   let states: ProbeState[];
   beforeAll(async () => {
-    states = await sampleStates({ seeds: SEEDS, quotas: SMALL });
-  });
+    states = await sample();
+  }, SAMPLING_TIMEOUT);
 
   const words = "clef:clef-flash:moves:choice:ordered";
 
