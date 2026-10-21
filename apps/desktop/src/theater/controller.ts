@@ -1,7 +1,7 @@
 import { type Decision, HOLD_WHYS, type HoldWhy, type WaitWhy } from "@ccr/agent";
 import { noticeText } from "../i18n/presentation.ts";
 import { type Translator, translator } from "../i18n/translate.ts";
-import type { DecisionLog, Turn } from "../session.ts";
+import type { DecisionLog, SessionState, Turn } from "../session.ts";
 import { spoken } from "./labels.ts";
 
 /** A `RouteStep` as read back from `Decision.extra`, which is untyped: the screen never reads the note's sentence. */
@@ -114,6 +114,17 @@ export function controllerSays(
   if (step?.kind === "hold")
     return decision.notice ? noticeText(decision.notice, translation) : controllerNote(decision);
   return null;
+}
+
+/** The wait the session has played and not yet followed. Unlike the live execution, it holds through the idle frames between two waits. */
+export function waitingStep(
+  state: Pick<SessionState, "last" | "playback" | "phase">,
+): Extract<ControllerStep, { kind: "wait" }> | null {
+  const { last } = state;
+  if (last?.action !== "stay" || state.phase === "reading") return null;
+  if (state.playback?.index !== last.index || state.playback.outcome !== "stay") return null;
+  const step = controllerStep(last.decision);
+  return step?.kind === "wait" ? step : null;
 }
 
 /** The crossing waited for a gap, in the controller's first step or a later one: "Go straight" then reads "when clear". */

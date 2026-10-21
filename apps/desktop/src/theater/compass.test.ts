@@ -1,7 +1,7 @@
 import type { Action } from "@ccr/core";
 import { describe, expect, it } from "vitest";
 import { buildCompass, STRIP_MOVES, stripOf } from "./compass.ts";
-import { answeredSession, readingSession, routeAnswers } from "./test-support.ts";
+import { answeredSession, readingSession, routeAnswers, waitingState } from "./test-support.ts";
 
 describe("compass model context, separate from live execution", () => {
   it("shows five quiet directions while the model reads, without selecting one", () => {
@@ -60,23 +60,27 @@ describe("compass model context, separate from live execution", () => {
   it("labels a held controller step as next and a crossing as when-clear only after a real wait", async () => {
     const s = await answeredSession(routeAnswers("stand", "still", "wait_here", 0.9), 1);
     const state = s.state();
-    if (!state.lastModel) throw new Error("missing answer");
     expect(buildCompass(state).verdict).toBe("Go straight");
-    const wait = {
-      ...state.lastModel,
-      action: "stay" as const,
-      decision: {
-        action: "stay" as const,
-        source: "executor" as const,
-        extra: { controller: { kind: "wait", n: 2, of: 15, cell: "vehicle" } },
-      },
-    };
-    const waiting = { ...state, last: wait, turns: [{ model: state.lastModel, steps: [wait] }] };
+    const waiting = waitingState(state);
     expect(buildCompass(waiting).verdict).toBe("Go straight · when clear");
     expect(buildCompass(waiting).doing).toBe("waiting for a vehicle to pass 2/15");
     expect(buildCompass({ ...waiting, phase: "reading" }).doing).toBe(
       "next: waiting for a vehicle to pass 2/15",
     );
+  });
+
+  it("names the forward pick the controller waits for, and nothing when the pick is another move", async () => {
+    const crossing = (
+      await answeredSession(routeAnswers("stand", "still", "wait_here", 0.9), 1)
+    ).state();
+    expect(buildCompass(crossing).waiting).toBeNull();
+    expect(buildCompass(waitingState(crossing)).waiting).toBe("hop_forward");
+    expect(buildCompass({ ...waitingState(crossing), phase: "reading" }).waiting).toBeNull();
+
+    for (const around of ["wait_here", "detour_right"]) {
+      const other = (await answeredSession(routeAnswers("no_stand", "still", around, 0.1))).state();
+      expect(buildCompass(waitingState(other)).waiting).toBeNull();
+    }
   });
 
   it("retains the move history across controller steps and hides context on reset, error or game over", async () => {

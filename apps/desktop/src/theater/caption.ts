@@ -3,7 +3,7 @@ import { actionLabel } from "../i18n/presentation.ts";
 import { type Translator, translator } from "../i18n/translate.ts";
 import type { SessionState } from "../session.ts";
 import { buildCompass, type StripChip, stripOf } from "./compass.ts";
-import { type ControllerStep, controllerStep } from "./controller.ts";
+import { type ControllerStep, waitingStep } from "./controller.ts";
 import type { ExecutionView } from "./execution.ts";
 
 export interface CaptionView {
@@ -39,15 +39,9 @@ export function buildCaption(
   const view = buildCompass(state, translation);
   const { t } = translation;
   const last = state.last;
-  const step = last ? controllerStep(last.decision) : null;
-  const confirmedWait =
-    step?.kind === "wait" &&
-    last?.action === "stay" &&
-    state.playback?.index === last.index &&
-    state.playback.outcome === "stay" &&
-    state.phase !== "reading";
+  const wait = waitingStep(state);
   const betweenWaits =
-    confirmedWait && !state.asking && !execution.action && !execution.next && !execution.blocked;
+    wait !== null && !state.asking && !execution.action && !execution.next && !execution.blocked;
   if (view.mode === "hidden" && !last && !execution.action && !execution.next && !execution.blocked)
     return null;
 
@@ -70,8 +64,8 @@ export function buildCaption(
     return {
       ...base,
       text:
-        action === "stay" && confirmedWait
-          ? waitText(step, translation)
+        action === "stay" && wait
+          ? waitText(wait, translation)
           : t("compass.now", { step: actionLabel(action, translation) }),
       glyph: ACTION_GLYPH[action],
       active: true,

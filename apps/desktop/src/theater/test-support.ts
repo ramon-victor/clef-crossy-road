@@ -2,7 +2,7 @@
 // they read is what the app would hold (no network, no key).
 import { clefPolicy, DEFAULT_CLEF } from "@ccr/agent";
 import { ClefClient, MemoryCache, type Transport } from "@ccr/clef";
-import { Session } from "../session.ts";
+import { Session, type SessionState } from "../session.ts";
 
 export const FRAME = 1 / 60;
 
@@ -60,4 +60,24 @@ export async function answeredSession(
     await settle();
   }
   return session;
+}
+
+/** The state a few steps into a crossing that waits for a gap: the controller's second wait, played. */
+export function waitingState(state: SessionState): SessionState {
+  if (!state.lastModel) throw new Error("missing answer");
+  const wait = {
+    ...state.lastModel,
+    action: "stay" as const,
+    decision: {
+      action: "stay" as const,
+      source: "executor" as const,
+      extra: { controller: { kind: "wait", n: 2, of: 15, cell: "vehicle" } },
+    },
+  };
+  return {
+    ...state,
+    last: wait,
+    playback: { index: wait.index, outcome: "stay" },
+    turns: [{ model: state.lastModel, steps: [wait] }],
+  };
 }
