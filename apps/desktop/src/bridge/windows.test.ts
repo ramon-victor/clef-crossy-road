@@ -213,3 +213,40 @@ describe("player presentation", () => {
     expect(JSON.parse(JSON.stringify(enabled))).toEqual(enabled);
   });
 });
+
+it("delivers character artwork outside recurring snapshots and restores it after decisions reconnect", async () => {
+  const artwork = {
+    hop_forward: "forward",
+    hop_back: "back",
+    hop_left: "left",
+    hop_right: "right",
+  };
+  let ready: typeof artwork | null | undefined;
+  bus.label = "main";
+  const host = await hostControls(
+    async () => {},
+    fixture,
+    () => ready,
+  );
+  bus.label = "decisions";
+  const onArtwork = vi.fn();
+  const onState = vi.fn();
+  const panel = await connectControls(onState, onArtwork);
+  await host.publish();
+  expect(onArtwork).not.toHaveBeenCalled();
+  ready = artwork;
+  await host.publish();
+  await host.publish();
+  expect(onArtwork).toHaveBeenCalledExactlyOnceWith(artwork);
+  expect(onState.mock.lastCall?.[0]).not.toHaveProperty("artwork");
+  panel.dispose();
+  const reopened = await connectControls(vi.fn(), onArtwork);
+  await reopened.sync();
+  expect(onArtwork).toHaveBeenCalledTimes(2);
+  ready = null;
+  await host.publish();
+  expect(onArtwork.mock.lastCall?.[0]).toBeNull();
+  reopened.dispose();
+  host.dispose();
+  expect([...bus.listeners.values()].every((listeners) => listeners.size === 0)).toBe(true);
+});

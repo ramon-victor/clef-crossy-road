@@ -51,7 +51,7 @@ describe("visual decision panel", () => {
     expect(props.onPace).toHaveBeenCalledWith("slow");
     expect(props.onClose).toHaveBeenCalledOnce();
     expect(session.state()).toEqual(state);
-    fireEvent.click(view.getByRole("tab", { name: "Details" }));
+    fireEvent.click(view.getByRole("button", { name: "Technical details" }));
     expect(view.container.querySelector(".stats")).not.toBeNull();
     expect(view.container.querySelectorAll("section.question-result")).toHaveLength(3);
     fireEvent.click(view.getByRole("button", { name: "Compass (C)" }));
@@ -90,13 +90,20 @@ describe("visual decision panel", () => {
       turns: [{ ...original, steps: [] }],
     };
     const view = render(surface({ state: held }));
-    fireEvent.click(view.getByRole("tab", { name: "Details" }));
-    expect(view.queryByRole("heading", { name: "Actions sent to the game" })).toBeNull();
+    fireEvent.click(view.getByRole("tab", { name: "History" }));
+    fireEvent.click(
+      view.container.querySelector(`[data-decision="${original.model.index}"]`) as HTMLElement,
+    );
+    expect(view.container.querySelectorAll(".decision-step-list li")).toHaveLength(0);
+    fireEvent.click(view.getByRole("button", { name: "Technical details" }));
     expect(view.getByRole("button", { name: "What the model read (I)" })).toBeTruthy();
     view.rerender(surface({ state: { ...held, phase: "hopping" } }));
-    expect(view.queryByRole("heading", { name: "Actions sent to the game" })).toBeNull();
+    expect(view.container.querySelectorAll(".decision-step-list li")).toHaveLength(0);
     fireEvent.click(view.getByRole("button", { name: /Back to live/ }));
-    fireEvent.click(view.getByRole("tab", { name: "Details" }));
+    fireEvent.click(view.getByRole("tab", { name: "History" }));
+    fireEvent.click(
+      view.container.querySelector(`[data-decision="${original.model.index}"]`) as HTMLElement,
+    );
     expect(view.getByRole("heading", { name: "Actions sent to the game" })).toBeTruthy();
     expect(view.container.querySelectorAll(".decision-step-list li")).toHaveLength(1);
   });
@@ -143,9 +150,9 @@ describe("visual decision panel", () => {
     if (!old) throw new Error("Missing history row");
     fireEvent.click(old);
     expect(view.getByText("Pinned")).toBeTruthy();
-    expect(view.queryByText("Decision 101", { exact: false })).toBeNull();
+    expect(view.getByRole("tab", { name: "History" }).getAttribute("aria-selected")).toBe("true");
     view.rerender(surface({ state: { ...initial, turns: [newer], decisions: 102 } }));
-    fireEvent.click(view.getByRole("tab", { name: "Details" }));
+    fireEvent.click(view.getByRole("button", { name: "Technical details" }));
     fireEvent.click(view.getByRole("button", { name: "What the model read (I)" }));
     expect(view.container.querySelector(".inspector-pre")?.textContent).toContain("older request");
     fireEvent.click(view.getByRole("button", { name: "Copy", exact: true }));
@@ -192,12 +199,12 @@ describe("visual decision panel", () => {
     expect(view.queryByText("Pinned")).toBeNull();
   });
 
-  it("does not freeze an empty Details tab before the first answer arrives", async () => {
+  it("does not freeze empty technical details before the first answer arrives", async () => {
     const { surface, state } = await fixture();
     const view = render(
       surface({ state: { ...state, turns: [], last: null, lastModel: null, decisions: 0 } }),
     );
-    fireEvent.click(view.getByRole("tab", { name: "Details" }));
+    fireEvent.click(view.getByRole("button", { name: "Technical details" }));
     expect(view.queryByText("Pinned")).toBeNull();
     view.rerender(surface({ state }));
     await waitFor(() => expect(view.getByText("Pinned")).toBeTruthy());
@@ -223,8 +230,129 @@ describe("visual decision panel", () => {
     await waitFor(() => expect(view.container.querySelector(".inspector")).not.toBeNull());
     const input = view.container.querySelector(".inspector-pre")?.textContent;
     fireEvent.click(view.getByRole("button", { name: "language" }));
-    await waitFor(() => expect(view.getByRole("tab", { name: "Detalhes" })).toBeTruthy());
+    await waitFor(() =>
+      expect(view.getByRole("button", { name: "Detalhes técnicos" })).toBeTruthy(),
+    );
     expect(view.container.querySelector(".inspector-pre")?.textContent).toBe(input);
     expect(view.getByText("Leitura fixada")).toBeTruthy();
   });
+});
+
+it("expands history in place, keeps one consultation open and refreshes only on request", async () => {
+  const { surface, state } = await fixture();
+  const first = state.turns[0];
+  if (!first) throw new Error("Missing turn");
+  const next = { model: { ...first.model, index: 100 }, steps: [] };
+  const initial = { ...state, turns: [first, next], lastModel: next.model, last: next.model };
+  const view = render(surface({ state: initial }));
+  fireEvent.click(view.getByRole("tab", { name: "History" }));
+  const content = view.container.querySelector<HTMLElement>(".decision-content");
+  if (!content) throw new Error("Missing scroll surface");
+  content.scrollTop = 125;
+  fireEvent.click(
+    view.container.querySelector(`[data-decision="${first.model.index}"]`) as HTMLElement,
+  );
+  expect(content.scrollTop).toBe(125);
+  expect(view.getByRole("tab", { name: "History" }).getAttribute("aria-selected")).toBe("true");
+  fireEvent.click(view.container.querySelector('[data-decision="100"]') as HTMLElement);
+  expect(
+    view.container.querySelectorAll('.decision-history-item[aria-expanded="true"]'),
+  ).toHaveLength(1);
+  const newest = { model: { ...first.model, index: 200 }, steps: [] };
+  view.rerender(
+    surface({
+      state: { ...initial, turns: [next, newest], lastModel: newest.model, last: newest.model },
+    }),
+  );
+  expect(view.container.querySelector('[data-decision="200"]')).toBeNull();
+  expect(view.getByRole("status").textContent).toBe("New consultations available");
+  fireEvent.click(view.getByRole("button", { name: "Refresh history" }));
+  expect(view.container.querySelector('[data-decision="200"]')).not.toBeNull();
+  expect(view.container.querySelector('[data-decision="100"]')?.getAttribute("aria-expanded")).toBe(
+    "true",
+  );
+  fireEvent.click(view.getByRole("tab", { name: "Now" }));
+  expect(view.queryByText("Pinned")).toBeNull();
+});
+
+it("announces an expired selection rather than displaying another consultation's details", async () => {
+  const { surface, state } = await fixture();
+  const first = state.turns[0];
+  if (!first) throw new Error("Missing turn");
+  const view = render(surface());
+  fireEvent.click(view.getByRole("tab", { name: "History" }));
+  fireEvent.click(view.container.querySelector("[data-decision]") as HTMLElement);
+  fireEvent.click(view.getByRole("button", { name: "Technical details" }));
+  const next = { model: { ...first.model, index: 200 }, steps: [] };
+  view.rerender(
+    surface({ state: { ...state, turns: [next], lastModel: next.model, last: next.model } }),
+  );
+  fireEvent.click(view.getByRole("button", { name: "Refresh history" }));
+  expect(view.getByRole("status").textContent).toBe(
+    "That consultation is no longer in recent history.",
+  );
+  expect(
+    view.container.querySelector(
+      ".history-expanded:not([hidden]), .decision-details-view, .inspector",
+    ),
+  ).toBeNull();
+});
+
+it("uses game artwork for the recorded action and keeps artwork failures readable", async () => {
+  const { surface, state } = await fixture();
+  const artwork = {
+    hop_forward: "data:image/png;base64,forward",
+    hop_back: "data:image/png;base64,back",
+    hop_left: "data:image/png;base64,left",
+    hop_right: "data:image/png;base64,right",
+  };
+  const view = render(surface({ artwork }));
+  const action = state.last?.action;
+  if (!action || action === "stay") throw new Error("Fixture must be moving");
+  expect(view.container.querySelector("image.board-chicken")?.getAttribute("href")).toBe(
+    artwork[action],
+  );
+  view.rerender(surface({ artwork: null }));
+  expect(view.getByText("Character preview unavailable")).toBeTruthy();
+  expect(view.container.querySelector("canvas.game")).toBeNull();
+});
+
+it("keeps inspector focus visible instead of resetting its scroll when I changes tabs", async () => {
+  const { surface } = await fixture();
+  const view = render(surface());
+  const content = view.container.querySelector<HTMLElement>(".decision-content");
+  if (!content) throw new Error("Missing content");
+  content.scrollTop = 120;
+  view.rerender(surface({ inspectVersion: 1 }));
+  await waitFor(() => expect(view.container.querySelector(".inspector")).not.toBeNull());
+  expect(document.activeElement).toBe(
+    view.container.querySelector('[data-action="close-inspector"]'),
+  );
+  expect(content.scrollTop).toBe(120);
+});
+
+it("keeps disclosure relationships valid while their content is collapsed", async () => {
+  const { surface } = await fixture();
+  const view = render(surface());
+  const validTargets = () => {
+    for (const button of view.container.querySelectorAll("[aria-controls]")) {
+      expect(document.getElementById(button.getAttribute("aria-controls") ?? "")).not.toBeNull();
+    }
+  };
+  validTargets();
+  fireEvent.click(view.getByRole("tab", { name: "History" }));
+  validTargets();
+  fireEvent.click(view.container.querySelector("[data-decision]") as HTMLElement);
+  validTargets();
+});
+
+it("returns keyboard focus to the inspection button when the inspector closes", async () => {
+  const { surface } = await fixture();
+  const view = render(surface({ inspectVersion: 1 }));
+  await waitFor(() => expect(view.container.querySelector(".inspector")).not.toBeNull());
+  fireEvent.keyDown(window, { key: "Escape" });
+  await waitFor(() => expect(view.container.querySelector(".inspector")).toBeNull());
+  expect(document.activeElement).toBe(
+    view.getByRole("button", { name: "What the model read (I)" }),
+  );
 });

@@ -1,5 +1,5 @@
-import type { GameView } from "@ccr/render";
-import { getCurrentWindow } from "@tauri-apps/api/window";
+import type { ChickenArtwork, GameView } from "@ccr/render";
+import { getCurrentWindow, Window } from "@tauri-apps/api/window";
 import { useCallback, useEffect, useMemo, useRef, useState } from "preact/hooks";
 import { Sounds } from "./audio.ts";
 import { createBridge, createClefClient } from "./bridge/clef.ts";
@@ -8,6 +8,7 @@ import {
   hostControls,
   setDecisionsVisible,
   showControls,
+  toggleControls,
   WINDOW_EVENTS,
 } from "./bridge/windows.ts";
 import { ControlSurface } from "./ControlSurface.tsx";
@@ -80,18 +81,18 @@ export function App({ desktop = false }: { desktop?: boolean }) {
   const [launchReady, setLaunchReady] = useState(false);
   const [windowsReady, setWindowsReady] = useState(false);
   const [decisionsVisible, setDecisionsShown] = useState(false);
+  const [controlsVisible, setControlsShown] = useState(false);
   const [windowFailed, setWindowFailed] = useState(false);
   // What the person chose for the Theater, or null if they never did (then a model player opens it).
   const [theaterChoice, setTheaterChoice] = useState<boolean | null>(() =>
     desktop ? false : readFlag("theater"),
   );
   const [compassChoice, setCompassChoice] = useState<boolean | null>(() => readFlag("compass"));
-  // Only the browser sidebar can be hidden; desktop settings live in their own window.
-  const [settingsVisible, setSettingsVisible] = useState(
-    () => desktop || (readFlag("settings") ?? true),
-  );
+  const [sidebarOpen, setSidebarOpen] = useState(() => readFlag("settings") ?? true);
   const [pace, setPaceState] = useState<Pace>(() => readPace());
   const viewRef = useRef<GameView | null>(null);
+  const [artwork, setArtwork] = useState<ChickenArtwork | null | undefined>(undefined);
+  const artworkRef = useRef<ChickenArtwork | null | undefined>(undefined);
   const minimizedRef = useRef(false);
 
   const refreshBudget = useCallback(() => {
@@ -221,13 +222,11 @@ export function App({ desktop = false }: { desktop?: boolean }) {
     void setDecisionsVisible(showTheater).catch(() => setWindowFailed(true));
   }, [desktop, launchReady, windowsReady, showTheater]);
   const theaterVisible = desktop ? decisionsVisible : showTheater;
-  const setSettings = useCallback(
-    (on: boolean) => {
-      setSettingsVisible(on);
-      if (!desktop) writeFlag("settings", on);
-    },
-    [desktop],
-  );
+  const settingsVisible = desktop ? controlsVisible : sidebarOpen;
+  const setSidebar = useCallback((on: boolean) => {
+    setSidebarOpen(on);
+    writeFlag("settings", on);
+  }, []);
   const showCompass = openByDefault(compassChoice, selected?.kind);
   const setCompass = useCallback((on: boolean) => {
     setCompassChoice(on);
@@ -374,6 +373,7 @@ export function App({ desktop = false }: { desktop?: boolean }) {
           state: session.state(),
           minimized: minimizedRef.current,
         }),
+        () => artworkRef.current,
       );
       stops.push(
         await current.listen<boolean>(WINDOW_EVENTS.minimized, ({ payload }) =>
@@ -382,11 +382,19 @@ export function App({ desktop = false }: { desktop?: boolean }) {
       );
       stops.push(await current.listen(WINDOW_EVENTS.decisionsClosed, () => setTheater(false)));
       stops.push(
+        await current.listen<boolean>(WINDOW_EVENTS.controlsVisible, ({ payload }) =>
+          setControlsShown(payload),
+        ),
+      );
+      stops.push(
         await current.listen<boolean>(WINDOW_EVENTS.decisionsVisible, ({ payload }) =>
           setDecisionsShown(payload),
         ),
       );
       updateMinimized(await current.isMinimized());
+      const controls = await Window.getByLabel("controls");
+      if (controls)
+        setControlsShown((await controls.isVisible()) && !(await controls.isMinimized()));
       if (!disposed) setWindowsReady(true);
       if (disposed) {
         host.dispose();
@@ -420,16 +428,28 @@ export function App({ desktop = false }: { desktop?: boolean }) {
   }, [desktop, session, setTheater]);
 
   const openControls = useCallback(() => {
-    if (desktop)
-      void showControls()
-        .then(() => setWindowFailed(false))
-        .catch(() => setWindowFailed(true));
-  }, [desktop]);
+    if (!desktop) {
+      setSidebar(true);
+      return;
+    }
+    void showControls()
+      .then(() => setWindowFailed(false))
+      .catch(() => setWindowFailed(true));
+  }, [desktop, setSidebar]);
   const toggleDecisions = useCallback(() => {
     void execute({ type: "theater", enabled: !theaterVisible })
       .then(() => setWindowFailed(false))
       .catch(() => setWindowFailed(true));
   }, [theaterVisible, execute]);
+  const toggleSettings = useCallback(() => {
+    if (!desktop) {
+      setSidebar(!sidebarOpen);
+      return;
+    }
+    void toggleControls()
+      .then(() => setWindowFailed(false))
+      .catch(() => setWindowFailed(true));
+  }, [desktop, sidebarOpen, setSidebar]);
 
   useEffect(() => {
     const unlockSound = () => sounds.unlock();
@@ -513,6 +533,12 @@ export function App({ desktop = false }: { desktop?: boolean }) {
   const onReady = useCallback(
     (view: GameView) => {
       viewRef.current = view;
+      try {
+        artworkRef.current = view.captureChickenArtwork();
+      } catch {
+        artworkRef.current = null;
+      }
+      setArtwork(artworkRef.current);
       void runSelfTest({ session, view, bridge, choices, select, setPace });
     },
     [session, bridge, choices, select, setPace],
@@ -525,6 +551,10 @@ export function App({ desktop = false }: { desktop?: boolean }) {
         state={state}
         sounds={sounds}
         onReady={onReady}
+        onUnavailable={() => {
+          artworkRef.current = null;
+          setArtwork(null);
+        }}
         onFps={setFps}
         onRetry={retry}
         onNewMap={newMap}
@@ -533,12 +563,10 @@ export function App({ desktop = false }: { desktop?: boolean }) {
           conversationOpen: theaterVisible,
           onConversation: () => void openDecisions().catch(() => setWindowFailed(true)),
         }}
-        // The browser error card offers "Configure" only while the sidebar is hidden.
-        onShowControls={
-          desktop ? openControls : settingsVisible ? undefined : () => setSettings(true)
-        }
-        onToggleControls={desktop ? undefined : () => setSettings(!settingsVisible)}
+        onShowControls={desktop || !settingsVisible ? openControls : undefined}
+        onToggleControls={toggleSettings}
         controlsVisible={settingsVisible}
+        controlsTarget={desktop ? "window" : "sidebar"}
         onToggleDecisions={toggleDecisions}
         decisionsVisible={theaterVisible}
       />
@@ -549,6 +577,7 @@ export function App({ desktop = false }: { desktop?: boolean }) {
       )}
       {!desktop && showTheater && (
         <Theater
+          artwork={artwork}
           state={state}
           kind={selected?.kind}
           compassOn={showCompass}

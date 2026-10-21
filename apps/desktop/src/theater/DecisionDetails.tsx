@@ -1,11 +1,10 @@
-import { ACTION_GLYPH, ACTION_ORDER } from "../format.ts";
-import { actionLabel, noticeText } from "../i18n/presentation.ts";
+import { ACTION_ORDER } from "../format.ts";
+import { actionLabel } from "../i18n/presentation.ts";
 import { useI18n } from "../i18n/provider.tsx";
 import { InputInspector } from "../panel/InputInspector.tsx";
 import { StatsCard } from "../panel/StatsCard.tsx";
 import type { SessionState } from "../session.ts";
 import { barsOf, branchText } from "./choice.ts";
-import { controllerSays, foldWaits } from "./controller.ts";
 import { Glyph } from "./Glyph.tsx";
 import type { DecisionPresentation } from "./presentation.ts";
 
@@ -27,16 +26,15 @@ export function DecisionDetails({
   onCompass(): void;
 }) {
   const translation = useI18n();
-  const { t, number, percent } = translation;
+  const { t, percent } = translation;
   const round = view.round;
   const bars = round?.log ? barsOf(round.log) : null;
-  const steps = foldWaits(
-    // The held log is available for inspection before its action reaches the game.
-    round?.pending ? [] : (round?.history ?? []),
-    (log) => log.action === "stay",
-    (log) => ({ log, count: 1 }),
-    (item, log) => ({ ...item, log }),
-  );
+  const inspectButton = useRef<HTMLButtonElement>(null);
+  const wasInputOpen = useRef(inputOpen);
+  useLayoutEffect(() => {
+    if (wasInputOpen.current && !inputOpen) inspectButton.current?.focus();
+    wasInputOpen.current = inputOpen;
+  }, [inputOpen]);
   return (
     <div class="decision-details-view">
       {round && (
@@ -107,31 +105,6 @@ export function DecisionDetails({
               </details>
             )}
           </section>
-          {steps.length > 0 && (
-            <section class="decision-detail-section">
-              <h3>{t("decisions.execution")}</h3>
-              <ol class="decision-step-list">
-                {steps.map(({ log, count }) => (
-                  <li key={log.index}>
-                    <Glyph glyph={ACTION_GLYPH[log.action]} size={16} />
-                    <div>
-                      <strong>
-                        {actionLabel(log.action, translation)}
-                        {count > 1 && ` ×${number(count)}`}
-                      </strong>
-                      <p>
-                        {controllerSays(log.decision, translation) ??
-                          (log.decision.notice
-                            ? noticeText(log.decision.notice, translation)
-                            : log.decision.note) ??
-                          t("decisions.sent")}
-                      </p>
-                    </div>
-                  </li>
-                ))}
-              </ol>
-            </section>
-          )}
         </>
       )}
       <section class="decision-detail-section">
@@ -162,6 +135,7 @@ export function DecisionDetails({
             />
           ) : (
             <button
+              ref={inspectButton}
               type="button"
               class="btn"
               onClick={() => onInput(true)}
@@ -175,3 +149,5 @@ export function DecisionDetails({
     </div>
   );
 }
+
+import { useLayoutEffect, useRef } from "preact/hooks";

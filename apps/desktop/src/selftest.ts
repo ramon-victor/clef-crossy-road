@@ -112,6 +112,7 @@ async function checkWindows(ctx: Context): Promise<Report> {
   ctx.select("human");
   ctx.session.start(1);
   ctx.session.setPaused(false);
+  const gameBeforeSettings = ctx.session.game;
   await showControls();
   await sleep(350);
   const initial = await controlsReport("status");
@@ -124,11 +125,48 @@ async function checkWindows(ctx: Context): Promise<Report> {
   const controls = await Window.getByLabel("controls");
   const hidden = controls !== null && !(await controls.isVisible());
   const button = document.querySelector<HTMLButtonElement>(".open-controls");
+  const titleCloseButtonOff = button?.getAttribute("aria-pressed") === "false";
   button?.click();
   await sleep(250);
   const reopened = await controlsReport("status");
   const visible = controls !== null && (await controls.isVisible());
   const sameSession = ctx.session.state().seed === seed && ctx.session.state().human;
+  const openButtonOn = button?.getAttribute("aria-pressed") === "true";
+  await controlsReport("settings");
+  button?.click();
+  await sleep(250);
+  const toggledHidden = controls !== null && !(await controls.isVisible());
+  const toggleButtonOff = button?.getAttribute("aria-pressed") === "false";
+  const clearedOnToggle = (await controlsReport("status")).settingsClosed === true;
+  button?.click();
+  await sleep(250);
+  const emptySettings = await controlsReport("settings-empty");
+  const credentialsDiscarded = emptySettings.opened === true && emptySettings.empty === true;
+  button?.click();
+  await sleep(250);
+  button?.click();
+  button?.click();
+  await sleep(300);
+  const consecutiveClicksHidden =
+    controls !== null &&
+    !(await controls.isVisible()) &&
+    button?.getAttribute("aria-pressed") === "false";
+  window.dispatchEvent(new KeyboardEvent("keydown", { key: "F2", bubbles: true }));
+  await sleep(250);
+  const f2Opened = controls !== null && (await controls.isVisible());
+  window.dispatchEvent(new KeyboardEvent("keydown", { key: "F2", bubbles: true }));
+  await sleep(250);
+  const f2KeptOpen = controls !== null && (await controls.isVisible());
+  await invoke("selftest_window_action", { action: "minimize-controls" });
+  await sleep(300);
+  const minimizedControlsButtonOff = button?.getAttribute("aria-pressed") === "false";
+  button?.click();
+  await sleep(300);
+  const controlsRestored =
+    controls !== null &&
+    (await controls.isVisible()) &&
+    !(await controls.isMinimized()) &&
+    button?.getAttribute("aria-pressed") === "true";
 
   const decisions = await Window.getByLabel("decisions");
   const decisionsButton = document.querySelector<HTMLButtonElement>(".toggle-decisions");
@@ -143,6 +181,17 @@ async function checkWindows(ctx: Context): Promise<Report> {
   const decisionsOpened = decisions !== null && (await decisions.isVisible());
   const openingKeepsPlaying = !ctx.session.state().paused;
   const controlsStillVisible = controls !== null && (await controls.isVisible());
+  const bounds = async (target: Window | null) => {
+    if (!target) return null;
+    const position = await target.outerPosition();
+    const size = await target.outerSize();
+    return { x: position.x, y: position.y, width: size.width, height: size.height };
+  };
+  const placement = {
+    game: await bounds(getCurrentWindow()),
+    controls: await bounds(controls),
+    decisions: await bounds(decisions),
+  };
   await invoke("selftest_window_action", { action: "close-decisions" });
   await sleep(250);
   const decisionsClosed = decisions !== null && !(await decisions.isVisible());
@@ -215,6 +264,21 @@ async function checkWindows(ctx: Context): Promise<Report> {
       visible,
       reopened,
       sameSession,
+      placement,
+      controlsToggle: {
+        titleCloseButtonOff,
+        openButtonOn,
+        toggledHidden,
+        toggleButtonOff,
+        clearedOnToggle,
+        credentialsDiscarded,
+        consecutiveClicksHidden,
+        f2Opened,
+        f2KeptOpen,
+        minimizedControlsButtonOff,
+        controlsRestored,
+        sameGame: gameBeforeSettings === ctx.session.game,
+      },
       decisions: {
         decisionsOpened,
         openingKeepsPlaying,
@@ -483,6 +547,7 @@ async function checkTheater(ctx: Context): Promise<Report> {
   const caption = document.querySelector(".cap-main")?.textContent ?? "";
   await controlsReport("now", "decisions");
   const { diagram, action, intent, tabs } = await conversation();
+  const history = await controlsReport("history", "decisions");
   await invoke("selftest_window_action", { action: "small-decisions" });
   await sleep(250);
   const smallWindow = await controlsReport("status", "decisions");
@@ -517,6 +582,7 @@ async function checkTheater(ctx: Context): Promise<Report> {
         shownAgain: compassShownAgain,
       },
       conversation: {
+        history,
         smallWindow,
         diagram,
         action,

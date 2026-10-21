@@ -6,6 +6,7 @@ import type { Sounds } from "./audio.ts";
 import { GameCanvas } from "./GameCanvas.tsx";
 import { LanguageProvider } from "./i18n/provider.tsx";
 import { Session } from "./session.ts";
+import { answeredSession, routeAnswers } from "./theater/test-support.ts";
 
 vi.mock("@ccr/render", () => ({
   GameView: { create: async () => ({ resize: () => {}, dispose: () => {} }) },
@@ -22,17 +23,15 @@ beforeEach(() => {
   vi.stubGlobal("requestAnimationFrame", () => 1);
   vi.stubGlobal("cancelAnimationFrame", () => {});
 });
-afterEach(async () => {
+afterEach(() => {
   cleanup();
-  // The stubbed frame never fires, so Preact flushes effects from its 35 ms fallback timer. Let it run
-  // before the stubs and the jsdom window go away, or it throws in `cancelAnimationFrame` afterwards.
-  await new Promise((resolve) => setTimeout(resolve, 80));
   vi.unstubAllGlobals();
 });
 
 it("keeps a model failure actionable in the game when both auxiliary windows are hidden", async () => {
   const session = new Session();
   const openSettings = vi.fn();
+  const toggleSettings = vi.fn();
   const openDecisions = vi.fn();
   const view = render(
     <LanguageProvider initial={{ preference: "en", detected: "en" }}>
@@ -43,6 +42,8 @@ it("keeps a model failure actionable in the game when both auxiliary windows are
         onRetry={vi.fn()}
         onNewMap={vi.fn()}
         onShowControls={openSettings}
+        onToggleControls={toggleSettings}
+        controlsVisible
         compass={{ on: false, conversationOpen: false, onConversation: openDecisions }}
       />
     </LanguageProvider>,
@@ -53,14 +54,20 @@ it("keeps a model failure actionable in the game when both auxiliary windows are
   expect(view.container.querySelector(".panel, .theater")).toBeNull();
   expect(view.queryByText("Offline during lookup")).toBeNull();
   fireEvent.click(view.getByRole("button", { name: "Configure", exact: true }));
-  fireEvent.click(view.getByRole("button", { name: "Details", exact: true }));
+  fireEvent.click(view.getByRole("button", { name: "Technical details", exact: true }));
+  const toggle = view.getByRole("button", { name: "Hide controls window", exact: true });
+  expect(toggle.getAttribute("aria-pressed")).toBe("true");
+  fireEvent.click(toggle);
   expect(openSettings).toHaveBeenCalledOnce();
+  expect(toggleSettings).toHaveBeenCalledOnce();
   expect(openDecisions).toHaveBeenCalledOnce();
 });
 
-function gameWith(extra: Partial<Parameters<typeof GameCanvas>[0]>) {
-  const session = new Session();
-  return (
+it("shows pause once in the caption, restores the plain notice when hidden, and opens Details", async () => {
+  const session = await answeredSession(routeAnswers("stand", "still", "wait_here"), 1);
+  session.setPaused(true);
+  const open = vi.fn();
+  const ui = (on: boolean) => (
     <LanguageProvider initial={{ preference: "en", detected: "en" }}>
       <GameCanvas
         session={session}
@@ -68,41 +75,21 @@ function gameWith(extra: Partial<Parameters<typeof GameCanvas>[0]>) {
         sounds={{} as Sounds}
         onRetry={vi.fn()}
         onNewMap={vi.fn()}
-        compass={{ on: false, conversationOpen: false, onConversation: vi.fn() }}
-        {...extra}
+        compass={{ on, conversationOpen: false, onConversation: open }}
       />
     </LanguageProvider>
   );
-}
-
-it("hides and shows the browser settings from a button beside the game", () => {
-  const toggleSettings = vi.fn();
-  const toggleDecisions = vi.fn();
-  const props = {
-    onToggleControls: toggleSettings,
-    onToggleDecisions: toggleDecisions,
-    decisionsVisible: true,
-  };
-  const view = render(gameWith({ ...props, controlsVisible: true }));
-  const hide = view.getByRole("button", { name: "Hide settings" });
-  expect(hide.getAttribute("aria-pressed")).toBe("true");
-  fireEvent.click(hide);
-  expect(toggleSettings).toHaveBeenCalledOnce();
-  fireEvent.click(view.getByRole("button", { name: "Hide decisions (T)" }));
-  expect(toggleDecisions).toHaveBeenCalledOnce();
-
-  view.rerender(gameWith({ ...props, controlsVisible: false }));
-  expect(view.getByRole("button", { name: "Show settings" }).getAttribute("aria-pressed")).toBe(
-    "false",
+  const screen = render(ui(true));
+  await waitFor(() =>
+    expect(screen.getByRole("status").textContent).toBe("Paused · Space to resume"),
   );
-});
-
-it("keeps the desktop settings button a plain opener", () => {
-  const openSettings = vi.fn();
-  const view = render(gameWith({ onShowControls: openSettings }));
-  const open = view.getByRole("button", { name: "Open controls window" });
-  expect(open.hasAttribute("aria-pressed")).toBe(false);
-  fireEvent.click(open);
-  expect(openSettings).toHaveBeenCalledOnce();
-  expect(view.queryByRole("button", { name: /decisions/i })).toBeNull();
+  expect(screen.container.querySelector(".compass-caption")).not.toBeNull();
+  expect(screen.container.querySelector(".paused-note")).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: "Details" }));
+  expect(open).toHaveBeenCalledOnce();
+  screen.rerender(ui(false));
+  expect(screen.container.querySelector(".compass-caption")).toBeNull();
+  expect(screen.container.querySelector(".paused-note")?.textContent).toBe(
+    "Paused · Space to resume",
+  );
 });

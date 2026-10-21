@@ -1,12 +1,16 @@
 // @vitest-environment jsdom
-import { cleanup, render } from "@testing-library/preact";
+import { act, cleanup, render } from "@testing-library/preact";
 import { afterEach, describe, expect, it } from "vitest";
 import { LanguageProvider } from "../i18n/provider.tsx";
 import { Compass } from "./Compass.tsx";
 import type { ExecutionView } from "./execution.ts";
 import { answeredSession, routeAnswers } from "./test-support.ts";
 
-afterEach(cleanup);
+afterEach(async () => {
+  cleanup();
+  // Flush deferred provider effects before jsdom removes window at the end of the file.
+  await act(async () => {});
+});
 
 describe("compass execution hierarchy", () => {
   it("lights only pause while Clef's forward choice stays secondary, without percentages", async () => {
@@ -19,14 +23,11 @@ describe("compass execution hierarchy", () => {
           state={session.state()}
           execution={execution}
           anchorRef={{ current: null }}
-          conversationOpen={false}
-          onConversation={() => {}}
         />
       </LanguageProvider>,
     );
     expect(screen.container.querySelectorAll(".cb.actual")).toHaveLength(1);
     expect(screen.container.querySelector(".cb.actual")?.getAttribute("data-move")).toBe("stay");
-    expect(screen.container.querySelector(".cap-choice")?.textContent).toContain("Go straight");
     expect(screen.container.querySelector(".compass")?.textContent).not.toContain("%");
     expect(screen.container.querySelector(".cb-badge")).toBeNull();
 
@@ -37,8 +38,6 @@ describe("compass execution hierarchy", () => {
           state={session.state()}
           execution={{ ...execution, action: "hop_forward" }}
           anchorRef={{ current: null }}
-          conversationOpen={false}
-          onConversation={() => {}}
         />
       </LanguageProvider>,
     );
@@ -66,14 +65,12 @@ describe("compass execution hierarchy", () => {
           state={session.state()}
           execution={execution}
           anchorRef={{ current: null }}
-          conversationOpen={false}
-          onConversation={() => {}}
         />
       </LanguageProvider>,
     );
     expect(screen.container.querySelectorAll(".cb.actual")).toHaveLength(1);
     expect(screen.container.querySelectorAll(".cb.next")).toHaveLength(1);
-    expect(screen.container.textContent).toContain("next: right");
+    expect(screen.container.querySelector(".cb.next")?.getAttribute("data-move")).toBe("hop_right");
     screen.rerender(
       <LanguageProvider initial={{ preference: "en", detected: "en" }}>
         <Compass
@@ -81,8 +78,6 @@ describe("compass execution hierarchy", () => {
           state={{ ...session.state(), phase: "error" }}
           execution={execution}
           anchorRef={{ current: null }}
-          conversationOpen={false}
-          onConversation={() => {}}
         />
       </LanguageProvider>,
     );

@@ -9,7 +9,7 @@ import { decisionLabel } from "./labels.ts";
 import { asText } from "./view.ts";
 
 /** How many of the latest moves the strip under the game shows. */
-export const STRIP_MOVES = 12;
+export const STRIP_MOVES = 6;
 
 export interface CompassMove {
   action: Action;

@@ -34,7 +34,7 @@ export async function runControlsSelfTest(): Promise<() => void> {
             savedLanguage = null;
           }
           report = { language: document.documentElement.lang };
-        } else if (payload.action === "settings") {
+        } else if (payload.action === "settings" || payload.action === "settings-empty") {
           const setup = document.querySelector<HTMLDetailsElement>("details.account-settings");
           if (setup) setup.open = true;
           document.querySelector<HTMLButtonElement>(".connection-setting button")?.click();
@@ -42,15 +42,20 @@ export async function runControlsSelfTest(): Promise<() => void> {
             await sleep(100);
           const account = document.querySelector<HTMLInputElement>("#cloudflare-account");
           const token = document.querySelector<HTMLInputElement>("#cloudflare-token");
-          for (const input of [account, token]) {
-            if (!input) continue;
-            input.value = "selftest-unsaved";
-            input.dispatchEvent(new Event("input", { bubbles: true }));
-          }
-          report = { opened: !!account && !!token };
+          report = {
+            opened: !!account && !!token,
+            empty: account?.value === "" && token?.value === "",
+          };
+          if (payload.action === "settings")
+            for (const input of [account, token]) {
+              if (!input) continue;
+              input.value = "selftest-unsaved";
+              input.dispatchEvent(new Event("input", { bubbles: true }));
+            }
         } else {
           report = {
             panelPresent: document.querySelector(".panel") !== null,
+            viewport: [window.innerWidth, window.innerHeight],
             canvasAbsent: document.querySelector("canvas.game") === null,
             settingsClosed: document.querySelector(".connection-dialog") === null,
             inspectorClosed: document.querySelector(".inspector") === null,

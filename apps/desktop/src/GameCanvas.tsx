@@ -7,6 +7,8 @@ import { useI18n } from "./i18n/provider.tsx";
 import { ErrorMessage } from "./panel/ErrorMessage.tsx";
 import type { Session, SessionState } from "./session.ts";
 import { Compass } from "./theater/Compass.tsx";
+import { CompassCaption } from "./theater/CompassCaption.tsx";
+import { buildCaption } from "./theater/caption.ts";
 import { modelChoice } from "./theater/choice.ts";
 import { buildExecution, type ExecutionView } from "./theater/execution.ts";
 import { Glyph } from "./theater/Glyph.tsx";
@@ -16,13 +18,15 @@ export interface GameCanvasProps {
   state: SessionState;
   sounds: Sounds;
   onReady?: (view: GameView) => void;
+  onUnavailable?: () => void;
   onFps?: (fps: number) => void;
   onRetry: () => void;
   onNewMap: () => void;
   onShowControls?: (() => void) | undefined;
-  /** Browser sidebar: when set, the settings button hides and shows it instead of only opening. */
   onToggleControls?: (() => void) | undefined;
   controlsVisible?: boolean;
+  /** Where the settings live, which decides how their button is worded. */
+  controlsTarget?: keyof typeof CONTROLS_TEXT;
   onToggleDecisions?: (() => void) | undefined;
   decisionsVisible?: boolean;
   /** The model's decision drawn around the chicken. It replaces the thought bubble while it is on. */
@@ -31,6 +35,15 @@ export interface GameCanvasProps {
 
 /** How far above its feet the compass is centred, in world units: the middle of the chicken. */
 const COMPASS_LIFT = 0.5;
+
+const CONTROLS_TEXT = {
+  window: {
+    show: "windows.openControls",
+    hide: "windows.hideControls",
+    showHint: "windows.openControlsHelp",
+  },
+  sidebar: { show: "panel.show", hide: "panel.hide", showHint: "panel.show" },
+} as const;
 
 /** Owns the WebGL view and the animation loop; everything else is plain DOM on top of it. */
 export function GameCanvas(props: GameCanvasProps) {
@@ -136,6 +149,8 @@ export function GameCanvas(props: GameCanvasProps) {
         frameId = requestAnimationFrame(loop);
       })
       .catch((error: unknown) => {
+        if (disposed) return;
+        latest.current.onUnavailable?.();
         setStatus("error");
         setErrorText(error instanceof Error ? error.message : String(error));
       });
@@ -154,11 +169,8 @@ export function GameCanvas(props: GameCanvasProps) {
   const chosen = last ? modelChoice(last) : null;
   const shownMove = chosen?.move ?? last?.action;
   const chosenP = chosen?.bars?.p[chosen.move];
-  const controlsAction = props.onToggleControls ?? props.onShowControls;
-  const controlsLabel = props.onToggleControls
-    ? t(props.controlsVisible ? "panel.hide" : "panel.show")
-    : t("windows.openControls");
-  const controlsTitle = props.onToggleControls ? controlsLabel : t("windows.openControlsHelp");
+  const controlsText = CONTROLS_TEXT[props.controlsTarget ?? "window"];
+  const caption = props.compass.on ? buildCaption(state, execution, translation) : null;
 
   return (
     <div class="stage">
@@ -169,14 +181,14 @@ export function GameCanvas(props: GameCanvasProps) {
         <div class="hud-sub">{t("game.hud", { best: state.best, seed: String(state.seed) })}</div>
       </div>
 
-      {controlsAction && (
+      {props.onToggleControls && (
         <button
           type="button"
-          class={`game-tool ${props.onToggleControls ? "toggle-controls" : "open-controls"}`}
-          onClick={controlsAction}
-          aria-pressed={props.onToggleControls ? (props.controlsVisible ?? false) : undefined}
-          aria-label={controlsLabel}
-          title={controlsTitle}
+          class="game-tool open-controls"
+          onClick={props.onToggleControls}
+          aria-pressed={props.controlsVisible ?? false}
+          aria-label={t(props.controlsVisible ? controlsText.hide : controlsText.show)}
+          title={t(props.controlsVisible ? controlsText.hide : controlsText.showHint)}
         >
           <svg
             viewBox="0 0 24 24"
@@ -217,7 +229,7 @@ export function GameCanvas(props: GameCanvasProps) {
         </button>
       )}
 
-      {state.paused && status === "ready" && state.alive && !state.stalled && (
+      {state.paused && status === "ready" && state.alive && !state.stalled && !caption && (
         <div class="paused-note" role="status">
           {t("windows.paused")}
         </div>
@@ -261,11 +273,12 @@ export function GameCanvas(props: GameCanvasProps) {
       </div>
 
       {status === "ready" && props.compass.on && (
-        <Compass
-          session={session}
-          state={state}
-          execution={execution}
-          anchorRef={compassRef}
+        <Compass session={session} state={state} execution={execution} anchorRef={compassRef} />
+      )}
+
+      {status === "ready" && caption && (
+        <CompassCaption
+          view={caption}
           conversationOpen={props.compass.conversationOpen}
           onConversation={props.compass.onConversation}
         />

@@ -64,6 +64,7 @@ export function buildDecisionPresentation(
   let title: string;
   if (stage === "error") title = t("error.stopped");
   else if (stage === "ended") title = gameEndTitle(state, translation);
+  else if (stage === "paused") title = t("decisions.stage.paused");
   else if (round?.reading) title = t("decisions.reading");
   else if (pending) title = t("decisions.ready");
   else if (current) title = t(`decisions.action.${current.action}`);

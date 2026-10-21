@@ -11,6 +11,8 @@ mod error;
 mod files;
 mod launch;
 mod ledger;
+#[cfg(target_os = "linux")]
+mod linux;
 mod logging;
 mod windows;
 
@@ -33,6 +35,9 @@ pub struct AppState {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    #[cfg(target_os = "linux")]
+    linux::configure_display();
+
     let root = files::find_root();
     let credentials = Mutex::new(credentials::load(&root));
     let state = AppState {
@@ -50,6 +55,7 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_os::init())
         .manage(state)
+        .manage(windows::WindowLayout::default())
         .invoke_handler(tauri::generate_handler![
             commands::clef_run,
             commands::cache_get,
@@ -61,14 +67,12 @@ pub fn run() {
             launch::launch_options,
             launch::selftest_enabled,
             launch::report_selftest,
+            windows::show_game,
             windows::show_controls,
+            windows::toggle_controls,
             windows::set_decisions_visible,
             launch::selftest_window_action
         ])
-        .setup(|app| {
-            windows::setup(app)?;
-            Ok(())
-        })
         .on_window_event(windows::on_event)
         .run(tauri::generate_context!())
         .expect("error while running the application");
