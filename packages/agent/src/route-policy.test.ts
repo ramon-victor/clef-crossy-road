@@ -14,6 +14,7 @@ import type { ModelInput } from "./policy.ts";
 import {
   boxedIn,
   grass,
+  road,
   seed6PlatformExit,
   warnedRailsExit,
   water,
@@ -32,6 +33,7 @@ describe("the route strategy through the Clef policy", () => {
     around: string,
     pStand = 0.8,
     ride?: { choice: string; pLeaving: number },
+    here: { choice: string; pMoveOff: number } = { choice: "remain", pMoveOff: 0.1 },
   ) {
     const requests: ClefRequest[] = [];
     const transport: Transport = {
@@ -59,6 +61,12 @@ describe("the route strategy through the Clef policy", () => {
                   choice: around,
                   probabilities: { detour_left: 0.2, detour_right: 0.6, wait_here: 0.2 },
                   confidence: 0.4,
+                },
+                here: {
+                  type: "choice",
+                  choice: here.choice,
+                  probabilities: { remain: 1 - here.pMoveOff, move_off: here.pMoveOff },
+                  confidence: 0.5,
                 },
                 ...(ride === undefined
                   ? {}
@@ -116,11 +124,16 @@ describe("the route strategy through the Clef policy", () => {
     expect(cost.tokens).toBeGreaterThan(1000);
   });
 
-  it("asks the three questions in one request, and a cell to stand on means cross", async () => {
+  it("asks the four questions in one request, and a cell to stand on means cross", async () => {
     const { client, requests } = clientAnswering("stand", "still", "detour_left");
     const decision = await policyOf(client).decide(observe(new Game({ seed: 1 })));
     expect(requests).toHaveLength(1);
-    expect(Object.keys(requests[0]?.questions ?? {}).sort()).toEqual(["around", "cell", "moving"]);
+    expect(Object.keys(requests[0]?.questions ?? {}).sort()).toEqual([
+      "around",
+      "cell",
+      "here",
+      "moving",
+    ]);
     expect(decision.action).toBe("hop_forward");
     expect(decision.source).toBe("model");
     expect(decision.extra).toMatchObject({
@@ -165,7 +178,12 @@ describe("the route strategy through the Clef policy", () => {
     expect(asked).toHaveLength(1);
     expect(asked[0]?.sentSoFar).toBe(0); // before the request left
     expect(asked[0]?.input).toBe(decision.sent);
-    expect(Object.keys(decision.answers ?? {}).sort()).toEqual(["around", "cell", "moving"]);
+    expect(Object.keys(decision.answers ?? {}).sort()).toEqual([
+      "around",
+      "cell",
+      "here",
+      "moving",
+    ]);
     expect(decision.answers?.cell).toEqual({
       choice: "no_stand",
       probabilities: { stand: 0.1, no_stand: 0.9 },
@@ -269,11 +287,12 @@ describe("the route strategy through the Clef policy", () => {
       expect(Object.keys(onPlatform.questions).sort()).toEqual([
         "around",
         "cell",
+        "here",
         "moving",
         "ride",
       ]);
       expect(chickenOf(onPlatform)).toMatchObject({ edge_in: "a_moment" });
-      expect(Object.keys(off.questions).sort()).toEqual(["around", "cell", "moving"]);
+      expect(Object.keys(off.questions).sort()).toEqual(["around", "cell", "here", "moving"]);
       expect(chickenOf(off)).not.toHaveProperty("edge_in");
     });
 
@@ -334,7 +353,7 @@ describe("the route strategy through the Clef policy", () => {
       expect(game.alive).toBe(true);
     });
 
-    it("retains an emergency exit across warned rails without another model request", async () => {
+    it("does not get the chicken off a drifting log when the model says it is staying: the next decision asks again", async () => {
       const game = warnedRailsExit();
       const { client, requests } = clientAnswering("no_stand", "still", "wait_here", 0.1, {
         choice: "staying",
@@ -343,29 +362,71 @@ describe("the route strategy through the Clef policy", () => {
       const policy = policyOf(client);
       const first = await policy.decide(observe(game));
       expect(first).toMatchObject({
-        action: "hop_back",
+        action: "stay",
         source: "model",
         extra: { maneuver: "wait_here", controller: { kind: "hold", why: "edge" } },
       });
-      expect(first.preview?.steps.map((step) => step.action)).toEqual([
-        "hop_back",
-        "hop_back",
-        "hop_back",
-      ]);
+      expect(first.preview).toBeUndefined();
       game.step(first.action);
-      for (const n of [2, 3]) {
-        const step = await policy.decide(observe(game));
-        expect(step).toMatchObject({
-          action: "hop_back",
-          source: "executor",
-          extra: { controller: { kind: "leave", n } },
-        });
-        expect(step.preview?.steps).toHaveLength(4 - n);
-        game.step(step.action);
-      }
-      expect(requests).toHaveLength(1);
-      expect(game.heroRow).toBe(6);
-      expect(game.alive).toBe(true);
+      const second = await policy.decide(observe(game));
+      expect(second.source).toBe("model");
+      expect(requests).toHaveLength(2);
+    });
+
+    it("keeps the platform clock first: leaving the platform wins over stepping off", async () => {
+      const { client } = clientAnswering(
+        "stand",
+        "still",
+        "wait_here",
+        0.9,
+        { choice: "leaving", pLeaving: 0.8 },
+        { choice: "move_off", pMoveOff: 0.6 },
+      );
+      const decision = await policyOf(client).decide(logAtEdge());
+      expect(decision.extra).toMatchObject({ maneuver: "leave_platform" });
+      expect(sum(decision.probabilities)).toBeCloseTo(1);
+    });
+  });
+
+  describe("the cell under the chicken", () => {
+    // A vehicle reaches the chicken's own road row at 0.3 s, with a tree ahead.
+    const vehicleOnRow = () =>
+      world([grass([], -1), road([{ col: 2.5, speed: -6 }], 0), grass([0], 1)]);
+    const sum = (probabilities: Record<string, number> | undefined) =>
+      Object.values(probabilities ?? {}).reduce((a, b) => a + b, 0);
+
+    it("steps off it when the model says it cannot stay, whatever it said of the row ahead, and the bars still add up", async () => {
+      const { client } = clientAnswering("stand", "still", "wait_here", 0.9, undefined, {
+        choice: "move_off",
+        pMoveOff: 0.7,
+      });
+      const decision = await policyOf(client).decide(vehicleOnRow());
+      expect(decision.source).toBe("model");
+      expect(decision.action).not.toBe("stay");
+      expect(decision.extra).toMatchObject({
+        maneuver: "step_off",
+        here: "move_off",
+        pMoveOff: 0.7,
+        controller: { kind: "dodge" },
+      });
+      expect(sum(decision.probabilities)).toBeCloseTo(1);
+      expect(decision.probabilities?.[decision.action]).toBeGreaterThanOrEqual(0.7);
+    });
+
+    it("leaves the chicken where it is when the model says it can stay: a wrong answer is not rescued", async () => {
+      const wrong = { choice: "remain", pMoveOff: 0.2 };
+      const { client } = clientAnswering("no_stand", "still", "wait_here", 0.1, undefined, wrong);
+      const decision = await policyOf(client).decide(vehicleOnRow());
+      // The way ahead is closed and the model says to wait: nothing moves the chicken off the cell the vehicle reaches.
+      expect(decision).toMatchObject({
+        action: "stay",
+        source: "model",
+        extra: {
+          maneuver: "wait_here",
+          here: "remain",
+          controller: { kind: "hold", why: "exposed" },
+        },
+      });
     });
   });
 
@@ -419,5 +480,25 @@ describe("the route strategy through the Clef policy", () => {
         cached: false,
       } as never),
     ).toThrow(/unknown option for cell/);
+  });
+
+  it("fromRoute needs the answer about the cell under the chicken", () => {
+    const choice = (name: string, options: Record<string, number>) => [
+      name,
+      { type: "choice", choice: Object.keys(options)[0], probabilities: options, confidence: 0 },
+    ];
+    expect(() =>
+      fromRoute({
+        answers: Object.fromEntries([
+          choice("cell", { stand: 1, no_stand: 0 }),
+          choice("moving", { moving: 1, still: 0 }),
+          choice("around", { detour_left: 1, detour_right: 0, wait_here: 0 }),
+        ]),
+        usage: { inputTokens: 1 },
+        latencyMs: 1,
+        neurons: 0,
+        cached: false,
+      } as never),
+    ).toThrow(/no `here` choice answer/);
   });
 });

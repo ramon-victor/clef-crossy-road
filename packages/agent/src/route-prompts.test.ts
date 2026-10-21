@@ -4,6 +4,7 @@ import {
   AROUND_CRITERIA,
   AROUND_OPTIONS,
   CELL_CRITERIA,
+  HERE_CRITERIA,
   MOVING_CRITERIA,
   RIDE_CRITERIA,
   routeQuestions,
@@ -12,8 +13,9 @@ import {
 describe("the lookup questions", () => {
   const questions = routeQuestions();
 
-  it("are three, each a lookup of its own field with its own options, the same for every state", () => {
-    expect(Object.keys(questions).sort()).toEqual(["around", "cell", "moving"]);
+  it("are four, each a lookup of its own field with its own options, the same for every state", () => {
+    expect(Object.keys(questions).sort()).toEqual(["around", "cell", "here", "moving"]);
+    expect(Object.keys(HERE_CRITERIA).sort()).toEqual(["move_off", "remain"]);
     expect(Object.keys(CELL_CRITERIA).sort()).toEqual(["no_stand", "stand"]);
     expect(Object.keys(MOVING_CRITERIA).sort()).toEqual(["moving", "still"]);
     expect(Object.keys(AROUND_CRITERIA).sort()).toEqual([...AROUND_OPTIONS].sort());
@@ -22,6 +24,13 @@ describe("the lookup questions", () => {
   it("each of the first two reads one field, and says so", () => {
     expect(questions.cell?.instructions).toContain("Read only cross_ahead.lands_on");
     expect(questions.moving?.instructions).toContain("Read only cross_ahead.things_move");
+  });
+
+  it("asks about the cell under the chicken in every request, as a lookup of one field, with the same words every time", () => {
+    expect(questions.here?.instructions).toContain("Read only wait_here.stands_on");
+    expect(questions.here?.instructions).toContain("stands_on train_coming -> move_off");
+    expect(questions.here?.instructions).toContain("stands_on log -> remain");
+    expect(routeQuestions(true).here).toEqual(questions.here);
   });
 
   it("only name entries and fields that the state has, and never say which move is good", () => {
@@ -45,9 +54,9 @@ describe("the lookup questions", () => {
     expect(text).not.toMatch(/\bsafe\b|\bunsafe\b|danger|you should|best move/i);
   });
 
-  it("add a fourth, that reads only the clock of the platform, when the chicken stands on one", () => {
+  it("add a fifth, that reads only the clock of the platform, when the chicken stands on one", () => {
     const riding = routeQuestions(true);
-    expect(Object.keys(riding).sort()).toEqual(["around", "cell", "moving", "ride"]);
+    expect(Object.keys(riding).sort()).toEqual(["around", "cell", "here", "moving", "ride"]);
     expect(riding.ride?.instructions).toContain("Read only chicken.edge_in");
     expect(riding.ride?.instructions).toContain("chicken.edge_in a_moment -> leaving");
     expect(riding.ride?.instructions).toContain("chicken.edge_in soon -> staying");
@@ -82,5 +91,6 @@ describe("the lookup questions", () => {
     expect(questions.cell?.instructions).toContain("lands_on water -> no_stand");
     expect(questions.moving?.instructions).toContain("things_move still -> still");
     expect(questions.around?.instructions).toContain("left none and right none -> wait_here");
+    expect(questions.here?.instructions).toContain("stands_on vehicle -> move_off");
   });
 });

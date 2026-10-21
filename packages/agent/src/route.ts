@@ -35,11 +35,14 @@ export const ROUTE_IDS = [
   "detour_right",
   "wait_here",
   "leave_platform",
+  "step_off",
 ] as const;
 export type RouteManeuver = (typeof ROUTE_IDS)[number];
 
-/** Each manoeuvre is reported on the move it is made of; `leave_platform` has none of its own, it is the hop the controller finds. */
-export const ROUTE_ACTION: Readonly<Record<Exclude<RouteManeuver, "leave_platform">, Action>> = {
+/** Each manoeuvre is reported on the move it is made of; `leave_platform` and `step_off` have none of their own, they are the hop the controller finds. */
+export const ROUTE_ACTION: Readonly<
+  Record<Exclude<RouteManeuver, "leave_platform" | "step_off">, Action>
+> = {
   cross_ahead: "hop_forward",
   detour_left: "hop_left",
   detour_right: "hop_right",
@@ -54,6 +57,8 @@ export const RETRY_AFTER = 4;
 /** Steps a crossing waits for the cell ahead to clear: three seconds of game time. */
 export const MAX_CROSS_WAIT = 15;
 export const MAX_LEAVE_STEPS = 8;
+/** Hops `step_off` looks ahead for a cell where the chicken can stay. */
+export const ESCAPE_DEPTH = 4;
 
 const T = HOP_SECONDS;
 
@@ -167,9 +172,9 @@ function walk(
   return null;
 }
 
-/** The shortest way to a cell where the chicken can stay without a platform carrying it off, within four hops. */
+/** The shortest way to a cell where the chicken can stay without a platform carrying it off, within `ESCAPE_DEPTH` hops. */
 export function searchEscape(obs: Observation): Route | null {
-  return walk(obs, 4, (node) => Math.abs(node.c + node.v) <= MAX_ABS_X - EDGE_MARGIN);
+  return walk(obs, ESCAPE_DEPTH, (node) => Math.abs(node.c + node.v) <= MAX_ABS_X - EDGE_MARGIN);
 }
 
 /** Shared by the exit search and its executor: a transit cell is not a completed exit. */
@@ -193,7 +198,12 @@ export function searchExit(obs: Observation): Route | null {
   );
 }
 
-export const HOLD_WHYS = ["refused", "unsafe_here", "edge", "no_way"] as const;
+/**
+ * Why a step stayed put: `refused` (a safe cell, nothing to do), `exposed` (the cell cannot hold the chicken and
+ * the model did not step off it) or `edge` (a platform is carrying it off the map and the model did not leave).
+ * In the last two nobody steps in.
+ */
+export const HOLD_WHYS = ["refused", "exposed", "edge"] as const;
 export type HoldWhy = (typeof HOLD_WHYS)[number];
 
 /** `no_rest`: the cell is clear for the hop, but a vehicle or train would reach it before the chicken could go on. */
@@ -205,6 +215,7 @@ export type RouteStep =
   | { kind: "wait"; n: number; of: number; cell: string; why: WaitWhy }
   | { kind: "walk"; n: number; left: number }
   | { kind: "leave"; n: number; left: number }
+  | { kind: "dodge"; left: number }
   | { kind: "hold"; why: HoldWhy };
 
 /** One step the controller takes: the move to make now, what it is doing in a sentence, and what kind of step it is. */
@@ -259,8 +270,12 @@ function legAct(
   };
 }
 
-/** A refusal never leaves the chicken standing where a vehicle is about to arrive: it steps off a cell it cannot stay on. */
-function safeHold(obs: Observation, memory: Memory): RouteAct & { exit?: Route } {
+/**
+ * What a refusal or `wait_here` does: stay. Nothing here steps in. If the cell cannot hold the chicken, or a platform
+ * is carrying it off the map, the model had its say (`here`, `ride`) and the chicken pays for a wrong answer; the step
+ * is marked so the screen can say that nobody moved it.
+ */
+function holdAct(obs: Observation, memory: Memory): RouteAct {
   const off = driftingOff(obs);
   if (off === "no" && canStand(lanesState(obs, memory).chicken.stays_on)) {
     return {
@@ -270,25 +285,14 @@ function safeHold(obs: Observation, memory: Memory): RouteAct & { exit?: Route }
       step: { kind: "hold", why: "refused" },
     };
   }
-  const why = off === "no" ? "unsafe_here" : "edge";
-  const exit = off === "no" ? null : searchExit(obs);
-  const away = exit ?? searchEscape(obs);
-  if (away) {
-    return {
-      action: away.first,
-      // The executor retains a platform exit; other escapes authorize only this one step.
-      preview: exit ? exit.preview : { ...away.preview, steps: away.preview.steps.slice(0, 1) },
-      note: `stepping off a cell it cannot stay on: ${legOf(away)}`,
-      notice: { kind: "escape", action: away.first, remaining: away.path.length },
-      step: { kind: "hold", why },
-      ...(exit ? { exit } : {}),
-    };
-  }
+  const edge = off !== "no";
   return {
     action: "stay",
-    note: "nowhere safe to step, waiting",
-    notice: { kind: "blocked_wait" },
-    step: { kind: "hold", why: "no_way" },
+    note: edge
+      ? "staying on a platform carrying it off the map"
+      : "staying on a cell it cannot hold",
+    notice: { kind: edge ? "edge_wait" : "exposed_wait" },
+    step: { kind: "hold", why: edge ? "edge" : "exposed" },
   };
 }
 
@@ -363,6 +367,7 @@ export class RouteExecutor {
       this.plan = plan;
       return this.leaveStep(plan, obs, true) ?? this.refusal(obs, memory);
     }
+    if (maneuver === "step_off") return this.stepOff(obs, memory) ?? this.refusal(obs, memory);
     const plan: DetourPlan = {
       kind: "detour",
       side: maneuver === "detour_left" ? "left" : "right",
@@ -378,12 +383,9 @@ export class RouteExecutor {
     return { ...this.hold(obs, memory), refused: true };
   }
 
-  /** A refused manoeuvre still costs the chicken a step: it waits, or steps off a cell that cannot hold it. */
+  /** A refused manoeuvre still costs the chicken a step, and it spends it where it stands. */
   private hold(obs: Observation, memory: Memory): RouteAct {
-    const { exit, ...held } = safeHold(obs, memory);
-    // A refusal can begin a multi-hop exit too. Keep control across its transit cells just as
-    // when the model chose leave_platform, rather than asking again on a warned rail.
-    if (exit) this.plan = { kind: "leave", steps: 1 };
+    const held = holdAct(obs, memory);
     return {
       ...held,
       note: `${this.last ?? "hold"}; ${held.note}`,
@@ -493,6 +495,34 @@ export class RouteExecutor {
     };
   }
 
+  /** The model said the chicken cannot stay where it is: one hop to the nearest cell that can hold it, which the controller finds. */
+  private stepOff(obs: Observation, memory: Memory): RouteAct | null {
+    const here = lanesState(obs, memory).chicken.stays_on;
+    if (canStand(here)) {
+      return this.giveBack(true, "step_off", `the cell under the chicken is ${here}`, {
+        kind: "not_exposed",
+        cell: here,
+      });
+    }
+    const away = searchEscape(obs);
+    if (!away) {
+      return this.giveBack(true, "step_off", `no cell to stand on within ${ESCAPE_DEPTH} hops`, {
+        kind: "no_exit",
+        count: ESCAPE_DEPTH,
+      });
+    }
+    this.last = `step_off: stepped ${away.first.replace("hop_", "")}`;
+    this.lastNotice = undefined;
+    return {
+      action: away.first,
+      // One step: the model is asked again from wherever the hop lands.
+      preview: { ...away.preview, steps: away.preview.steps.slice(0, 1) },
+      note: `step_off: ${legOf(away)}`,
+      notice: { kind: "escape", action: away.first, remaining: away.path.length },
+      step: { kind: "dodge", left: away.path.length },
+    };
+  }
+
   private leaveStep(plan: LeavePlan, obs: Observation, starting: boolean): RouteAct | null {
     if (starting && secondsToEdge(obs) >= EDGE_SOON) {
       const why = "the chicken is not being carried towards the edge";
@@ -573,6 +603,7 @@ const RANK: Readonly<Record<string, number>> = {
  */
 export function routeChoice(scene: SceneState): RouteManeuver {
   if (scene.chicken.edge_in === "a_moment") return "leave_platform";
+  if (!canStand(scene.wait_here.stands_on)) return "step_off";
   const ahead = scene.cross_ahead;
   if (canStand(ahead.lands_on)) return "cross_ahead";
   if (!isPermanent(ahead.lands_on) && ahead.things_move !== "still") return "cross_ahead";

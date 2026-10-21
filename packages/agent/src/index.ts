@@ -54,6 +54,7 @@ export {
   renderSceneImage,
   type SceneImage,
 } from "./image.ts";
+export { decidedBy, type Initiative } from "./initiative.ts";
 export {
   inputAsJson,
   inputAsText,
@@ -133,6 +134,8 @@ export {
 export {
   AROUND_OPTIONS,
   CELL_OPTIONS,
+  HERE_OPTIONS,
+  HERE_QUESTION_ID,
   MOVING_OPTIONS,
   RIDE_OPTIONS,
   RIDE_QUESTION_ID,

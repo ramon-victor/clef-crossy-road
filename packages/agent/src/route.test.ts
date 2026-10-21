@@ -229,35 +229,29 @@ describe("RouteExecutor: leave_platform", () => {
     expect(game.alive).toBe(true);
   });
 
-  it("uses the same exit through the rail when another maneuver cannot wait on the log", () => {
-    const obs = observe(seed6PlatformExit());
+  it("does not get off the log for a model that did not say so: waiting or crossing leaves it carried to the edge", () => {
+    const game = seed6PlatformExit();
+    const obs = observe(game);
     for (const maneuver of ["wait_here", "cross_ahead"] as const) {
-      const act = new RouteExecutor().start(maneuver, obs, emptyMemory());
-      expect(act).toMatchObject({ action: "hop_back", step: { kind: "hold", why: "edge" } });
+      const executor = new RouteExecutor();
+      const act = executor.start(maneuver, obs, emptyMemory());
+      expect(act).toMatchObject({ action: "stay", step: { kind: "hold", why: "edge" } });
+      expect(act.notice).toMatchObject({ kind: "sequence" });
+      expect(executor.next(obs, emptyMemory())).toBeNull();
     }
+    game.advance(60);
+    expect(game.deathCause).toBe("out_of_bounds");
   });
 
-  it.each(["wait_here", "cross_ahead"] as const)(
-    "continues the emergency exit after %s across two warned rails to the bank",
-    (maneuver) => {
+  it("holds when the model chose wait_here or cross_ahead on the log of two warned rails, and nothing steps in", () => {
+    for (const maneuver of ["wait_here", "cross_ahead"] as const) {
       const game = warnedRailsExit();
       const executor = new RouteExecutor();
       const first = executor.start(maneuver, observe(game), emptyMemory());
-      expect(first).toMatchObject({ action: "hop_back", step: { kind: "hold", why: "edge" } });
-      game.step(first.action);
-      for (const n of [2, 3]) {
-        expect(observe(game).player.standing_on).toBe("rail");
-        const step = executor.next(observe(game), emptyMemory());
-        expect(step).toMatchObject({ action: "hop_back", step: { kind: "leave", n } });
-        if (!step) throw new Error("emergency exit ended on a warned rail");
-        game.step(step.action);
-      }
-      expect(game.heroRow).toBe(6);
+      expect(first).toMatchObject({ action: "stay", step: { kind: "hold", why: "edge" } });
       expect(executor.next(observe(game), emptyMemory())).toBeNull();
-      game.advance(60);
-      expect(game.alive).toBe(true);
-    },
-  );
+    }
+  });
 
   it.each([
     [
@@ -357,25 +351,25 @@ describe("RouteExecutor: what each step is, without reading its sentence", () =>
     });
   });
 
-  it("says why a refused manoeuvre holds: a cell it cannot stay on, a platform to the edge, or nowhere to step", () => {
+  it("says why a refused manoeuvre holds: a safe cell, a cell that cannot hold the chicken, or a platform to the edge", () => {
     const vehicle = world([grass([], -1), road([{ col: 2.5, speed: -6 }], 0), grass([0], 1)]);
     expect(new RouteExecutor().start("cross_ahead", vehicle, emptyMemory()).step).toEqual({
       kind: "hold",
-      why: "unsafe_here",
+      why: "exposed",
     });
     const log = world(
       [grass([], -1), water([{ col: 3, speed: 3, type: "log", half: 1.6 }], 0), water([], 1)],
       3,
       true,
     );
-    expect(new RouteExecutor().start("wait_here", log, emptyMemory()).step).toMatchObject({
+    expect(new RouteExecutor().start("wait_here", log, emptyMemory()).step).toEqual({
       kind: "hold",
       why: "edge",
     });
     const alone = world([water([{ col: 4.2, speed: 3, type: "log", half: 1.5 }], 0)], 4.2, true);
     expect(new RouteExecutor().start("wait_here", alone, emptyMemory()).step).toEqual({
       kind: "hold",
-      why: "no_way",
+      why: "edge",
     });
   });
 
@@ -492,16 +486,20 @@ describe("RouteExecutor: the manoeuvre in progress", () => {
     );
   });
 
-  it("steps off a cell a vehicle is about to cover instead of waiting on it when a manoeuvre is refused", () => {
+  it("does not step in when a refused manoeuvre leaves the chicken on a cell a vehicle is about to cover", () => {
     const executor = new RouteExecutor();
     // A vehicle arriving on the chicken's own road row at 0.3 s, and a tree ahead so crossing is refused.
     const obs = world([grass([], -1), road([{ col: 2.5, speed: -6 }], 0), grass([0], 1)]);
     const act = executor.start("cross_ahead", obs, emptyMemory());
-    expect(act.action).not.toBe("stay");
-    expect(act.note).toContain("stepping off a cell it cannot stay on");
+    expect(act.action).toBe("stay");
+    expect(act.refused).toBe(true);
+    expect(act.notice).toMatchObject({ kind: "sequence" });
+    const parts = act.notice.kind === "sequence" ? act.notice.parts : [];
+    expect(parts.at(-1)).toEqual({ kind: "exposed_wait" });
+    expect(act.note).toContain("cannot hold");
   });
 
-  it("does not wait on a platform that carries it past the edge: it gives the crossing back and steps off", () => {
+  it("does not wait on a platform that carries it past the edge, and does not step off either: it gives the crossing back and stays", () => {
     const executor = new RouteExecutor();
     const rows = [
       grass([], -1),
@@ -510,7 +508,8 @@ describe("RouteExecutor: the manoeuvre in progress", () => {
     ];
     const act = executor.start("cross_ahead", world(rows, 3, true), emptyMemory());
     expect(executor.lastResult).toContain("past the edge of the world");
-    expect(act.action).not.toBe("stay");
+    expect(act.action).toBe("stay");
+    expect(act.step).toEqual({ kind: "hold", why: "edge" });
   });
 
   it("makes a crossing from a platform wait for a vehicle that only covers the column it leaves", () => {
@@ -529,6 +528,48 @@ describe("RouteExecutor: the manoeuvre in progress", () => {
   });
 });
 
+describe("RouteExecutor: step_off, the model said the cell cannot hold the chicken", () => {
+  // A vehicle reaches the chicken's own road row at 0.3 s, with a tree ahead.
+  const vehicleOnRow = (): Observation =>
+    world([grass([], -1), road([{ col: 2.5, speed: -6 }], 0), grass([0], 1)]);
+
+  it("takes one hop to a cell that can hold it, and says it is a dodge", () => {
+    const executor = new RouteExecutor();
+    const act = executor.start("step_off", vehicleOnRow(), emptyMemory());
+    expect(act.action).not.toBe("stay");
+    expect(act.step).toMatchObject({ kind: "dodge" });
+    expect(act.notice).toMatchObject({ kind: "escape", action: act.action });
+    expect(act.preview?.steps).toHaveLength(1);
+    expect(act.refused).toBeUndefined();
+    expect(executor.next(vehicleOnRow(), emptyMemory())).toBeNull();
+  });
+
+  it("is refused, and the chicken waits, when the cell under it can hold it", () => {
+    const executor = new RouteExecutor();
+    const act = executor.start("step_off", world([grass([], 0), grass([], 1)]), emptyMemory());
+    expect(executor.lastResult).toMatch(/^step_off: refused, the cell under the chicken is empty/);
+    expect(act.action).toBe("stay");
+    expect(act.step).toEqual({ kind: "hold", why: "refused" });
+    expect(act.refused).toBe(true);
+  });
+
+  it("is refused, and the chicken stays where it cannot be held, when no cell is within reach", () => {
+    const executor = new RouteExecutor();
+    const act = executor.start("step_off", world([water([], 0)]), emptyMemory());
+    expect(executor.lastResult).toMatch(/^step_off: refused, no cell to stand on within 4 hops/);
+    expect(act.action).toBe("stay");
+    expect(act.step).toEqual({ kind: "hold", why: "exposed" });
+  });
+
+  it("is the only thing that moves a chicken off a cell it cannot hold: crossing into a wall and waiting do not", () => {
+    for (const maneuver of ["cross_ahead", "wait_here"] as const) {
+      const act = new RouteExecutor().start(maneuver, vehicleOnRow(), emptyMemory());
+      expect(act.action).toBe("stay");
+      expect(act.step).toEqual({ kind: "hold", why: "exposed" });
+    }
+  });
+});
+
 describe("routeChoice: the lookups the options describe", () => {
   const base = (): SceneState => scene(boxedIn());
   const with_ = (patch: Partial<SceneState>): SceneState => ({ ...base(), ...patch });
@@ -543,6 +584,18 @@ describe("routeChoice: the lookups the options describe", () => {
     expect(
       routeChoice(with_({ cross_ahead: { lands_on: "train_coming", things_move: "left" } })),
     ).toBe("cross_ahead");
+  });
+
+  it("steps off a cell that cannot hold the chicken before anything else, after the platform clock", () => {
+    const exposed = with_({ wait_here: { stands_on: "train_coming" } });
+    expect(routeChoice(exposed)).toBe("step_off");
+    expect(
+      routeChoice({
+        ...exposed,
+        chicken: { ...exposed.chicken, edge_in: "a_moment" },
+      }),
+    ).toBe("leave_platform");
+    expect(routeChoice(with_({ wait_here: { stands_on: "log" } }))).not.toBe("step_off");
   });
 
   it("goes round by the nearer side, and by the one away from the nearer edge when they are as near", () => {
@@ -621,6 +674,7 @@ describe("exec-route: the controller with an ideal chooser, a free reference", (
       "detour_right",
       "wait_here",
       "leave_platform",
+      "step_off",
     ]);
   });
 });

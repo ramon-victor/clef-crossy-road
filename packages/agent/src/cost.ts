@@ -38,8 +38,9 @@ export function decisionCost(config: {
   strategy: StrategyId;
 }): DecisionCost {
   if (config.strategy === "route") {
-    // Three lookups with examples and the scene state; the planner still uses an estimate.
-    return { tokens: 1650, measured: false, neurons: neuronsForTokens(config.model, 1650) };
+    // Four lookups with examples and the scene state. Read back from the one game recorded with `here` (seed 7, 19
+    // requests, 2026-10-20), so still an estimate for the planner; the three-lookup figure had been 1650.
+    return { tokens: 2242, measured: false, neurons: neuronsForTokens(config.model, 2242) };
   }
   if (config.strategy === "graph" || config.strategy === "graph-maneuver") {
     // Two questions with the game text: about 1.5 times a choice with the moves view.

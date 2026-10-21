@@ -11,7 +11,8 @@ export type DecisionNotice =
       kind:
         | "wait"
         | "safe_wait"
-        | "blocked_wait"
+        | "exposed_wait"
+        | "edge_wait"
         | "drift"
         | "waited"
         | "still_water"
@@ -27,7 +28,7 @@ export type DecisionNotice =
       action: Action;
       remaining: number;
     }
-  | { kind: "permanent" | "cannot_stay"; cell: Cell }
+  | { kind: "permanent" | "cannot_stay" | "not_exposed"; cell: Cell }
   | { kind: "timeout"; cell: Cell; count: number }
   | { kind: "too_long" | "still_carried" | "no_exit"; count: number }
   | { kind: "no_route"; side: "left" | "right"; count: number }
