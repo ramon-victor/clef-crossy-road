@@ -16,7 +16,7 @@ Cloudflare's Clef-flash makes the calls in a deterministic Crossy Road clone, an
 
 [Quick start](#quick-start) · [How Clef plays](#how-clef-plays) · [Results](#results) · [Benchmark](#benchmark)
 
-<img src="docs/images/demo-preview.webp" alt="Clef-flash playing seed 624140: arrows around the chicken show how much the model wanted each move, and the card at the bottom says who made it" width="400">
+<img src="docs/images/demo.gif" alt="Clef-flash playing seed 624140: arrows around the chicken show how much the model wanted each move, and the card at the bottom says who made it" width="400">
 
 <sub>Clef-flash playing seed 624140 in the desktop app (UI in Portuguese).</sub>
 
