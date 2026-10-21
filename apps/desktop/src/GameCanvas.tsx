@@ -7,6 +7,8 @@ import { useI18n } from "./i18n/provider.tsx";
 import { ErrorMessage } from "./panel/ErrorMessage.tsx";
 import type { Session, SessionState } from "./session.ts";
 import { Compass } from "./theater/Compass.tsx";
+import { CompassCaption } from "./theater/CompassCaption.tsx";
+import { buildCaption } from "./theater/caption.ts";
 import { modelChoice } from "./theater/choice.ts";
 import { buildExecution, type ExecutionView } from "./theater/execution.ts";
 import { Glyph } from "./theater/Glyph.tsx";
@@ -151,6 +153,7 @@ export function GameCanvas(props: GameCanvasProps) {
   const chosen = last ? modelChoice(last) : null;
   const shownMove = chosen?.move ?? last?.action;
   const chosenP = chosen?.bars?.p[chosen.move];
+  const caption = props.compass.on ? buildCaption(state, execution, translation) : null;
 
   return (
     <div class="stage">
@@ -208,7 +211,7 @@ export function GameCanvas(props: GameCanvasProps) {
         </button>
       )}
 
-      {state.paused && status === "ready" && state.alive && !state.stalled && (
+      {state.paused && status === "ready" && state.alive && !state.stalled && !caption && (
         <div class="paused-note" role="status">
           {t("windows.paused")}
         </div>
@@ -252,11 +255,12 @@ export function GameCanvas(props: GameCanvasProps) {
       </div>
 
       {status === "ready" && props.compass.on && (
-        <Compass
-          session={session}
-          state={state}
-          execution={execution}
-          anchorRef={compassRef}
+        <Compass session={session} state={state} execution={execution} anchorRef={compassRef} />
+      )}
+
+      {status === "ready" && caption && (
+        <CompassCaption
+          view={caption}
           conversationOpen={props.compass.conversationOpen}
           onConversation={props.compass.onConversation}
         />

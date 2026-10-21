@@ -19,14 +19,11 @@ describe("compass execution hierarchy", () => {
           state={session.state()}
           execution={execution}
           anchorRef={{ current: null }}
-          conversationOpen={false}
-          onConversation={() => {}}
         />
       </LanguageProvider>,
     );
     expect(screen.container.querySelectorAll(".cb.actual")).toHaveLength(1);
     expect(screen.container.querySelector(".cb.actual")?.getAttribute("data-move")).toBe("stay");
-    expect(screen.container.querySelector(".cap-choice")?.textContent).toContain("Go straight");
     expect(screen.container.querySelector(".compass")?.textContent).not.toContain("%");
     expect(screen.container.querySelector(".cb-badge")).toBeNull();
 
@@ -37,8 +34,6 @@ describe("compass execution hierarchy", () => {
           state={session.state()}
           execution={{ ...execution, action: "hop_forward" }}
           anchorRef={{ current: null }}
-          conversationOpen={false}
-          onConversation={() => {}}
         />
       </LanguageProvider>,
     );
@@ -66,14 +61,12 @@ describe("compass execution hierarchy", () => {
           state={session.state()}
           execution={execution}
           anchorRef={{ current: null }}
-          conversationOpen={false}
-          onConversation={() => {}}
         />
       </LanguageProvider>,
     );
     expect(screen.container.querySelectorAll(".cb.actual")).toHaveLength(1);
     expect(screen.container.querySelectorAll(".cb.next")).toHaveLength(1);
-    expect(screen.container.textContent).toContain("next: right");
+    expect(screen.container.querySelector(".cb.next")?.getAttribute("data-move")).toBe("hop_right");
     screen.rerender(
       <LanguageProvider initial={{ preference: "en", detected: "en" }}>
         <Compass
@@ -81,8 +74,6 @@ describe("compass execution hierarchy", () => {
           state={{ ...session.state(), phase: "error" }}
           execution={execution}
           anchorRef={{ current: null }}
-          conversationOpen={false}
-          onConversation={() => {}}
         />
       </LanguageProvider>,
     );
